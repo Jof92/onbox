@@ -1,0 +1,40 @@
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #F5F8FF; /* tom claro que orna com azul do logo */
+  padding: 10px 30px;
+  border-bottom: 2px solid #E0E6F5;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+}
+
+.header-logo {
+  height: 60px;
+}
+
+.header-logo-text {
+  height: 50px;
+}
+
+.header-nav {
+  list-style: none;
+  display: flex;
+  gap: 20px;
+  margin: 0;
+  padding: 0;
+}
+
+.header-nav li a {
+  text-decoration: none;
+  font-weight: 600;
+  color: #101B3D; /* Azul-marinho da paleta */
+  transition: color 0.3s ease;
+}
+
+.header-nav li a:hover {
+  color: #0084FF; /* Azul principal */
+}

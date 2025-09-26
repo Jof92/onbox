@@ -1,0 +1,26 @@
+.footer {
+  position: fixed;      /* fixa no final da tela */
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  background-color: #1c243c; /* azul marinho */
+  color: #ffffff;
+  text-align: center;
+  font-size: 0.9rem;
+  z-index: 1000;        /* garante que fique acima do conteúdo */
+  p{
+    margin: 5px 0;
+  }
+  
+}
+
+.footer a {
+  color: #ffffff;
+  margin: 0 10px;
+  text-decoration: none;
+  transition: color 0.2s ease-in-out;
+}
+
+.footer a:hover {
+  color: #00C48C; /* cor de destaque da paleta */
+}
