@@ -1,0 +1,260 @@
+/* Página Cards */
+.cards-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: #f8faff;
+  font-family: 'Arial', sans-serif;
+}
+
+/* Header */
+.cards-header {
+  display: flex;
+  align-items: center;
+  padding: 5px 30px;
+  background-color: #fff;
+  border-bottom: 2px solid #e0e6ed;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.cards-header img.project-photo-header {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  margin-right: 12px;
+  object-fit: cover;
+  border: 2px solid #bf9010;
+}
+
+.cards-header h1 {
+  font-size: 22px;
+  font-weight: bold;
+  color: #0d1b2a;
+  margin: 0;
+  display: flex;
+  align-items: center;
+}
+
+.cards-header .project-name {
+  font-size: 20px;
+  font-weight: normal;
+  margin-left: 10px;
+  color: #bf9010;
+}
+
+/* Corpo */
+.cards-body {
+  display: flex;
+  flex: 1;
+  padding: 20px;
+  gap: 20px;
+  overflow-x: auto;
+}
+
+/* Colunas */
+.cards-column {
+  border-radius: 10px;
+  padding: 15px;
+  min-width: 260px;
+  max-width: 300px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* Header da coluna (título + botão) */
+.column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.column-header h3 {
+  font-size: 16px;
+  font-weight: bold;
+  color: #fff;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  flex: 1;
+  text-align: center;
+}
+
+/* Botão de adicionar (+) */
+.column-header .btn-add {
+  background: #f59e0b;
+  border: none;
+  color: #fff;
+  font-size: 16px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin-left: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.column-header .btn-add:hover {
+  background: #d97706;
+}
+
+/* Colunas com cores específicas */
+.cards-column.nova-tarefa {
+  background: #fff7e6;
+}
+.cards-column.nova-tarefa h3 {
+  background: #f59e0b;
+}
+
+.cards-column.andamento {
+  background: #e6f0ff;
+}
+.cards-column.andamento h3 {
+  background: #2563eb;
+}
+
+.cards-column.continuo {
+  background: #e6fffa;
+}
+.cards-column.continuo h3 {
+  background: #059669;
+}
+
+.cards-column.concluido {
+  background: #ecfdf5;
+}
+.cards-column.concluido h3 {
+  background: #10b981;
+}
+
+/* Lista de cards */
+.cards-list {
+  flex: 1;
+  min-height: 50px;
+}
+
+/* Card base */
+.card-item {
+  background: #fff;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  cursor: grab;
+  border: 1px solid #e0e6ed;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  text-align: center;
+}
+
+.card-item strong {
+  display: block;
+  font-size: 15px;
+  margin-bottom: 5px;
+  color: #0d1b2a;
+}
+
+.card-item p {
+  font-size: 13px;
+  color: #555;
+  margin: 0;
+  text-align: center;
+}
+
+.card-item.dragging {
+  background: #eef2f7;
+  transform: rotate(2deg) scale(1.02);
+  box-shadow: 0 5px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Cores por tipo de card */
+.card-item.tipo-lista {
+  border-left: 5px solid #2563eb;
+}
+.card-item.tipo-comentarios {
+  border-left: 5px solid #059669;
+}
+.card-item.tipo-lembrete {
+  border-left: 5px solid #f59e0b;
+}
+
+/* -------- Modal -------- */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: #fff;
+  padding: 20px;
+  border-radius: 12px;
+  width: 400px;
+  max-width: 90%;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+.modal-content h2 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 18px;
+  color: #0d1b2a;
+}
+
+.modal-content label {
+  display: block;
+  margin: 10px 0 5px;
+  font-size: 14px;
+  font-weight: bold;
+  color: #333;
+}
+
+.modal-content input,
+.modal-content select {
+  width: 100%;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.modal-actions .btn-salvar {
+  background: #10b981;
+  border: none;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.modal-actions .btn-salvar:hover {
+  background: #059669;
+}
+
+.modal-actions .btn-cancelar {
+  background: #ef4444;
+  border: none;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.modal-actions .btn-cancelar:hover {
+  background: #b91c1c;
+}
