@@ -15,6 +15,7 @@
   background-color: #fff;
   border-bottom: 2px solid #e0e6ed;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  position: relative;
 }
 
 .cards-header img.project-photo-header {
@@ -33,6 +34,7 @@
   margin: 0;
   display: flex;
   align-items: center;
+  flex: 1;
 }
 
 .cards-header .project-name {
@@ -40,6 +42,21 @@
   font-weight: normal;
   margin-left: 10px;
   color: #bf9010;
+}
+
+/* Botão de adicionar pilha no header */
+.cards-header .btn-add-pilha {
+  background: none ;
+  border: none;
+  color: #f59e0b;
+  font-size: 20px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.cards-header .btn-add-pilha:hover {
+  color:rgb(215, 188, 158);
+  font-size: 22px;
 }
 
 /* Corpo */
@@ -63,14 +80,16 @@
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
 }
 
-/* Header da coluna (título + botão) */
+/* Header da coluna (título + botões) */
 .column-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 12px;
+  gap: 6px;
 }
 
+/* Título da pilha */
 .column-header h3 {
   font-size: 16px;
   font-weight: bold;
@@ -80,17 +99,43 @@
   border-radius: 6px;
   flex: 1;
   text-align: center;
+  background-color: #2563eb; /* cor padrão se quiser azul, muda conforme tema da pilha */
 }
 
-/* Botão de adicionar (+) */
+/* Input para edição de título inline */
+.column-header input {
+  font-size: 16px;
+  font-weight: bold;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 2px solid #bf9010; /* borda visível */
+  flex: 1;
+  text-align: center;
+  outline: none;
+  background-color: #fff; /* fundo branco */
+  color: #0d1b2a; /* texto escuro legível */
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.column-header input:focus {
+  border-color: #2563eb; /* muda cor ao focar */
+  box-shadow: 0 0 6px rgba(37, 99, 235, 0.5);
+}
+
+/* Botões da coluna */
+.column-header .column-actions {
+  display: flex;
+  gap: 4px;
+}
+
+/* Botão de adicionar nota (+) */
 .column-header .btn-add {
   background: #f59e0b;
   border: none;
   color: #fff;
   font-size: 16px;
-  padding: 8px 10px;
+  padding: 6px 10px;
   border-radius: 6px;
-  margin-left: 8px;
   cursor: pointer;
   transition: background 0.2s ease;
 }
@@ -99,33 +144,20 @@
   background: #d97706;
 }
 
-/* Colunas com cores específicas */
-.cards-column.nova-tarefa {
-  background: #fff7e6;
-}
-.cards-column.nova-tarefa h3 {
-  background: #f59e0b;
-}
-
-.cards-column.andamento {
-  background: #e6f0ff;
-}
-.cards-column.andamento h3 {
+/* Botão de editar título */
+.column-header .btn-edit {
   background: #2563eb;
+  border: none;
+  color: #fff;
+  font-size: 14px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s ease;
 }
 
-.cards-column.continuo {
-  background: #e6fffa;
-}
-.cards-column.continuo h3 {
-  background: #059669;
-}
-
-.cards-column.concluido {
-  background: #ecfdf5;
-}
-.cards-column.concluido h3 {
-  background: #10b981;
+.column-header .btn-edit:hover {
+  background: #1d4ed8;
 }
 
 /* Lista de cards */
@@ -168,7 +200,7 @@
   box-shadow: 0 5px 12px rgba(0, 0, 0, 0.2);
 }
 
-/* Cores por tipo de card */
+/* Cores por tipo de nota */
 .card-item.tipo-lista {
   border-left: 5px solid #2563eb;
 }

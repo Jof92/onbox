@@ -150,27 +150,77 @@ export default function Containers() {
 
         {/* Área Central */}
         <main className="containers-main">
-          {projects.length === 0 ? (
-            <p className="no-projects">Tudo calmo por aqui ainda...</p>
-          ) : (
-            <div className="projects-grid">
-              {projects.map((proj, i) => (
-                <div
-                  key={i}
-                  className="project-box"
-                  onClick={() => openCardsPage(proj)}
-                >
-                  <div className="project-photo">
-                    {proj.photo ? (
-                      <img src={proj.photo} alt={proj.name} />
-                    ) : (
-                      <FaCamera />
-                    )}
+          {!selectedProject ? (
+            projects.length === 0 ? (
+              <p className="no-projects">Tudo calmo por aqui ainda...</p>
+            ) : (
+              <div className="projects-grid">
+                {projects.map((proj, i) => (
+                  <div
+                    key={i}
+                    className="project-box"
+                    onClick={() => openCardsPage(proj)}
+                  >
+                    <div className="project-photo">
+                      {proj.photo ? <img src={proj.photo} alt={proj.name} /> : <FaCamera />}
+                    </div>
+                    <h3>{proj.name}</h3>
+                    <p>{proj.type === 'vertical' ? 'Edificação Vertical' : 'Edificação Horizontal'}</p>
                   </div>
-                  <h3>{proj.name}</h3>
-                  <p>{proj.type === 'vertical' ? 'Edificação Vertical' : 'Edificação Horizontal'}</p>
-                </div>
-              ))}
+                ))}
+              </div>
+            )
+          ) : (
+            // Mostra detalhes do projeto selecionado ao clicar no nome da sidebar
+            <div className="project-details">
+              <button className="back-btn" onClick={() => setSelectedProject(null)}>
+                &larr; Voltar
+              </button>
+
+              <div className="details-photo">
+                {selectedProject.photo ? (
+                  <img src={selectedProject.photo} alt={selectedProject.name} />
+                ) : (
+                  <FaCamera size={40} />
+                )}
+              </div>
+
+              <h2>{selectedProject.name}</h2>
+              <p>
+                Tipo: {selectedProject.type === 'vertical' ? 'Edificação Vertical' : 'Edificação Horizontal'}
+              </p>
+
+              {selectedProject.type === 'vertical' && selectedProject.pavimentos.length > 0 && (
+                <>
+                  <h3>Pavimentos</h3>
+                  <ul>
+                    {selectedProject.pavimentos.map((pav, idx) => (
+                      <li key={idx}>{pav}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+
+              {selectedProject.eap.length > 0 && (
+                <>
+                  <h3>EAP</h3>
+                  <ul>
+                    {selectedProject.eap.map((item, idx) => (
+                      <li key={idx}>{item}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+
+              {/* Botão Editar */}
+              <div className="details-actions">
+                <button
+                  className="edit-btn"
+                  onClick={() => handleEditProject(selectedProject)}
+                >
+                  Editar Projeto
+                </button>
+              </div>
             </div>
           )}
         </main>

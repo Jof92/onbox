@@ -16,9 +16,10 @@
   background: #fff;
   color: #bf9010;
   box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-  h1{
-    margin: 2px 0;
-  }
+}
+
+.containers-header h1 {
+  margin: 2px 0;
 }
 
 /* Layout */
@@ -29,7 +30,6 @@
 
 /* ===== Sidebar ===== */
 .containers-sidebar {
-
   background: #fff;
   padding: 25px 20px;
   display: flex;
@@ -84,10 +84,15 @@
   font-size: 14px;
 }
 
-.sidebar-project:hover,
+.sidebar-project:hover {
+  background: #f6e1a7;
+}
+
 .sidebar-project.active {
   background: #f6e1a7;
   font-weight: bold;
+  border-left: 4px solid #bf9010; /* Destaca projeto selecionado */
+  padding-left: 8px;
 }
 
 /* ===== Área Central ===== */
@@ -95,6 +100,8 @@
   flex: 1;
   padding: 30px;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .no-projects {
@@ -170,8 +177,13 @@
   padding: 25px;
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-  max-width: 600px;
+  width: 600px;          /* largura fixa */
+  height: 500px;         /* altura fixa */
+  overflow-y: auto;      /* scroll interno se necessário */
   margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .project-details h2 {
@@ -205,6 +217,12 @@
   border-radius: 6px;
   cursor: pointer;
   margin-bottom: 20px;
+  color: #0d1b2a;
+  font-weight: bold;
+}
+
+.back-btn:hover {
+  color: #bf9010;
 }
 
 .edit-btn {
@@ -302,14 +320,15 @@
   font-size: 28px;
   color: #bf9010;
   transition: background 0.3s;
-  line-height: 0; /* <- garante que ícones SVG fiquem centralizados verticalmente */
+  line-height: 0;
 }
 
 .photo-circle svg {
-  width: 50%;       /* Ajuste do tamanho do ícone */
-  height: 50%;      /* Ajuste do tamanho do ícone */
-  display: block;   /* Remove espaço extra do SVG inline */
+  width: 50%;
+  height: 50%;
+  display: block;
 }
+
 .photo-circle:hover {
   background: #fff6e0;
 }

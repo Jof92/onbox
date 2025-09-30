@@ -2,20 +2,17 @@ import React, { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import './Cards.css';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { FaPlus } from 'react-icons/fa';
+import { FaPlus, FaEdit } from 'react-icons/fa';
 
 export default function Cards() {
   const location = useLocation();
   const { projectName, projectPhoto } = location.state || {};
 
-  const [columns, setColumns] = useState({
-    nova: [],
-    andamento: [],
-    continuo: [],
-    concluido: [],
-  });
-
+  const [columns, setColumns] = useState([]);
   const [showForm, setShowForm] = useState(false);
+  const [activeColumnId, setActiveColumnId] = useState(null);
+  const [editingColumnId, setEditingColumnId] = useState(null); // nota sendo editada
+  const [columnTitleDraft, setColumnTitleDraft] = useState('');
 
   const [formData, setFormData] = useState({
     nome: '',
@@ -23,18 +20,33 @@ export default function Cards() {
     tipo: 'Lista',
   });
 
-  // Salvar nova tarefa (só na coluna Nova Tarefa)
+  // Criar nova nota (antes pilha)
+  const handleAddColumn = () => {
+    const newId = `nota-${Date.now()}`;
+    setColumns([...columns, { id: newId, title: 'Nova Nota', notas: [] }]);
+  };
+
+  // Salvar título editado
+  const saveColumnTitle = (id) => {
+    setColumns(columns.map(col =>
+      col.id === id ? { ...col, title: columnTitleDraft } : col
+    ));
+    setEditingColumnId(null);
+  };
+
+  // Salvar nova pilha (antes nota) na nota ativa
   const handleSaveTask = () => {
-    if (!formData.nome.trim()) return alert('Digite o nome da tarefa!');
+    if (!formData.nome.trim()) return alert('Digite o nome da pilha!');
+    if (!activeColumnId) return;
 
     const newTask = { ...formData };
 
-    setColumns({
-      ...columns,
-      nova: [newTask, ...columns.nova], // adiciona no topo da lista
-    });
+    setColumns(columns.map(col =>
+      col.id === activeColumnId
+        ? { ...col, notas: [newTask, ...col.notas] }
+        : col
+    ));
 
-    // Resetar form
     setFormData({ nome: '', responsavel: '', tipo: 'Lista' });
     setShowForm(false);
   };
@@ -44,19 +56,39 @@ export default function Cards() {
     const { source, destination } = result;
     if (!destination) return;
 
-    const sourceCol = source.droppableId;
-    const destCol = destination.droppableId;
+    const sourceColId = source.droppableId;
+    const destColId = destination.droppableId;
 
-    const sourceTasks = Array.from(columns[sourceCol]);
-    const [movedTask] = sourceTasks.splice(source.index, 1);
-
-    if (sourceCol === destCol) {
-      sourceTasks.splice(destination.index, 0, movedTask);
-      setColumns({ ...columns, [sourceCol]: sourceTasks });
+    if (sourceColId === destColId) {
+      const updatedColumns = columns.map(col => {
+        if (col.id === sourceColId) {
+          const tasks = Array.from(col.notas);
+          const [movedTask] = tasks.splice(source.index, 1);
+          tasks.splice(destination.index, 0, movedTask);
+          return { ...col, notas: tasks };
+        }
+        return col;
+      });
+      setColumns(updatedColumns);
     } else {
-      const destTasks = Array.from(columns[destCol]);
-      destTasks.splice(destination.index, 0, movedTask);
-      setColumns({ ...columns, [sourceCol]: sourceTasks, [destCol]: destTasks });
+      let movedTask;
+      const updatedColumns = columns.map(col => {
+        if (col.id === sourceColId) {
+          const tasks = Array.from(col.notas);
+          [movedTask] = tasks.splice(source.index, 1);
+          return { ...col, notas: tasks };
+        }
+        return col;
+      });
+
+      setColumns(updatedColumns.map(col => {
+        if (col.id === destColId && movedTask) {
+          const tasks = Array.from(col.notas);
+          tasks.splice(destination.index, 0, movedTask);
+          return { ...col, notas: tasks };
+        }
+        return col;
+      }));
     }
   };
 
@@ -64,46 +96,72 @@ export default function Cards() {
     <div className="cards-page">
       {/* Header */}
       <header className="cards-header">
-        {projectPhoto && <img src={projectPhoto} alt={projectName} className="project-photo-header" />}
+        {projectPhoto && (
+          <img src={projectPhoto} alt={projectName} className="project-photo-header" />
+        )}
         <h1>
-          Cartões - <span className="project-name">{projectName}</span>
+          Pilhas - <span className="project-name">{projectName}</span>
         </h1>
+        <button className="btn-add-pilha" onClick={handleAddColumn}>
+          <FaPlus />
+        </button>
       </header>
 
       {/* Body */}
       <DragDropContext onDragEnd={onDragEnd}>
         <div className="cards-body">
-          {[
-            { key: 'nova', title: 'Nova Tarefa', className: 'nova-tarefa' },
-            { key: 'andamento', title: 'Em Andamento', className: 'andamento' },
-            { key: 'continuo', title: 'Contínuo', className: 'continuo' },
-            { key: 'concluido', title: 'Concluído', className: 'concluido' },
-          ].map((col) => (
-            <Droppable key={col.key} droppableId={col.key}>
+          {columns.map((col) => (
+            <Droppable key={col.id} droppableId={col.id}>
               {(provided) => (
                 <div
-                  className={`cards-column ${col.className}`}
+                  className="cards-column"
                   ref={provided.innerRef}
                   {...provided.droppableProps}
                 >
-                  {/* Header da coluna */}
+                  {/* Header da nota (antes pilha) */}
                   <div className="column-header">
-                    <h3>{col.title}</h3>
-                    {col.key === 'nova' && (
-                      <button className="btn-add" onClick={() => setShowForm(true)}>
+                    {editingColumnId === col.id ? (
+                      <input
+                        type="text"
+                        value={columnTitleDraft}
+                        autoFocus
+                        onChange={(e) => setColumnTitleDraft(e.target.value)}
+                        onBlur={() => saveColumnTitle(col.id)}
+                        onKeyDown={(e) => e.key === 'Enter' && saveColumnTitle(col.id)}
+                      />
+                    ) : (
+                      <h3>{col.title}</h3>
+                    )}
+                    <div className="column-actions">
+                      <button
+                        className="btn-edit"
+                        onClick={() => {
+                          setEditingColumnId(col.id);
+                          setColumnTitleDraft(col.title);
+                        }}
+                      >
+                        <FaEdit />
+                      </button>
+                      <button
+                        className="btn-add"
+                        onClick={() => {
+                          setActiveColumnId(col.id);
+                          setShowForm(true);
+                        }}
+                      >
                         <FaPlus />
                       </button>
-                    )}
+                    </div>
                   </div>
 
                   <div className="cards-list">
-                    {columns[col.key].map((task, index) => (
+                    {col.notas.map((task, index) => (
                       <Draggable
                         key={task.nome + index}
                         draggableId={task.nome + index}
                         index={index}
                       >
-                        {(provided, snapshot) => (
+                        {(provided) => (
                           <div
                             className={`card-item tipo-${task.tipo.toLowerCase()}`}
                             ref={provided.innerRef}
@@ -125,13 +183,13 @@ export default function Cards() {
         </div>
       </DragDropContext>
 
-      {/* Modal Nova Tarefa */}
+      {/* Modal Nova Pilha (antes Nota) */}
       {showForm && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <h2>Nova Tarefa</h2>
+            <h2>Nova Pilha</h2>
 
-            <label>Nome da Tarefa</label>
+            <label>Nome da Pilha</label>
             <input
               type="text"
               value={formData.nome}
@@ -145,7 +203,7 @@ export default function Cards() {
               onChange={(e) => setFormData({ ...formData, responsavel: e.target.value })}
             />
 
-            <label>Tipo de Card</label>
+            <label>Tipo de Pilha</label>
             <select
               value={formData.tipo}
               onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
