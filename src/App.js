@@ -1,28 +1,26 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { useState } from 'react';
 import Header from './components/Header';
-import Footer from './components/Footer';
-import Containers from './components/Containers';
-import Cards from './components/Cards'; // ⬅️ importar Cards.jsx
-import './index.css';
+import LoginPanel from './components/Login';
 
 function App() {
+  const [showLogin, setShowLogin] = useState(false);
+
+  const handleLoginClick = () => {
+    setShowLogin(prev => !prev); // alterna entre mostrar/esconder
+  };
+
   return (
-    <Router>
-      <Header />
+    <div className="App">
+      <Header onLoginClick={handleLoginClick} />
+
+      {/* Painel de login, aparece apenas se showLogin for true */}
+      {showLogin && <LoginPanel onClose={() => setShowLogin(false)} />}
+
+      {/* Resto do conteúdo da página */}
       <main>
-        <Routes>
-          {/* Página inicial (login/cadastro) */}
-          <Route path="/" element={<h2>Bem-vindo ao ONBOX</h2>} />
-
-          {/* Página Containers (após login) */}
-          <Route path="/containers" element={<Containers />} />
-
-          {/* Página Cards de um projeto */}
-          <Route path="/cards/:projectName" element={<Cards />} />
-        </Routes>
+        {!showLogin && <h2>Bem-vindo ao ONBOX</h2>}
       </main>
-      <Footer />
-    </Router>
+    </div>
   );
 }
 

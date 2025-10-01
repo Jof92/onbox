@@ -1,12 +1,18 @@
+/* Header geral */
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #F5F8FF; /* tom claro que orna com azul do logo */
+  background-color: #F5F8FF; /* fundo claro */
   padding: 10px 30px;
   border-bottom: 2px solid #E0E6F5;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  position: sticky;
+  top: 0;
+  z-index: 100;
 }
 
+/* Logo à esquerda */
 .header-left {
   display: flex;
   align-items: center;
@@ -18,8 +24,10 @@
 
 .header-logo-text {
   height: 50px;
+  margin-left: 10px;
 }
 
+/* Menu de navegação */
 .header-nav {
   list-style: none;
   display: flex;
@@ -28,13 +36,51 @@
   padding: 0;
 }
 
+.header-nav li {
+  display: flex;
+  align-items: center;
+}
+
+/* Links do menu */
 .header-nav li a {
   text-decoration: none;
   font-weight: 600;
-  color: #101B3D; /* Azul-marinho da paleta */
-  transition: color 0.3s ease;
+  color: #101B3D; /* azul-marinho */
+  transition: color 0.3s ease, transform 0.2s ease;
 }
 
 .header-nav li a:hover {
-  color: #0084FF; /* Azul principal */
+  color: #0084FF; /* azul principal */
+  transform: translateY(-2px);
+}
+
+/* Botão de login */
+.header-btn-login {
+  background-color: #0084FF;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.header-btn-login:hover {
+  background-color: #006AD1;
+  transform: translateY(-2px);
+}
+
+/* Responsividade básica */
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 10px 20px;
+  }
+
+  .header-nav {
+    gap: 15px;
+    margin-top: 10px;
+  }
 }

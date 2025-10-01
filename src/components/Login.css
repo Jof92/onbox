@@ -1,24 +1,43 @@
+/* Container da tela inteira */
+.login-page {
+  height: 90vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #f8faff;
+  font-family: Arial, sans-serif;
+}
+
+/* Card de login/cadastro */
 .login-panel {
-  max-width: 360px;
-  margin: 20px auto; /* centraliza abaixo do header */
+  width: 100%;
+  max-width: 380px;
+  max-height: 90vh;
   background-color: #fff;
   border: 1px solid #E0E6F5;
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 25px;
-  box-shadow: 0px 4px 12px rgba(0,0,0,0.08);
-  animation: fadeIn 0.3s ease-in-out;
-}
-
-.login-panel h2 {
-  text-align: center;
-  color: #101B3D; /* Azul-marinho */
-  margin-bottom: 20px;
-}
-
-.form-group {
-  margin-bottom: 15px;
+  box-shadow: 0px 6px 16px rgba(0,0,0,0.1);
   display: flex;
   flex-direction: column;
+  overflow-y: auto; /* rolagem só dentro do card se necessário */
+  text-align: center;
+  animation: fadeIn 0.4s ease-in-out;
+}
+
+/* Título */
+.login-panel h2 {
+  margin-bottom: 20px;
+  color: #101B3D;
+  font-size: 22px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* Inputs e labels */
+.form-group {
+  margin-bottom: 15px;
+  text-align: left;
 }
 
 .form-group label {
@@ -28,50 +47,64 @@
 }
 
 .form-group input {
-  padding: 10px;
-  border: 1px solid #ccc;
+  width: 100%;
+  padding: 10px 0 10px;
+  border:none;
   border-radius: 6px;
   outline: none;
+  font-size: 14px;
   transition: border-color 0.3s;
+  background-color: #f0f1f4;
 }
 
-.form-group input:focus {
-  border-color: #0084FF; /* Azul principal */
-}
-
+/* Botão */
 .login-btn {
   width: 100%;
-  padding: 10px;
-  background-color: #0084FF;
+  padding: 12px;
+  background: linear-gradient(90deg, #0084FF, #006AD1);
   border: none;
   border-radius: 6px;
   color: #fff;
+  font-size: 15px;
   font-weight: bold;
   cursor: pointer;
-  transition: background-color 0.3s;
+  margin-top: 5px;
+  transition: all 0.3s;
 }
 
 .login-btn:hover {
-  background-color: #006AD1; /* Azul mais escuro */
+  background: linear-gradient(90deg, #006AD1, #004FA1);
+  box-shadow: 0 4px 10px rgba(0,132,255,0.25);
 }
 
+/* Link de cadastro/login */
 .signup-link {
   margin-top: 15px;
-  text-align: center;
   font-size: 14px;
 }
 
-.signup-link a {
-  color: #FFC600; /* Amarelo */
+.link-btn {
+  background: none;
+  border: none;
+  color: #FFC600;
   font-weight: bold;
-  text-decoration: none;
+  cursor: pointer;
 }
 
-.signup-link a:hover {
+.link-btn:hover {
   text-decoration: underline;
+  color: #e6ae00;
 }
 
+/* Erro de senha */
+.error-msg {
+  color: #d93025;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+/* Animação */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-10px); }
+  from { opacity: 0; transform: translateY(-12px); }
   to { opacity: 1; transform: translateY(0); }
 }
