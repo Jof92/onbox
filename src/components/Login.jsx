@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import './Login.css';
+import { supabase } from '../supabaseClient';
 
 export default function LoginPanel({ onLogin }) {
   const [isSignup, setIsSignup] = useState(false);
@@ -12,135 +14,173 @@ export default function LoginPanel({ onLogin }) {
     confirmarSenha: ''
   });
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const navigate = useNavigate();
+
+  const handleChange = (field, value) => {
+    setFormData({ ...formData, [field]: value });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (isSignup && formData.senha !== formData.confirmarSenha) {
-      setError('As senhas não conferem!');
-      return;
-    }
-
     setError('');
+    setSuccessMessage('');
+    setLoading(true);
 
-    // Codifica a senha (exemplo simples, apenas visual)
-    const senhaCodificada = btoa(formData.senha);
+    try {
+      if (isSignup) {
+        // Validações básicas
+        if (!formData.email.includes('@')) {
+          setError('Email inválido!');
+          setLoading(false);
+          return;
+        }
+        if (formData.senha.length < 6) {
+          setError('Senha deve ter no mínimo 6 caracteres!');
+          setLoading(false);
+          return;
+        }
+        if (formData.senha !== formData.confirmarSenha) {
+          setError('As senhas não conferem!');
+          setLoading(false);
+          return;
+        }
 
-    // Monta dados para enviar
-    const dadosEnvio = {
-      ...formData,
-      senha: senhaCodificada
-    };
+        console.log('Tentando criar usuário:', formData);
 
-    // Aqui você integraria com Supabase
-    console.log('Dados enviados para Supabase:', dadosEnvio);
+        // Criar usuário no Auth
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email: formData.email,
+          password: formData.senha
+        });
 
-    // Simula login bem-sucedido
-    if (onLogin) onLogin();
+        console.log('signUpData:', signUpData);
+        console.log('signUpError:', signUpError);
+
+        if (signUpError) throw signUpError;
+
+        const userId = signUpData.user?.id;
+        if (!userId) {
+          throw new Error('Erro ao criar usuário. ID não retornado pelo Auth.');
+        }
+
+        // Inserir perfil na tabela profiles
+        const { error: profileError } = await supabase.from('profiles').insert([
+          {
+            id: userId,
+            nome: formData.nome,
+            empresa: formData.empresa,
+            funcao: formData.funcao,
+            email: formData.email
+          }
+        ]);
+
+        if (profileError) throw profileError;
+
+        // Limpar formulário e mostrar mensagem
+        setFormData({
+          nome: '',
+          empresa: '',
+          funcao: '',
+          email: '',
+          senha: '',
+          confirmarSenha: ''
+        });
+
+        setSuccessMessage(
+          'Cadastro feito com sucesso! Verifique seu email para confirmar a conta.'
+        );
+
+      } else {
+        // Login normal
+        const { data, error: loginError } = await supabase.auth.signInWithPassword({
+          email: formData.email,
+          password: formData.senha
+        });
+        if (loginError) throw loginError;
+
+        if (onLogin) onLogin();
+        navigate('/containers');
+      }
+    } catch (err) {
+      console.error(err);
+      if (err.status === 500) {
+        setError('Erro do servidor: verifique sua conexão ou tente outro email.');
+      } else {
+        setError(err.message || 'Erro ao processar a requisição.');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const renderInput = (label, field, type = 'text', required = true) => (
+    <div className="form-group">
+      <label>{label}</label>
+      <input
+        type={type}
+        value={formData[field]}
+        onChange={(e) => handleChange(field, e.target.value)}
+        required={required}
+      />
+    </div>
+  );
 
   return (
     <div className="login-page">
       <div className="login-panel">
-        {isSignup ? (
+        {successMessage ? (
+          <div className="success-message">{successMessage}</div>
+        ) : (
           <>
-            <h2>Criar Conta</h2>
+            <h2>{isSignup ? 'Criar Conta' : 'Entrar'}</h2>
             <form onSubmit={handleSubmit}>
-              <div className="form-group">
-                <label>Nome</label>
-                <input
-                  type="text"
-                  value={formData.nome}
-                  onChange={(e) => setFormData({...formData, nome: e.target.value})}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Empresa</label>
-                <input
-                  type="text"
-                  value={formData.empresa}
-                  onChange={(e) => setFormData({...formData, empresa: e.target.value})}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Função</label>
-                <input
-                  type="text"
-                  value={formData.funcao}
-                  onChange={(e) => setFormData({...formData, funcao: e.target.value})}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Email</label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({...formData, email: e.target.value})}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Senha</label>
-                <input
-                  type="password"
-                  value={formData.senha}
-                  onChange={(e) => setFormData({...formData, senha: e.target.value})}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Confirmar Senha</label>
-                <input
-                  type="password"
-                  value={formData.confirmarSenha}
-                  onChange={(e) => setFormData({...formData, confirmarSenha: e.target.value})}
-                  required
-                />
-              </div>
+              {isSignup && renderInput('Nome', 'nome')}
+              {isSignup && renderInput('Empresa', 'empresa')}
+              {isSignup && renderInput('Função', 'funcao')}
+              {renderInput('Email', 'email', 'email')}
+              {renderInput('Senha', 'senha', 'password')}
+              {isSignup && renderInput('Confirmar Senha', 'confirmarSenha', 'password')}
 
               {error && <div className="error-msg">{error}</div>}
 
-              <button type="submit" className="login-btn">Cadastrar</button>
-            </form>
-            <p className="signup-link">
-              Já tem conta?{' '}
-              <button type="button" onClick={() => setIsSignup(false)} className="link-btn">
-                Entrar
+              <button type="submit" className="login-btn" disabled={loading}>
+                {loading
+                  ? isSignup
+                    ? 'Cadastrando...'
+                    : 'Entrando...'
+                  : isSignup
+                  ? 'Cadastrar'
+                  : 'Acessar'}
               </button>
-            </p>
-          </>
-        ) : (
-          <>
-            <h2>Entrar</h2>
-            <form onSubmit={handleSubmit}>
-              <div className="form-group">
-                <label>Email</label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({...formData, email: e.target.value})}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Senha</label>
-                <input
-                  type="password"
-                  value={formData.senha}
-                  onChange={(e) => setFormData({...formData, senha: e.target.value})}
-                  required
-                />
-              </div>
-              <button type="submit" className="login-btn">Acessar</button>
             </form>
+
             <p className="signup-link">
-              Não tem conta?{' '}
-              <button type="button" onClick={() => setIsSignup(true)} className="link-btn">
-                Cadastre-se
-              </button>
+              {isSignup ? (
+                <>
+                  Já tem conta?{' '}
+                  <button
+                    type="button"
+                    onClick={() => setIsSignup(false)}
+                    className="link-btn"
+                  >
+                    Entrar
+                  </button>
+                </>
+              ) : (
+                <>
+                  Não tem conta?{' '}
+                  <button
+                    type="button"
+                    onClick={() => setIsSignup(true)}
+                    className="link-btn"
+                  >
+                    Cadastre-se
+                  </button>
+                </>
+              )}
             </p>
           </>
         )}

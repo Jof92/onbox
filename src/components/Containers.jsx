@@ -20,7 +20,6 @@ export default function Containers() {
     createdAt: null,
   });
 
-  // Upload da foto
   const handlePhotoUpload = (e) => {
     if (e.target.files && e.target.files[0]) {
       setNewProject({
@@ -58,7 +57,6 @@ export default function Containers() {
     setNewProject({ ...newProject, eap: updated });
   };
 
-  // Salvar projeto
   const saveProject = () => {
     if (!newProject.name.trim()) {
       alert('Digite o nome do projeto!');
@@ -134,7 +132,6 @@ export default function Containers() {
             <FaPlus className="icon" /> Novo Setor
           </button>
 
-          {/* Lista de projetos */}
           <div className="sidebar-projects">
             {projects.map((proj, i) => (
               <div
@@ -148,7 +145,7 @@ export default function Containers() {
           </div>
         </aside>
 
-        {/* Área Central */}
+        {/* ✅ MAIN agora independente */}
         <main className="containers-main">
           {!selectedProject ? (
             projects.length === 0 ? (
@@ -171,7 +168,6 @@ export default function Containers() {
               </div>
             )
           ) : (
-            // Mostra detalhes do projeto selecionado ao clicar no nome da sidebar
             <div className="project-details">
               <button className="back-btn" onClick={() => setSelectedProject(null)}>
                 &larr; Voltar
@@ -212,7 +208,6 @@ export default function Containers() {
                 </>
               )}
 
-              {/* Botão Editar */}
               <div className="details-actions">
                 <button
                   className="edit-btn"

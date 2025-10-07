@@ -1,4 +1,4 @@
-/* Reset básico e fonte global */
+/* 🎨 RESET BÁSICO E FONTE GLOBAL */
 * {
   margin: 0;
   padding: 0;
@@ -6,25 +6,19 @@
 }
 
 body {
-  font-family: Arial, Helvetica, sans-serif;
-  background-color: #e3e4e6; /* cinza claro */
+  font-family: 'Segoe UI', Arial, Helvetica, sans-serif;
+  background-color: #e3e4e6;
+  color: #333;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
-/* Ajuste para o conteúdo não ficar atrás do header */
-main {
- 
-  padding-top: 7rem; /* altura do header */
-}
-
-
-/* Links padrão */
+/* 🌐 LINKS E BOTÕES */
 a {
   text-decoration: none;
   color: inherit;
 }
 
-/* Botões padrão */
 button {
   font-family: inherit;
   cursor: pointer;
@@ -32,3 +26,135 @@ button {
   outline: none;
 }
 
+/* 📦 CONTEÚDO PRINCIPAL — agora com classe exclusiva */
+.app-main {
+  padding-top: 5rem; /* altura do header */
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: calc(100vh - 7rem);
+  text-align: center;
+}
+
+/* 🏠 SEÇÃO DE BOAS-VINDAS */
+.welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  padding: 2rem;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.welcome:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.1);
+}
+
+.welcome h2 {
+  font-size: 1.8rem;
+  color: #1a1a1a;
+}
+
+.welcome p {
+  font-size: 1rem;
+  color: #555;
+}
+
+/* 💫 ANIMAÇÃO DO PAINEL DE LOGIN */
+.login-panel-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  background: #fff;
+  z-index: 999;
+  opacity: 0;
+  transform: translateY(-100%);
+  transition: all 0.9s ease; /* mais lento e suave */
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  overflow-y: auto; /* se o conteúdo for grande */
+}
+
+.login-panel-container.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (max-width: 768px) {
+  .login-panel-container {
+    padding: 1rem;
+  }
+}
+
+
+.welcome {
+  text-align: center;
+  padding: 4rem 2rem;
+}
+
+.welcome .brand {
+  color: #0078ff;
+}
+
+/* 🎯 RESPONSIVIDADE */
+@media (max-width: 600px) {
+  .app-main {
+    padding-top: 6rem;
+  }
+
+  .login-panel-wrapper {
+    width: 90%;
+  }
+
+  .welcome {
+    width: 95%;
+    padding: 1.5rem;
+  }
+
+  .welcome h2 {
+    font-size: 1.5rem;
+  }
+}
+
+/* 🧭 SUAVIZAÇÃO DE TRANSIÇÕES GERAIS */
+html {
+  scroll-behavior: smooth;
+}
+
+button,
+a {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+button:hover,
+a:hover {
+  opacity: 0.85;
+  transform: scale(1.02);
+}
+
+/* ✅ MENSAGEM DE SUCESSO (para cadastros) */
+.success-message {
+  position: fixed;
+  top: 100px;
+  right: 20px;
+  background-color: #28c76f;
+  color: white;
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+  font-weight: 500;
+  animation: fadeInOut 4s ease forwards;
+  z-index: 999;
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translateY(-20px); }
+  10%, 90% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-20px); }
+}
