@@ -102,10 +102,8 @@
 
 /* ===== Área Central ===== */
 .containers-main {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
   justify-content: flex-start;
   min-height: calc(100vh - 7rem);
   text-align: center;
@@ -371,12 +369,49 @@
   object-fit: cover;
 }
 
-/* Lista dinâmica */
+/* ===== Lista Dinâmica Pavimentos/EAP ===== */
+.list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: bold;
+  font-size: 16px;
+  color: #0d1b2a;
+  margin-top: 10px;
+  margin-bottom: 5px;
+}
+
+.add-icon {
+  cursor: pointer;
+  color: #28a745;
+  font-size: 18px;
+  transition: color 0.2s, transform 0.2s;
+}
+
+.add-icon:hover {
+  color: #218838;
+  transform: scale(1.2);
+}
+
 .list-item {
   display: flex;
   align-items: center;
   gap: 10px;
   margin-bottom: 8px;
+}
+
+.list-item input {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  outline: none;
+  transition: all 0.25s;
+}
+
+.list-item input:focus {
+  border-color: #bf9010;
+  box-shadow: 0 0 6px rgba(191,144,16,0.3);
 }
 
 .delete-icon {
@@ -390,25 +425,7 @@
   transform: scale(1.1);
 }
 
-/* Botões */
-.small-btn {
-  background: #007bff;
-  color: white;
-  padding: 7px 14px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-  transition: all 0.2s;
-  margin-bottom: 8px;
-}
-
-.small-btn:hover {
-  background: #0056b3;
-  transform: translateY(-2px);
-}
-
-/* Footer */
+/* Modal Footer */
 .modal-footer {
   display: flex;
   justify-content: flex-end;
@@ -458,5 +475,18 @@
   .photo-circle {
     width: 90px;
     height: 90px;
+  }
+
+  .list-header {
+    font-size: 14px;
+  }
+
+  .add-icon {
+    font-size: 16px;
+  }
+
+  .list-item input {
+    padding: 8px 10px;
+    font-size: 14px;
   }
 }

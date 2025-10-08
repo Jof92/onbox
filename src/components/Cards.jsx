@@ -1,17 +1,23 @@
-import React, { useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import './Cards.css';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { FaPlus, FaEdit } from 'react-icons/fa';
 
-export default function Cards() {
+export default function Cards({ projects }) {
+  const { projectName } = useParams();
   const location = useLocation();
-  const { projectName, projectPhoto } = location.state || {};
+  const navigate = useNavigate();
+
+  // Tenta pegar do state, senão do parâmetro da URL
+  const projectFromState = location.state?.projectName
+    ? { name: location.state.projectName, photo: location.state.projectPhoto }
+    : projects.find(p => p.name === decodeURIComponent(projectName)) || {};
 
   const [columns, setColumns] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [activeColumnId, setActiveColumnId] = useState(null);
-  const [editingColumnId, setEditingColumnId] = useState(null); // nota sendo editada
+  const [editingColumnId, setEditingColumnId] = useState(null);
   const [columnTitleDraft, setColumnTitleDraft] = useState('');
 
   const [formData, setFormData] = useState({
@@ -20,13 +26,18 @@ export default function Cards() {
     tipo: 'Lista',
   });
 
-  // Criar nova nota (antes pilha)
+  useEffect(() => {
+    if (!projectFromState.name) {
+      alert('Projeto não encontrado!');
+      navigate('/containers');
+    }
+  }, [projectFromState, navigate]);
+
   const handleAddColumn = () => {
     const newId = `nota-${Date.now()}`;
     setColumns([...columns, { id: newId, title: 'Nova Nota', notas: [] }]);
   };
 
-  // Salvar título editado
   const saveColumnTitle = (id) => {
     setColumns(columns.map(col =>
       col.id === id ? { ...col, title: columnTitleDraft } : col
@@ -34,7 +45,6 @@ export default function Cards() {
     setEditingColumnId(null);
   };
 
-  // Salvar nova pilha (antes nota) na nota ativa
   const handleSaveTask = () => {
     if (!formData.nome.trim()) return alert('Digite o nome da pilha!');
     if (!activeColumnId) return;
@@ -51,7 +61,6 @@ export default function Cards() {
     setShowForm(false);
   };
 
-  // Drag & Drop
   const onDragEnd = (result) => {
     const { source, destination } = result;
     if (!destination) return;
@@ -94,20 +103,18 @@ export default function Cards() {
 
   return (
     <div className="cards-page">
-      {/* Header */}
       <header className="cards-header">
-        {projectPhoto && (
-          <img src={projectPhoto} alt={projectName} className="project-photo-header" />
+        {projectFromState.photo && (
+          <img src={projectFromState.photo} alt={projectFromState.name} className="project-photo-header" />
         )}
         <h1>
-          Pilhas - <span className="project-name">{projectName}</span>
+          Pilhas - <span className="project-name">{projectFromState.name}</span>
         </h1>
         <button className="btn-add-pilha" onClick={handleAddColumn}>
           <FaPlus />
         </button>
       </header>
 
-      {/* Body */}
       <DragDropContext onDragEnd={onDragEnd}>
         <div className="cards-body">
           {columns.map((col) => (
@@ -118,7 +125,6 @@ export default function Cards() {
                   ref={provided.innerRef}
                   {...provided.droppableProps}
                 >
-                  {/* Header da nota (antes pilha) */}
                   <div className="column-header">
                     {editingColumnId === col.id ? (
                       <input
@@ -183,7 +189,6 @@ export default function Cards() {
         </div>
       </DragDropContext>
 
-      {/* Modal Nova Pilha (antes Nota) */}
       {showForm && (
         <div className="modal-overlay">
           <div className="modal-content">
