@@ -25,7 +25,7 @@
   font-weight: bold;
 }
 
-/* Layout */
+/* ===== Layout ===== */
 .containers-body {
   display: flex;
   flex: 1;
@@ -73,7 +73,7 @@
   transform: translateY(-2px);
 }
 
-/* Projetos da Sidebar */
+/* ===== Projetos da Sidebar ===== */
 .sidebar-projects {
   margin-top: 20px;
   display: flex;
@@ -104,9 +104,8 @@
 .containers-main {
   display: flex;
   flex-direction: column;
+  flex: 1;
   justify-content: flex-start;
-  min-height: calc(100vh - 7rem);
-  text-align: center;
   overflow-y: auto;
   padding: 20px;
 }
@@ -116,19 +115,24 @@
   font-style: italic;
   margin: 40px 0;
   font-size: 16px;
+  text-align: center;
 }
 
-/* ===== Grid de Projetos ===== */
+/* ===== Projetos Lado a Lado ===== */
 .projects-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: flex-start;
   gap: 25px;
+  padding: 10px 5px;
 }
 
 .project-box {
   background: #fff;
   border-radius: 12px;
   padding: 20px 15px;
+  flex: 0 0 230px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -465,8 +469,28 @@
   transform: translateY(-2px);
 }
 
-/* Responsividade */
-@media (max-width: 600px) {
+/* ===== Responsividade ===== */
+@media (max-width: 768px) {
+  .containers-body {
+    flex-direction: column;
+  }
+
+  .containers-sidebar {
+    border-right: none;
+    border-bottom: 2px solid #f6e1a7;
+    flex-direction: row;
+    justify-content: space-around;
+    gap: 10px;
+  }
+
+  .projects-grid {
+    justify-content: center;
+  }
+
+  .project-box {
+    flex: 0 0 180px;
+  }
+
   .modal-content {
     width: 100%;
     padding: 20px 15px;
@@ -478,15 +502,6 @@
   }
 
   .list-header {
-    font-size: 14px;
-  }
-
-  .add-icon {
-    font-size: 16px;
-  }
-
-  .list-item input {
-    padding: 8px 10px;
     font-size: 14px;
   }
 }
