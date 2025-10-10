@@ -29,7 +29,6 @@ export default function Containers() {
     loadUser();
   }, []);
 
-  // 🟢 Buscar projetos e fotos associadas
   const fetchProjects = async (userId) => {
     const { data: projectsData, error } = await supabase
       .from('projects')
@@ -73,11 +72,9 @@ export default function Containers() {
     return colors[Math.floor(Math.random() * colors.length)];
   };
 
-  // 🟣 SALVAR PROJETO
   const saveProject = async () => {
     if (!newProject.name.trim()) return alert('Digite o nome do projeto!');
 
-    // 🔹 Criar ou atualizar projeto
     let currentProjectId = selectedProject?.id;
     let projectResult;
 
@@ -101,7 +98,6 @@ export default function Containers() {
       currentProjectId = data.id;
     }
 
-    // 🔹 Upload da foto no bucket e salvar em projects_photos
     if (newProject.photoFile) {
       const fileName = `${Date.now()}_${newProject.photoFile.name}`;
       const { error: uploadError } = await supabase.storage
@@ -118,9 +114,11 @@ export default function Containers() {
         .insert([{ project_id: currentProjectId, photo_url: urlData.publicUrl }]);
     }
 
-    // 🔹 Pavimentos e EAP
+    // Limpar Pavimentos e EAP existentes
     await supabase.from('pavimentos').delete().eq('project_id', currentProjectId);
     await supabase.from('eap').delete().eq('project_id', currentProjectId);
+
+    // Inserir Pavimentos e EAP
     for (const pav of newProject.pavimentos.filter(Boolean))
       await supabase.from('pavimentos').insert({ name: pav, project_id: currentProjectId });
     for (const eap of newProject.eap.filter(Boolean))
@@ -132,11 +130,9 @@ export default function Containers() {
     fetchProjects(user.id);
   };
 
-  // 🗑️ Deletar projeto e fotos
   const handleDeleteProject = async (projectId) => {
     if (!window.confirm('Deseja realmente apagar este projeto?')) return;
 
-    // Deleta fotos no bucket
     const { data: photoRecords } = await supabase
       .from('projects_photos')
       .select('photo_url')
@@ -176,7 +172,6 @@ export default function Containers() {
     });
   };
 
-  // 🧱 JSX
   return (
     <div className="containers-page">
       <header className="containers-header"><h1>Container</h1></header>
@@ -196,9 +191,9 @@ export default function Containers() {
                 className={`sidebar-project ${selectedProject?.id === proj.id ? 'active' : ''}`}
                 onClick={() => setSelectedProject(proj)}
               >
-                {proj.name}
+                <span className="project-name">{proj.name}</span>
                 <FaTrash
-                  className="delete-icon"
+                  className="delete-icon hidden"
                   onClick={(e) => { e.stopPropagation(); handleDeleteProject(proj.id); }}
                 />
               </div>
@@ -230,11 +225,42 @@ export default function Containers() {
           ) : (
             <div className="project-details">
               <button className="back-btn" onClick={() => setSelectedProject(null)}>&larr; Voltar</button>
-              <div className="details-photo" style={{ backgroundColor: selectedProject.photo_url ? undefined : getRandomColor(), color: '#fff' }}>
+
+              <div
+                className="details-photo"
+                style={{ backgroundColor: selectedProject.photo_url ? undefined : getRandomColor(), color: '#fff' }}
+              >
                 {selectedProject.photo_url ? <img src={selectedProject.photo_url} alt={selectedProject.name} /> : selectedProject.name.charAt(0)}
               </div>
+
               <h2>{selectedProject.name}</h2>
               <p>Tipo: {selectedProject.type === 'vertical' ? 'Edificação Vertical' : 'Edificação Horizontal'}</p>
+
+              {/* Pavimentos */}
+              {selectedProject.pavimentos?.length > 0 && (
+                <div className="project-section">
+                  <h3>Pavimentos:</h3>
+                  <ul>
+                    {selectedProject.pavimentos.map((pav) => (
+                      <li key={pav.id}>{pav.name}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* EAP */}
+              {selectedProject.eap?.length > 0 && (
+                <div className="project-section">
+                  <h3>EAP:</h3>
+                  <ul>
+                    {selectedProject.eap.map((eapItem) => (
+                      <li key={eapItem.id}>{eapItem.name}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <button className="edit-btn" onClick={() => handleEditProject(selectedProject)}>Editar</button>
             </div>
           )}
         </main>
