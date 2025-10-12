@@ -3,17 +3,14 @@ import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import './Cards.css';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { FaPlus, FaEdit } from 'react-icons/fa';
+import { supabase } from '../supabaseClient';
 
-export default function Cards({ projects }) {
+export default function Cards() {
   const { projectName } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Tenta pegar do state, senão do parâmetro da URL
-  const projectFromState = location.state?.projectName
-    ? { name: location.state.projectName, photo: location.state.projectPhoto }
-    : projects.find(p => p.name === decodeURIComponent(projectName)) || {};
-
+  const [project, setProject] = useState(null);
   const [columns, setColumns] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [activeColumnId, setActiveColumnId] = useState(null);
@@ -26,34 +23,111 @@ export default function Cards({ projects }) {
     tipo: 'Lista',
   });
 
+  // Carregar projeto e suas pilhas/notas
   useEffect(() => {
-    if (!projectFromState.name) {
+    const projectId = location.state?.projectId;
+
+    if (!projectId) {
       alert('Projeto não encontrado!');
       navigate('/containers');
+      return;
     }
-  }, [projectFromState, navigate]);
 
-  const handleAddColumn = () => {
-    const newId = `nota-${Date.now()}`;
-    setColumns([...columns, { id: newId, title: 'Nova Nota', notas: [] }]);
+    const fetchProjectData = async () => {
+      const { data: projectData, error: projectError } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('id', projectId)
+        .single();
+
+      if (projectError || !projectData) {
+        alert('Projeto não encontrado!');
+        navigate('/containers');
+        return;
+      }
+
+      setProject(projectData);
+
+      const { data: pilhasData, error: pilhasError } = await supabase
+        .from('pilhas')
+        .select('*, notas(*)')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: true });
+
+      if (pilhasError) {
+        console.error(pilhasError);
+        return;
+      }
+
+      const formattedColumns = pilhasData.map((p) => ({
+        id: p.id,
+        title: p.title,
+        notas: p.notas || [],
+      }));
+
+      setColumns(formattedColumns);
+    };
+
+    fetchProjectData();
+  }, [location.state, navigate]);
+
+  // Adicionar nova coluna/pilha
+  const handleAddColumn = async () => {
+    if (!project) return;
+    const title = 'Nova Pilha';
+
+    const { data: newPilha, error } = await supabase
+      .from('pilhas')
+      .insert([{ project_id: project.id, title }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error(error);
+      return alert('Erro ao criar pilha');
+    }
+
+    setColumns([...columns, { id: newPilha.id, title: newPilha.title, notas: [] }]);
   };
 
-  const saveColumnTitle = (id) => {
-    setColumns(columns.map(col =>
-      col.id === id ? { ...col, title: columnTitleDraft } : col
-    ));
+  const saveColumnTitle = async (id) => {
+    const { error } = await supabase
+      .from('pilhas')
+      .update({ title: columnTitleDraft })
+      .eq('id', id);
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setColumns(columns.map(col => col.id === id ? { ...col, title: columnTitleDraft } : col));
     setEditingColumnId(null);
   };
 
-  const handleSaveTask = () => {
-    if (!formData.nome.trim()) return alert('Digite o nome da pilha!');
+  const handleSaveTask = async () => {
+    if (!formData.nome.trim()) return alert('Digite o nome da nota!');
     if (!activeColumnId) return;
 
-    const newTask = { ...formData };
+    const { data: newNota, error } = await supabase
+      .from('notas')
+      .insert([{
+        pilha_id: activeColumnId,
+        nome: formData.nome,
+        responsavel: formData.responsavel,
+        tipo: formData.tipo
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error(error);
+      return alert('Erro ao criar nota');
+    }
 
     setColumns(columns.map(col =>
       col.id === activeColumnId
-        ? { ...col, notas: [newTask, ...col.notas] }
+        ? { ...col, notas: [newNota, ...col.notas] }
         : col
     ));
 
@@ -101,14 +175,23 @@ export default function Cards({ projects }) {
     }
   };
 
+  // 🎨 Loading animado
+  if (!project)
+    return (
+      <div className="loading-card">
+        <div className="loading-box"></div>
+        <p>Carregando projeto...</p>
+      </div>
+    );
+
   return (
     <div className="cards-page">
       <header className="cards-header">
-        {projectFromState.photo && (
-          <img src={projectFromState.photo} alt={projectFromState.name} className="project-photo-header" />
+        {project.photo_url && (
+          <img src={project.photo_url} alt={project.name} className="project-photo-header" />
         )}
         <h1>
-          Pilhas - <span className="project-name">{projectFromState.name}</span>
+          Pilhas - <span className="project-name">{project.name}</span>
         </h1>
         <button className="btn-add-pilha" onClick={handleAddColumn}>
           <FaPlus />
@@ -163,8 +246,8 @@ export default function Cards({ projects }) {
                   <div className="cards-list">
                     {col.notas.map((task, index) => (
                       <Draggable
-                        key={task.nome + index}
-                        draggableId={task.nome + index}
+                        key={task.id}
+                        draggableId={task.id}
                         index={index}
                       >
                         {(provided) => (
@@ -192,9 +275,9 @@ export default function Cards({ projects }) {
       {showForm && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <h2>Nova Pilha</h2>
+            <h2>Nova Nota</h2>
 
-            <label>Nome da Pilha</label>
+            <label>Nome</label>
             <input
               type="text"
               value={formData.nome}
@@ -208,14 +291,16 @@ export default function Cards({ projects }) {
               onChange={(e) => setFormData({ ...formData, responsavel: e.target.value })}
             />
 
-            <label>Tipo de Pilha</label>
+            <label>Tipo</label>
             <select
               value={formData.tipo}
               onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
             >
               <option>Lista</option>
-              <option>Comentários</option>
-              <option>Lembrete</option>
+              <option>Diário de Obra</option>
+              <option>Livres</option>
+              <option>Atas</option>
+              <option>Medição</option>
             </select>
 
             <div className="modal-actions">

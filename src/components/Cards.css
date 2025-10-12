@@ -1,4 +1,6 @@
-/* Página Cards */
+/* ==============================
+   🎨 Página Cards
+   ============================== */
 .cards-page {
   display: flex;
   flex-direction: column;
@@ -7,7 +9,9 @@
   font-family: 'Arial', sans-serif;
 }
 
-/* Header */
+/* ==============================
+   🏠 Header
+   ============================== */
 .cards-header {
   display: flex;
   align-items: center;
@@ -46,20 +50,22 @@
 
 /* Botão de adicionar pilha no header */
 .cards-header .btn-add-pilha {
-  background: none ;
+  background: none;
   border: none;
   color: #f59e0b;
   font-size: 20px;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: all 0.2s ease;
 }
 
 .cards-header .btn-add-pilha:hover {
-  color:rgb(215, 188, 158);
+  color: rgb(215, 188, 158);
   font-size: 22px;
 }
 
-/* Corpo */
+/* ==============================
+   🗂 Corpo
+   ============================== */
 .cards-body {
   display: flex;
   flex: 1;
@@ -68,7 +74,9 @@
   overflow-x: auto;
 }
 
-/* Colunas */
+/* ==============================
+   📦 Colunas
+   ============================== */
 .cards-column {
   border-radius: 10px;
   padding: 15px;
@@ -78,9 +86,10 @@
   display: flex;
   flex-direction: column;
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
+  background: #fff;
 }
 
-/* Header da coluna (título + botões) */
+/* Header da coluna */
 .column-header {
   display: flex;
   align-items: center;
@@ -89,7 +98,6 @@
   gap: 6px;
 }
 
-/* Título da pilha */
 .column-header h3 {
   font-size: 16px;
   font-weight: bold;
@@ -99,26 +107,25 @@
   border-radius: 6px;
   flex: 1;
   text-align: center;
-  background-color: #2563eb; /* cor padrão se quiser azul, muda conforme tema da pilha */
+  background-color: #2563eb;
 }
 
-/* Input para edição de título inline */
 .column-header input {
   font-size: 16px;
   font-weight: bold;
   padding: 6px 10px;
   border-radius: 6px;
-  border: 2px solid #bf9010; /* borda visível */
+  border: 2px solid #bf9010;
   flex: 1;
   text-align: center;
   outline: none;
-  background-color: #fff; /* fundo branco */
-  color: #0d1b2a; /* texto escuro legível */
+  background-color: #fff;
+  color: #0d1b2a;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .column-header input:focus {
-  border-color: #2563eb; /* muda cor ao focar */
+  border-color: #2563eb;
   box-shadow: 0 0 6px rgba(37, 99, 235, 0.5);
 }
 
@@ -128,7 +135,6 @@
   gap: 4px;
 }
 
-/* Botão de adicionar nota (+) */
 .column-header .btn-add {
   background: #f59e0b;
   border: none;
@@ -144,7 +150,6 @@
   background: #d97706;
 }
 
-/* Botão de editar título */
 .column-header .btn-edit {
   background: #2563eb;
   border: none;
@@ -160,13 +165,14 @@
   background: #1d4ed8;
 }
 
-/* Lista de cards */
+/* ==============================
+   📝 Cards
+   ============================== */
 .cards-list {
   flex: 1;
   min-height: 50px;
 }
 
-/* Card base */
 .card-item {
   background: #fff;
   border-radius: 8px;
@@ -204,14 +210,18 @@
 .card-item.tipo-lista {
   border-left: 5px solid #2563eb;
 }
+
 .card-item.tipo-comentarios {
   border-left: 5px solid #059669;
 }
+
 .card-item.tipo-lembrete {
   border-left: 5px solid #f59e0b;
 }
 
-/* -------- Modal -------- */
+/* ==============================
+   💬 Modal
+   ============================== */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -289,4 +299,36 @@
 
 .modal-actions .btn-cancelar:hover {
   background: #b91c1c;
+}
+
+/* ==============================
+   ⏳ Loading - Caixa abrindo
+   ============================== */
+.loading-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  gap: 1rem;
+}
+
+.loading-box {
+  width: 80px;
+  height: 80px;
+  background-color: #0078ff;
+  border-radius: 16px;
+  animation: openBox 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes openBox {
+  0% { transform: scaleY(0.3); opacity: 0.5; }
+  50% { transform: scaleY(1.1); opacity: 0.8; }
+  100% { transform: scaleY(1); opacity: 1; }
+}
+
+.loading-card p {
+  font-size: 1rem;
+  color: #555;
+  font-weight: 500;
 }

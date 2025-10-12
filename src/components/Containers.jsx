@@ -40,6 +40,7 @@ export default function Containers() {
 
     const projectsWithPhotos = await Promise.all(
       (projectsData || []).map(async (proj) => {
+        // Pega a foto mais recente
         const { data: photoData } = await supabase
           .from('projects_photos')
           .select('photo_url')
@@ -98,6 +99,7 @@ export default function Containers() {
       currentProjectId = data.id;
     }
 
+    // Upload da foto
     if (newProject.photoFile) {
       const fileName = `${Date.now()}_${newProject.photoFile.name}`;
       const { error: uploadError } = await supabase.storage
@@ -166,9 +168,10 @@ export default function Containers() {
     });
   };
 
+  // ✅ Atualizado: abrir Cards enviando projectId
   const openCardsPage = (proj) => {
     navigate(`/cards/${encodeURIComponent(proj.name)}`, {
-      state: { projectName: proj.name, projectPhoto: proj.photo_url },
+      state: { projectId: proj.id, projectName: proj.name, projectPhoto: proj.photo_url },
     });
   };
 
@@ -177,7 +180,6 @@ export default function Containers() {
       <header className="containers-header"><h1>Container</h1></header>
 
       <div className="containers-body">
-        {/* Sidebar */}
         <aside className="containers-sidebar">
           <div className="sidebar-item"><FaCog className="icon" /><span>Controle</span></div>
           <button className="sidebar-btn" onClick={() => { setIsEditing(false); setShowForm(true); }}>
@@ -201,7 +203,6 @@ export default function Containers() {
           </div>
         </aside>
 
-        {/* Main */}
         <main className="containers-main">
           {!selectedProject ? (
             projects.length ? (
@@ -236,7 +237,6 @@ export default function Containers() {
               <h2>{selectedProject.name}</h2>
               <p>Tipo: {selectedProject.type === 'vertical' ? 'Edificação Vertical' : 'Edificação Horizontal'}</p>
 
-              {/* Pavimentos */}
               {selectedProject.pavimentos?.length > 0 && (
                 <div className="project-section">
                   <h3>Pavimentos:</h3>
@@ -248,7 +248,6 @@ export default function Containers() {
                 </div>
               )}
 
-              {/* EAP */}
               {selectedProject.eap?.length > 0 && (
                 <div className="project-section">
                   <h3>EAP:</h3>
@@ -266,7 +265,6 @@ export default function Containers() {
         </main>
       </div>
 
-      {/* Modal */}
       {showForm && (
         <div className="modal-overlay">
           <div className="modal-content">
