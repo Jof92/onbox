@@ -4,9 +4,9 @@
 .cards-page {
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  background-color: #f8faff;
-  font-family: 'Arial', sans-serif;
+  min-height: 100vh;
+  background-color: #f4f6fa;
+  font-family: 'Inter', Arial, sans-serif;
 }
 
 /* ==============================
@@ -15,26 +15,26 @@
 .cards-header {
   display: flex;
   align-items: center;
-  padding: 5px 30px;
-  background-color: #fff;
-  border-bottom: 2px solid #e0e6ed;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  padding: 10px 30px;
+  background-color: #ffffff;
+  border-bottom: 2px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   position: relative;
 }
 
 .cards-header img.project-photo-header {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  margin-right: 12px;
+  margin-right: 14px;
   object-fit: cover;
-  border: 2px solid #bf9010;
+  border: 2px solid #fbbf24;
 }
 
 .cards-header h1 {
   font-size: 22px;
-  font-weight: bold;
-  color: #0d1b2a;
+  font-weight: 600;
+  color: #1e293b;
   margin: 0;
   display: flex;
   align-items: center;
@@ -43,24 +43,24 @@
 
 .cards-header .project-name {
   font-size: 20px;
-  font-weight: normal;
+  font-weight: 500;
   margin-left: 10px;
-  color: #bf9010;
+  color: #fbbf24;
 }
 
 /* Botão de adicionar pilha no header */
 .cards-header .btn-add-pilha {
   background: none;
   border: none;
-  color: #f59e0b;
-  font-size: 20px;
+  color: #fbbf24;
+  font-size: 22px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .cards-header .btn-add-pilha:hover {
-  color: rgb(215, 188, 158);
-  font-size: 22px;
+  color: #fcd34d;
+  font-size: 24px;
 }
 
 /* ==============================
@@ -70,23 +70,29 @@
   display: flex;
   flex: 1;
   padding: 20px;
-  gap: 20px;
+  gap: 24px;
   overflow-x: auto;
+  scroll-behavior: smooth;
 }
 
 /* ==============================
    📦 Colunas
    ============================== */
 .cards-column {
-  border-radius: 10px;
-  padding: 15px;
-  min-width: 260px;
-  max-width: 300px;
+  border-radius: 12px;
+  padding: 16px;
+  min-width: 280px;
+  max-width: 320px;
   flex: 1;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
-  background: #fff;
+  background: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transition: transform 0.2s ease;
+}
+
+.cards-column:hover {
+  transform: translateY(-2px);
 }
 
 /* Header da coluna */
@@ -94,75 +100,78 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   gap: 6px;
 }
 
 .column-header h3 {
   font-size: 16px;
-  font-weight: bold;
-  color: #fff;
+  font-weight: 600;
+  color: #ffffff;
   margin: 0;
-  padding: 8px 12px;
+  padding: 10px 12px;
   border-radius: 6px;
   flex: 1;
   text-align: center;
-  background-color: #2563eb;
+  background-color: #3b82f6;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .column-header input {
   font-size: 16px;
-  font-weight: bold;
-  padding: 6px 10px;
+  font-weight: 600;
+  padding: 8px 12px;
   border-radius: 6px;
-  border: 2px solid #bf9010;
+  border: 2px solid #fbbf24;
   flex: 1;
   text-align: center;
   outline: none;
-  background-color: #fff;
-  color: #0d1b2a;
+  background-color: #ffffff;
+  color: #1e293b;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .column-header input:focus {
-  border-color: #2563eb;
-  box-shadow: 0 0 6px rgba(37, 99, 235, 0.5);
+  border-color: #3b82f6;
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
 }
 
 /* Botões da coluna */
 .column-header .column-actions {
   display: flex;
-  gap: 4px;
+  gap: 6px;
 }
 
 .column-header .btn-add {
-  background: #f59e0b;
+  background: #fbbf24;
   border: none;
-  color: #fff;
+  color: #ffffff;
   font-size: 16px;
-  padding: 6px 10px;
+  padding: 6px 12px;
   border-radius: 6px;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background 0.2s ease, transform 0.2s ease;
 }
 
 .column-header .btn-add:hover {
-  background: #d97706;
+  background: #f59e0b;
+  transform: scale(1.05);
 }
 
 .column-header .btn-edit {
-  background: #2563eb;
+  background: #3b82f6;
   border: none;
-  color: #fff;
+  color: #ffffff;
   font-size: 14px;
-  padding: 6px 10px;
+  padding: 6px 12px;
   border-radius: 6px;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background 0.2s ease, transform 0.2s ease;
 }
 
 .column-header .btn-edit:hover {
-  background: #1d4ed8;
+  background: #2563eb;
+  transform: scale(1.05);
 }
 
 /* ==============================
@@ -170,57 +179,65 @@
    ============================== */
 .cards-list {
   flex: 1;
-  min-height: 50px;
+  min-height: 60px;
 }
 
 .card-item {
-  background: #fff;
-  border-radius: 8px;
-  padding: 12px;
+  background: #f9fafb;
+  border-radius: 10px;
+  padding: 14px;
   margin-bottom: 12px;
   font-size: 14px;
   cursor: grab;
-  border: 1px solid #e0e6ed;
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.06);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
   text-align: center;
+}
+
+.card-item:hover {
+  background: #ffffff;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12);
 }
 
 .card-item strong {
   display: block;
   font-size: 15px;
-  margin-bottom: 5px;
-  color: #0d1b2a;
+  margin-bottom: 6px;
+  color: #1e293b;
 }
 
 .card-item p {
   font-size: 13px;
-  color: #555;
+  color: #4b5563;
   margin: 0;
   text-align: center;
 }
 
 .card-item.dragging {
   background: #eef2f7;
-  transform: rotate(2deg) scale(1.02);
-  box-shadow: 0 5px 12px rgba(0, 0, 0, 0.2);
+  transform: rotate(1deg) scale(1.03);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
 }
 
 /* Cores por tipo de nota */
 .card-item.tipo-lista {
-  border-left: 5px solid #2563eb;
+  border-left: 5px solid #3b82f6;
 }
 
 .card-item.tipo-comentarios {
-  border-left: 5px solid #059669;
+  border-left: 5px solid #10b981;
 }
 
 .card-item.tipo-lembrete {
-  border-left: 5px solid #f59e0b;
+  border-left: 5px solid #fbbf24;
 }
 
 /* ==============================
    💬 Modal
+   ============================== */
+/* ==============================
+   💬 Modal Listagem
    ============================== */
 .modal-overlay {
   position: fixed;
@@ -228,60 +245,73 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.55);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 1000;
+  padding: 10px;
+  overflow-y: auto; /* Permite scroll se o conteúdo for maior que a tela */
 }
 
 .modal-content {
-  background: #fff;
+  background: #ffffff;
   padding: 20px;
   border-radius: 12px;
-  width: 400px;
-  max-width: 90%;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  width: 90%;
+  max-width: 1200px; /* Maior largura */
+  height: 90vh; /* Ocupa 90% da altura da tela */
+  overflow-y: auto; /* Scroll interno */
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  position: relative;
 }
 
 .modal-content h2 {
   margin-top: 0;
-  margin-bottom: 15px;
-  font-size: 18px;
-  color: #0d1b2a;
+  margin-bottom: 16px;
+  font-size: 22px;
+  color: #1e293b;
 }
 
 .modal-content label {
   display: block;
-  margin: 10px 0 5px;
+  margin: 10px 0 6px;
   font-size: 14px;
-  font-weight: bold;
-  color: #333;
+  font-weight: 600;
+  color: #374151;
 }
 
 .modal-content input,
 .modal-content select {
   width: 100%;
-  padding: 8px;
-  border-radius: 6px;
-  border: 1px solid #ccc;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
   font-size: 14px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.modal-content input:focus,
+.modal-content select:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 6px rgba(59, 130, 246, 0.4);
 }
 
 .modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 12px;
 }
 
 .modal-actions .btn-salvar {
   background: #10b981;
   border: none;
-  color: #fff;
-  padding: 8px 12px;
-  border-radius: 6px;
+  color: #ffffff;
+  padding: 10px 16px;
+  border-radius: 8px;
   cursor: pointer;
+  transition: background 0.2s ease;
 }
 
 .modal-actions .btn-salvar:hover {
@@ -291,15 +321,36 @@
 .modal-actions .btn-cancelar {
   background: #ef4444;
   border: none;
-  color: #fff;
-  padding: 8px 12px;
-  border-radius: 6px;
+  color: #ffffff;
+  padding: 10px 16px;
+  border-radius: 8px;
   cursor: pointer;
 }
 
 .modal-actions .btn-cancelar:hover {
   background: #b91c1c;
 }
+
+/* Botão de fechar no canto superior direito */
+.modal-close-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: #ef4444;
+  border: none;
+  color: #fff;
+  font-size: 18px;
+  font-weight: bold;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.modal-close-btn:hover {
+  background: #b91c1c;
+}
+
 
 /* ==============================
    ⏳ Loading - Caixa abrindo
@@ -310,14 +361,14 @@
   align-items: center;
   justify-content: center;
   min-height: 60vh;
-  gap: 1rem;
+  gap: 1.2rem;
 }
 
 .loading-box {
-  width: 80px;
-  height: 80px;
-  background-color: #0078ff;
-  border-radius: 16px;
+  width: 90px;
+  height: 90px;
+  background-color: #3b82f6;
+  border-radius: 18px;
   animation: openBox 1.2s ease-in-out infinite alternate;
 }
 
@@ -329,6 +380,6 @@
 
 .loading-card p {
   font-size: 1rem;
-  color: #555;
+  color: #4b5563;
   font-weight: 500;
 }

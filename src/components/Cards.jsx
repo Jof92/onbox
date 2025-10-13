@@ -4,6 +4,7 @@ import './Cards.css';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { FaPlus, FaEdit } from 'react-icons/fa';
 import { supabase } from '../supabaseClient';
+import Listagem from './Listagem';
 
 export default function Cards() {
   const { projectName } = useParams();
@@ -22,6 +23,10 @@ export default function Cards() {
     responsavel: '',
     tipo: 'Lista',
   });
+
+  // Modal Listagem
+  const [showListagem, setShowListagem] = useState(false);
+  const [listagemProjeto, setListagemProjeto] = useState(null);
 
   // Carregar projeto e suas pilhas/notas
   useEffect(() => {
@@ -256,6 +261,12 @@ export default function Cards() {
                             ref={provided.innerRef}
                             {...provided.draggableProps}
                             {...provided.dragHandleProps}
+                            onClick={() => {
+                              if (task.tipo === 'Lista') {
+                                setListagemProjeto(task);
+                                setShowListagem(true);
+                              }
+                            }}
                           >
                             <strong>{task.nome}</strong>
                             <p>{task.tipo}</p>
@@ -272,6 +283,7 @@ export default function Cards() {
         </div>
       </DragDropContext>
 
+      {/* Modal de criação de nota */}
       {showForm && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -307,6 +319,25 @@ export default function Cards() {
               <button className="btn-salvar" onClick={handleSaveTask}>Salvar</button>
               <button className="btn-cancelar" onClick={() => setShowForm(false)}>Cancelar</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Listagem.jsx */}
+      {showListagem && (
+        <div className="modal-overlay">
+          <div className="modal-content large">
+            <button
+              className="modal-close-btn"
+              onClick={() => setShowListagem(false)}
+            >
+              X
+            </button>
+            <Listagem
+              projetoAtual={listagemProjeto?.nome || project.name}
+              usuarioAtual="Usuário Atual"
+              onClose={() => setShowListagem(false)}
+            />
           </div>
         </div>
       )}
