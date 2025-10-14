@@ -48,7 +48,6 @@
   color: #fbbf24;
 }
 
-/* Botão de adicionar pilha no header */
 .cards-header .btn-add-pilha {
   background: none;
   border: none;
@@ -89,6 +88,7 @@
   background: #ffffff;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   transition: transform 0.2s ease;
+  position: relative;
 }
 
 .cards-column:hover {
@@ -102,6 +102,7 @@
   justify-content: space-between;
   margin-bottom: 14px;
   gap: 6px;
+  position: relative;
 }
 
 .column-header h3 {
@@ -115,6 +116,7 @@
   text-align: center;
   background-color: #3b82f6;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
 }
 
 .column-header input {
@@ -142,6 +144,7 @@
   gap: 6px;
 }
 
+/* Botão adicionar nota */
 .column-header .btn-add {
   background: #fbbf24;
   border: none;
@@ -158,20 +161,63 @@
   transform: scale(1.05);
 }
 
-.column-header .btn-edit {
-  background: #3b82f6;
+/* ==============================
+   ⬆ Menu suspenso de Excel
+   ============================== */
+.export-menu {
+  position: relative;
+}
+
+.btn-upload {
+  background: #10b981;
   border: none;
-  color: #ffffff;
-  font-size: 14px;
-  padding: 6px 12px;
+  color: #fff;
+  font-size: 16px;
+  padding: 6px 10px;
   border-radius: 6px;
   cursor: pointer;
   transition: background 0.2s ease, transform 0.2s ease;
 }
 
-.column-header .btn-edit:hover {
-  background: #2563eb;
+.btn-upload:hover {
+  background: #059669;
   transform: scale(1.05);
+}
+
+/* Dropdown */
+.export-dropdown {
+  position: absolute;
+  top: 38px;
+  right: 0;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 10px;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 50;
+  min-width: 180px;
+}
+
+.export-dropdown input[type="file"] {
+  cursor: pointer;
+}
+
+.export-dropdown button {
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s ease;
+}
+
+.export-dropdown button:hover {
+  background: #2563eb;
 }
 
 /* ==============================
@@ -236,9 +282,6 @@
 /* ==============================
    💬 Modal
    ============================== */
-/* ==============================
-   💬 Modal Listagem
-   ============================== */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -251,7 +294,7 @@
   align-items: center;
   z-index: 1000;
   padding: 10px;
-  overflow-y: auto; /* Permite scroll se o conteúdo for maior que a tela */
+  overflow-y: auto;
 }
 
 .modal-content {
@@ -259,9 +302,9 @@
   padding: 20px;
   border-radius: 12px;
   width: 90%;
-  max-width: 1200px; /* Maior largura */
-  height: 90vh; /* Ocupa 90% da altura da tela */
-  overflow-y: auto; /* Scroll interno */
+  max-width: 1200px;
+  height: 90vh;
+  overflow-y: auto;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
   position: relative;
 }
@@ -331,7 +374,6 @@
   background: #b91c1c;
 }
 
-/* Botão de fechar no canto superior direito */
 .modal-close-btn {
   position: absolute;
   top: 12px;
@@ -350,7 +392,6 @@
 .modal-close-btn:hover {
   background: #b91c1c;
 }
-
 
 /* ==============================
    ⏳ Loading - Caixa abrindo

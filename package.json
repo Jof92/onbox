@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
+    "@lottiefiles/dotlottie-react": "^0.17.5",
     "@supabase/supabase-js": "^2.74.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.8.0",
@@ -14,7 +15,8 @@
     "react-icons": "^5.5.0",
     "react-router-dom": "^7.9.3",
     "react-scripts": "5.0.1",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "xlsx": "^0.18.5"
   },
   "scripts": {
     "start": "react-scripts start",

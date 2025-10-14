@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { FaCog, FaPlus, FaTrash, FaCamera } from 'react-icons/fa';
-import { supabase } from '../supabaseClient';
-import './Containers.css';
+// Containers.jsx
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { FaCog, FaPlus, FaTrash, FaCamera } from "react-icons/fa";
+import { supabase } from "../supabaseClient";
+import Loading from "./Loading"; // 👈 Importa o componente de loading
+import "./Containers.css";
 
 export default function Containers() {
   const navigate = useNavigate();
@@ -12,10 +14,18 @@ export default function Containers() {
   const [selectedProject, setSelectedProject] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(true); // 👈 controle do loading
   const [newProject, setNewProject] = useState(initialProjectState());
 
   function initialProjectState() {
-    return { name: '', type: 'vertical', pavimentos: [], eap: [], photoFile: null, photoUrl: null };
+    return {
+      name: "",
+      type: "vertical",
+      pavimentos: [],
+      eap: [],
+      photoFile: null,
+      photoUrl: null,
+    };
   }
 
   useEffect(() => {
@@ -23,29 +33,34 @@ export default function Containers() {
       const { data, error } = await supabase.auth.getUser();
       if (!error && data.user) {
         setUser(data.user);
-        fetchProjects(data.user.id);
+        await fetchProjects(data.user.id);
       }
+      setLoading(false); // ✅ encerra loading após carregamento inicial
     };
     loadUser();
   }, []);
 
   const fetchProjects = async (userId) => {
+    setLoading(true); // ✅ mostra loading durante a busca
     const { data: projectsData, error } = await supabase
-      .from('projects')
-      .select('*, pavimentos(*), eap(*)')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+      .from("projects")
+      .select("*, pavimentos(*), eap(*)")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
 
-    if (error) return console.error(error);
+    if (error) {
+      console.error(error);
+      setLoading(false);
+      return;
+    }
 
     const projectsWithPhotos = await Promise.all(
       (projectsData || []).map(async (proj) => {
-        // Pega a foto mais recente
         const { data: photoData } = await supabase
-          .from('projects_photos')
-          .select('photo_url')
-          .eq('project_id', proj.id)
-          .order('created_at', { ascending: false })
+          .from("projects_photos")
+          .select("photo_url")
+          .eq("project_id", proj.id)
+          .order("created_at", { ascending: false })
           .limit(1)
           .single();
 
@@ -54,47 +69,82 @@ export default function Containers() {
     );
 
     setProjects(projectsWithPhotos);
+    setLoading(false); // ✅ encerra loading quando termina
   };
 
   const handlePhotoUpload = (e) => {
     const file = e.target.files?.[0];
-    if (file) setNewProject((p) => ({ ...p, photoFile: file, photoUrl: URL.createObjectURL(file) }));
+    if (file)
+      setNewProject((p) => ({
+        ...p,
+        photoFile: file,
+        photoUrl: URL.createObjectURL(file),
+      }));
   };
 
   const handleListChange = (list, index, value) =>
-    setNewProject((p) => ({ ...p, [list]: p[list].map((item, i) => (i === index ? value : item)) }));
+    setNewProject((p) => ({
+      ...p,
+      [list]: p[list].map((item, i) => (i === index ? value : item)),
+    }));
 
-  const addListItem = (list) => setNewProject((p) => ({ ...p, [list]: [...p[list], ''] }));
+  const addListItem = (list) =>
+    setNewProject((p) => ({ ...p, [list]: [...p[list], ""] }));
+
   const removeListItem = (list, index) =>
-    setNewProject((p) => ({ ...p, [list]: p[list].filter((_, i) => i !== index) }));
+    setNewProject((p) => ({
+      ...p,
+      [list]: p[list].filter((_, i) => i !== index),
+    }));
 
   const getRandomColor = () => {
-    const colors = ['#FFB74D', '#4DB6AC', '#BA68C8', '#7986CB', '#F06292', '#81C784'];
+    const colors = [
+      "#FFB74D",
+      "#4DB6AC",
+      "#BA68C8",
+      "#7986CB",
+      "#F06292",
+      "#81C784",
+    ];
     return colors[Math.floor(Math.random() * colors.length)];
   };
 
   const saveProject = async () => {
-    if (!newProject.name.trim()) return alert('Digite o nome do projeto!');
+    if (!newProject.name.trim()) return alert("Digite o nome do projeto!");
+    setLoading(true); // ✅ mostra loading durante o salvamento
 
     let currentProjectId = selectedProject?.id;
     let projectResult;
 
     if (isEditing && selectedProject) {
       const { data, error } = await supabase
-        .from('projects')
-        .update({ name: newProject.name, type: newProject.type })
-        .eq('id', selectedProject.id)
+        .from("projects")
+        .update({
+          name: newProject.name,
+          type: newProject.type,
+        })
+        .eq("id", selectedProject.id)
         .select()
         .single();
-      if (error) return alert('Erro ao atualizar projeto');
+
+      if (error) {
+        setLoading(false);
+        return alert("Erro ao atualizar projeto");
+      }
       projectResult = data;
     } else {
       const { data, error } = await supabase
-        .from('projects')
-        .insert([{ name: newProject.name, type: newProject.type, user_id: user.id }])
+        .from("projects")
+        .insert([
+          { name: newProject.name, type: newProject.type, user_id: user.id },
+        ])
         .select()
         .single();
-      if (error) return alert('Erro ao criar projeto');
+
+      if (error) {
+        setLoading(false);
+        return alert("Erro ao criar projeto");
+      }
       projectResult = data;
       currentProjectId = data.id;
     }
@@ -103,55 +153,70 @@ export default function Containers() {
     if (newProject.photoFile) {
       const fileName = `${Date.now()}_${newProject.photoFile.name}`;
       const { error: uploadError } = await supabase.storage
-        .from('projects_photos')
+        .from("projects_photos")
         .upload(fileName, newProject.photoFile, { upsert: true });
-      if (uploadError) return alert('Erro ao enviar foto');
+
+      if (uploadError) {
+        setLoading(false);
+        return alert("Erro ao enviar foto");
+      }
 
       const { data: urlData } = supabase.storage
-        .from('projects_photos')
+        .from("projects_photos")
         .getPublicUrl(fileName);
 
-      await supabase
-        .from('projects_photos')
-        .insert([{ project_id: currentProjectId, photo_url: urlData.publicUrl }]);
+      await supabase.from("projects_photos").insert([
+        {
+          project_id: currentProjectId,
+          photo_url: urlData.publicUrl,
+        },
+      ]);
     }
 
-    // Limpar Pavimentos e EAP existentes
-    await supabase.from('pavimentos').delete().eq('project_id', currentProjectId);
-    await supabase.from('eap').delete().eq('project_id', currentProjectId);
+    // Limpar Pavimentos e EAP antigos
+    await supabase.from("pavimentos").delete().eq("project_id", currentProjectId);
+    await supabase.from("eap").delete().eq("project_id", currentProjectId);
 
     // Inserir Pavimentos e EAP
     for (const pav of newProject.pavimentos.filter(Boolean))
-      await supabase.from('pavimentos').insert({ name: pav, project_id: currentProjectId });
+      await supabase
+        .from("pavimentos")
+        .insert({ name: pav, project_id: currentProjectId });
+
     for (const eap of newProject.eap.filter(Boolean))
-      await supabase.from('eap').insert({ name: eap, project_id: currentProjectId });
+      await supabase
+        .from("eap")
+        .insert({ name: eap, project_id: currentProjectId });
 
     setNewProject(initialProjectState());
     setShowForm(false);
     setIsEditing(false);
-    fetchProjects(user.id);
+    await fetchProjects(user.id); // ✅ recarrega lista
+    setLoading(false);
   };
 
   const handleDeleteProject = async (projectId) => {
-    if (!window.confirm('Deseja realmente apagar este projeto?')) return;
+    if (!window.confirm("Deseja realmente apagar este projeto?")) return;
+    setLoading(true);
 
     const { data: photoRecords } = await supabase
-      .from('projects_photos')
-      .select('photo_url')
-      .eq('project_id', projectId);
+      .from("projects_photos")
+      .select("photo_url")
+      .eq("project_id", projectId);
 
     if (photoRecords?.length) {
-      const fileNames = photoRecords.map((p) => p.photo_url.split('/').pop());
-      await supabase.storage.from('projects_photos').remove(fileNames);
-      await supabase.from('projects_photos').delete().eq('project_id', projectId);
+      const fileNames = photoRecords.map((p) => p.photo_url.split("/").pop());
+      await supabase.storage.from("projects_photos").remove(fileNames);
+      await supabase.from("projects_photos").delete().eq("project_id", projectId);
     }
 
-    await supabase.from('pavimentos').delete().eq('project_id', projectId);
-    await supabase.from('eap').delete().eq('project_id', projectId);
-    await supabase.from('projects').delete().eq('id', projectId);
+    await supabase.from("pavimentos").delete().eq("project_id", projectId);
+    await supabase.from("eap").delete().eq("project_id", projectId);
+    await supabase.from("projects").delete().eq("id", projectId);
 
     if (selectedProject?.id === projectId) setSelectedProject(null);
-    fetchProjects(user.id);
+    await fetchProjects(user.id);
+    setLoading(false);
   };
 
   const handleEditProject = (project) => {
@@ -168,21 +233,41 @@ export default function Containers() {
     });
   };
 
-  // ✅ Atualizado: abrir Cards enviando projectId
   const openCardsPage = (proj) => {
     navigate(`/cards/${encodeURIComponent(proj.name)}`, {
-      state: { projectId: proj.id, projectName: proj.name, projectPhoto: proj.photo_url },
+      state: {
+        projectId: proj.id,
+        projectName: proj.name,
+        projectPhoto: proj.photo_url,
+      },
     });
   };
 
+  // 👇 Loading na tela inteira enquanto carrega
+  if (loading) {
+    return <Loading />;
+  }
+
   return (
     <div className="containers-page">
-      <header className="containers-header"><h1>Container</h1></header>
+      <header className="containers-header">
+        <h1>Container</h1>
+      </header>
 
       <div className="containers-body">
         <aside className="containers-sidebar">
-          <div className="sidebar-item"><FaCog className="icon" /><span>Controle</span></div>
-          <button className="sidebar-btn" onClick={() => { setIsEditing(false); setShowForm(true); }}>
+          <div className="sidebar-item">
+            <FaCog className="icon" />
+            <span>Controle</span>
+          </div>
+
+          <button
+            className="sidebar-btn"
+            onClick={() => {
+              setIsEditing(false);
+              setShowForm(true);
+            }}
+          >
             <FaPlus className="icon" /> Novo Projeto
           </button>
 
@@ -190,13 +275,18 @@ export default function Containers() {
             {projects.map((proj) => (
               <div
                 key={proj.id}
-                className={`sidebar-project ${selectedProject?.id === proj.id ? 'active' : ''}`}
+                className={`sidebar-project ${
+                  selectedProject?.id === proj.id ? "active" : ""
+                }`}
                 onClick={() => setSelectedProject(proj)}
               >
                 <span className="project-name">{proj.name}</span>
                 <FaTrash
                   className="delete-icon hidden"
-                  onClick={(e) => { e.stopPropagation(); handleDeleteProject(proj.id); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteProject(proj.id);
+                  }}
                 />
               </div>
             ))}
@@ -208,15 +298,32 @@ export default function Containers() {
             projects.length ? (
               <div className="projects-grid">
                 {projects.map((proj) => (
-                  <div key={proj.id} className="project-box" onClick={() => openCardsPage(proj)}>
+                  <div
+                    key={proj.id}
+                    className="project-box"
+                    onClick={() => openCardsPage(proj)}
+                  >
                     <div
                       className="project-photo"
-                      style={{ backgroundColor: proj.photo_url ? undefined : getRandomColor(), color: '#fff' }}
+                      style={{
+                        backgroundColor: proj.photo_url
+                          ? undefined
+                          : getRandomColor(),
+                        color: "#fff",
+                      }}
                     >
-                      {proj.photo_url ? <img src={proj.photo_url} alt={proj.name} /> : proj.name.charAt(0)}
+                      {proj.photo_url ? (
+                        <img src={proj.photo_url} alt={proj.name} />
+                      ) : (
+                        proj.name.charAt(0)
+                      )}
                     </div>
                     <h3>{proj.name}</h3>
-                    <p>{proj.type === 'vertical' ? 'Edificação Vertical' : 'Edificação Horizontal'}</p>
+                    <p>
+                      {proj.type === "vertical"
+                        ? "Edificação Vertical"
+                        : "Edificação Horizontal"}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -225,17 +332,39 @@ export default function Containers() {
             )
           ) : (
             <div className="project-details">
-              <button className="back-btn" onClick={() => setSelectedProject(null)}>&larr; Voltar</button>
+              <button
+                className="back-btn"
+                onClick={() => setSelectedProject(null)}
+              >
+                &larr; Voltar
+              </button>
 
               <div
                 className="details-photo"
-                style={{ backgroundColor: selectedProject.photo_url ? undefined : getRandomColor(), color: '#fff' }}
+                style={{
+                  backgroundColor: selectedProject.photo_url
+                    ? undefined
+                    : getRandomColor(),
+                  color: "#fff",
+                }}
               >
-                {selectedProject.photo_url ? <img src={selectedProject.photo_url} alt={selectedProject.name} /> : selectedProject.name.charAt(0)}
+                {selectedProject.photo_url ? (
+                  <img
+                    src={selectedProject.photo_url}
+                    alt={selectedProject.name}
+                  />
+                ) : (
+                  selectedProject.name.charAt(0)
+                )}
               </div>
 
               <h2>{selectedProject.name}</h2>
-              <p>Tipo: {selectedProject.type === 'vertical' ? 'Edificação Vertical' : 'Edificação Horizontal'}</p>
+              <p>
+                Tipo:{" "}
+                {selectedProject.type === "vertical"
+                  ? "Edificação Vertical"
+                  : "Edificação Horizontal"}
+              </p>
 
               {selectedProject.pavimentos?.length > 0 && (
                 <div className="project-section">
@@ -259,7 +388,12 @@ export default function Containers() {
                 </div>
               )}
 
-              <button className="edit-btn" onClick={() => handleEditProject(selectedProject)}>Editar</button>
+              <button
+                className="edit-btn"
+                onClick={() => handleEditProject(selectedProject)}
+              >
+                Editar
+              </button>
             </div>
           )}
         </main>
@@ -268,47 +402,107 @@ export default function Containers() {
       {showForm && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <h2>{isEditing ? 'Editar Projeto' : 'Novo Projeto'}</h2>
+            <h2>{isEditing ? "Editar Projeto" : "Novo Projeto"}</h2>
 
             <div className="project-photo-upload">
               <label htmlFor="photo-upload" className="photo-circle">
-                {newProject.photoUrl ? <img src={newProject.photoUrl} alt="Projeto" /> : <FaCamera />}
+                {newProject.photoUrl ? (
+                  <img src={newProject.photoUrl} alt="Projeto" />
+                ) : (
+                  <FaCamera />
+                )}
               </label>
-              <input type="file" id="photo-upload" accept="image/*" onChange={handlePhotoUpload} hidden />
+              <input
+                type="file"
+                id="photo-upload"
+                accept="image/*"
+                onChange={handlePhotoUpload}
+                hidden
+              />
             </div>
 
             <label>Nome do Projeto</label>
-            <input type="text" value={newProject.name} onChange={(e) => setNewProject({ ...newProject, name: e.target.value })} />
+            <input
+              type="text"
+              value={newProject.name}
+              onChange={(e) =>
+                setNewProject({ ...newProject, name: e.target.value })
+              }
+            />
 
             <label>Tipo de Projeto</label>
-            <select value={newProject.type} onChange={(e) => setNewProject({ ...newProject, type: e.target.value })}>
+            <select
+              value={newProject.type}
+              onChange={(e) =>
+                setNewProject({ ...newProject, type: e.target.value })
+              }
+            >
               <option value="vertical">Edificação Vertical</option>
               <option value="horizontal">Edificação Horizontal</option>
             </select>
 
-            {newProject.type === 'vertical' && (
+            {newProject.type === "vertical" && (
               <>
-                <div className="list-header">Pavimentos <FaPlus className="add-icon" onClick={() => addListItem('pavimentos')} /></div>
+                <div className="list-header">
+                  Pavimentos{" "}
+                  <FaPlus
+                    className="add-icon"
+                    onClick={() => addListItem("pavimentos")}
+                  />
+                </div>
                 {newProject.pavimentos.map((p, i) => (
                   <div key={i} className="list-item">
-                    <input type="text" placeholder={`Pavimento ${i + 1}`} value={p} onChange={(e) => handleListChange('pavimentos', i, e.target.value)} />
-                    <FaTrash className="delete-icon" onClick={() => removeListItem('pavimentos', i)} />
+                    <input
+                      type="text"
+                      placeholder={`Pavimento ${i + 1}`}
+                      value={p}
+                      onChange={(e) =>
+                        handleListChange("pavimentos", i, e.target.value)
+                      }
+                    />
+                    <FaTrash
+                      className="delete-icon"
+                      onClick={() => removeListItem("pavimentos", i)}
+                    />
                   </div>
                 ))}
               </>
             )}
 
-            <div className="list-header">EAP <FaPlus className="add-icon" onClick={() => addListItem('eap')} /></div>
+            <div className="list-header">
+              EAP{" "}
+              <FaPlus
+                className="add-icon"
+                onClick={() => addListItem("eap")}
+              />
+            </div>
             {newProject.eap.map((e, i) => (
               <div key={i} className="list-item">
-                <input type="text" placeholder={`EAP ${i + 1}`} value={e} onChange={(ev) => handleListChange('eap', i, ev.target.value)} />
-                <FaTrash className="delete-icon" onClick={() => removeListItem('eap', i)} />
+                <input
+                  type="text"
+                  placeholder={`EAP ${i + 1}`}
+                  value={e}
+                  onChange={(ev) =>
+                    handleListChange("eap", i, ev.target.value)
+                  }
+                />
+                <FaTrash
+                  className="delete-icon"
+                  onClick={() => removeListItem("eap", i)}
+                />
               </div>
             ))}
 
             <div className="modal-actions">
-              <button className="save-btn" onClick={saveProject}>Salvar</button>
-              <button className="cancel-btn" onClick={() => setShowForm(false)}>Cancelar</button>
+              <button className="save-btn" onClick={saveProject}>
+                Salvar
+              </button>
+              <button
+                className="cancel-btn"
+                onClick={() => setShowForm(false)}
+              >
+                Cancelar
+              </button>
             </div>
           </div>
         </div>

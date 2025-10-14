@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Header from './components/Header';
+import Footer from './components/Footer'; // ✅ importando Footer
 import LoginPanel from './components/Login';
 import Containers from './components/Containers';
 import Cards from './components/Cards';
@@ -21,7 +22,7 @@ export default function App() {
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentIndex(prev => (prev + 1) % images.length);
-    }, 3000); // muda a cada 3s
+    }, 3000);
     return () => clearInterval(interval);
   }, []);
 
@@ -35,7 +36,6 @@ export default function App() {
 
     getSession();
 
-    // Escuta mudanças de login/logout
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session) setShowLogin(false);
@@ -45,7 +45,10 @@ export default function App() {
   }, []);
 
   const handleLoginClick = () => setShowLogin(prev => !prev);
-  const handleLogout = async () => { await supabase.auth.signOut(); setSession(null); };
+  const handleLogout = async () => { 
+    await supabase.auth.signOut(); 
+    setSession(null); 
+  };
 
   return (
     <Router>
@@ -63,7 +66,6 @@ export default function App() {
         )}
 
         <main className="app-main">
-          {/* Carrossel */}
           {!session && (
             <div className="carousel-container">
               <img src={images[currentIndex]} alt={`Slide ${currentIndex + 1}`} className="carousel-image" />
@@ -91,6 +93,8 @@ export default function App() {
             />
           </Routes>
         </main>
+
+        <Footer /> {/* ✅ Footer chamado em todas as páginas */}
       </div>
     </Router>
   );
