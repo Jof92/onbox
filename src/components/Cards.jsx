@@ -1,15 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useLocation, useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import './Cards.css';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { FaPlus, FaUpload } from 'react-icons/fa';
+import { FaPlus, FaArrowLeft, FaTimes } from 'react-icons/fa';
 import { supabase } from '../supabaseClient';
 import Listagem from './Listagem';
 import Loading from './Loading';
-import * as XLSX from 'xlsx';
 
 export default function Cards() {
-  const { projectName } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -22,11 +20,10 @@ export default function Cards() {
   const [formData, setFormData] = useState({ nome: '', responsavel: '', tipo: 'Lista' });
   const [loading, setLoading] = useState(true);
   const [showListagem, setShowListagem] = useState(false);
-  const [listagemProjeto, setListagemProjeto] = useState(null);
 
-  const [fileData, setFileData] = useState(null); // armazena o excel carregado
-  const [menuOpen, setMenuOpen] = useState(false);
-  const fileInputRef = useRef();
+  const [pilhaSelecionada, setPilhaSelecionada] = useState(null);
+  const [notaSelecionada, setNotaSelecionada] = useState(null);
+  const [usuarioAtual, setUsuarioAtual] = useState("Usuário Atual");
 
   useEffect(() => {
     const projectId = location.state?.projectId;
@@ -39,12 +36,12 @@ export default function Cards() {
     const fetchProjectData = async () => {
       setLoading(true);
 
+      // Dados do projeto
       const { data: projectData, error: projectError } = await supabase
         .from('projects')
         .select('*')
         .eq('id', projectId)
         .single();
-
       if (projectError || !projectData) {
         alert('Projeto não encontrado!');
         navigate('/containers');
@@ -52,6 +49,7 @@ export default function Cards() {
         return;
       }
 
+      // Foto do projeto
       const { data: photoData } = await supabase
         .from('projects_photos')
         .select('photo_url')
@@ -60,27 +58,54 @@ export default function Cards() {
         .limit(1)
         .single();
 
-      setProject({ ...projectData, photo_url: photoData?.photo_url || null });
+      // Pavimentos e EAP já relacionados ao projeto
+      const { data: pavimentosData } = await supabase
+        .from('pavimentos')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: true });
 
+      const { data: eapsData } = await supabase
+        .from('eap')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: true });
+
+      setProject({
+        ...projectData,
+        photo_url: photoData?.photo_url || null,
+        pavimentos: pavimentosData || [],
+        eap: eapsData || [],
+      });
+
+      // Usuário atual
+      const { data: userData } = await supabase
+        .from("profiles")
+        .select("nome")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+      if (userData?.nome) setUsuarioAtual(userData.nome);
+
+      // Pilhas e notas
       const { data: pilhasData, error: pilhasError } = await supabase
         .from('pilhas')
         .select('*, notas(*)')
         .eq('project_id', projectId)
         .order('created_at', { ascending: true });
-
       if (pilhasError) {
         console.error(pilhasError);
         setLoading(false);
         return;
       }
 
-      const formattedColumns = pilhasData.map((p) => ({
-        id: p.id,
+      const formattedColumns = (pilhasData || []).map(p => ({
+        id: String(p.id),
         title: p.title,
         notas: p.notas || [],
       }));
-
       setColumns(formattedColumns);
+
       setLoading(false);
     };
 
@@ -95,23 +120,21 @@ export default function Cards() {
       .insert([{ project_id: project.id, title }])
       .select()
       .single();
-
     if (error) return alert('Erro ao criar pilha');
-    setColumns([...columns, { id: newPilha.id, title: newPilha.title, notas: [] }]);
+    setColumns([...columns, { id: String(newPilha.id), title: newPilha.title, notas: [] }]);
   };
 
-  const handleColumnDoubleClick = (col) => {
+  const handleColumnDoubleClick = col => {
     setEditingColumnId(col.id);
     setColumnTitleDraft(col.title);
   };
 
-  const saveColumnTitle = async (id) => {
+  const saveColumnTitle = async id => {
     if (!columnTitleDraft.trim()) return;
     const { error } = await supabase
       .from('pilhas')
       .update({ title: columnTitleDraft })
       .eq('id', id);
-
     if (!error) {
       setColumns(columns.map(c => c.id === id ? { ...c, title: columnTitleDraft } : c));
     }
@@ -130,7 +153,6 @@ export default function Cards() {
       }])
       .select()
       .single();
-
     if (error) return alert('Erro ao criar nota');
 
     setColumns(columns.map(col =>
@@ -143,7 +165,7 @@ export default function Cards() {
     setShowForm(false);
   };
 
-  const onDragEnd = (result) => {
+  const onDragEnd = result => {
     const { source, destination } = result;
     if (!destination) return;
 
@@ -170,47 +192,27 @@ export default function Cards() {
     setColumns(updatedColumns);
   };
 
-  // Carregar arquivo Excel
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const data = new Uint8Array(evt.target.result);
-      const workbook = XLSX.read(data, { type: 'array' });
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-      setFileData(jsonData);
-    };
-    reader.readAsArrayBuffer(file);
-  };
-
-  const handleSendExcel = async (col) => {
-    if (!fileData) return alert('Nenhum arquivo carregado');
-
-    // Exemplo: transforma os dados do excel em CSV
-    const csvContent = fileData.map(row => row.join(',')).join('\n');
-
-    await supabase.from('pilha_excel').insert([{ pilha_id: col.id, csv: csvContent }]);
-
-    alert('Arquivo enviado com sucesso!');
-    setFileData(null);
-    setMenuOpen(false);
-  };
-
   if (loading) return <Loading />;
 
   return (
     <div className="cards-page">
       <header className="cards-header">
+        <button
+          className="btn-voltar"
+          onClick={() => navigate('/containers')}
+          title="Voltar para Containers"
+        >
+          <FaArrowLeft />
+        </button>
+
         {project?.photo_url && (
           <img src={project.photo_url} alt={project.name} className="project-photo-header" />
         )}
+
         <h1>
-          Pilhas - <span className="project-name">{project.name}</span>
+          Pilhas - <span className="project-name">{project?.name || "Projeto Desconhecido"}</span>
         </h1>
+
         <button className="btn-add-pilha" onClick={handleAddColumn}>
           <FaPlus />
         </button>
@@ -220,104 +222,71 @@ export default function Cards() {
         <div className="cards-body">
           {columns.map(col => (
             <Droppable key={col.id} droppableId={col.id}>
-              {(provided) => {
-                const hasLista = col.notas.some(n => n.tipo === 'Lista');
-                return (
-                  <div className="cards-column" ref={provided.innerRef} {...provided.droppableProps}>
-                    <div className="column-header">
-                      {editingColumnId === col.id ? (
-                        <input
-                          type="text"
-                          value={columnTitleDraft}
-                          autoFocus
-                          onChange={e => setColumnTitleDraft(e.target.value)}
-                          onBlur={() => saveColumnTitle(col.id)}
-                          onKeyDown={e => e.key === 'Enter' && saveColumnTitle(col.id)}
-                        />
-                      ) : (
-                        <h3 onDoubleClick={() => handleColumnDoubleClick(col)}>{col.title}</h3>
-                      )}
+              {(provided) => (
+                <div className="cards-column" ref={provided.innerRef} {...provided.droppableProps}>
+                  <div className="column-header">
+                    {editingColumnId === col.id ? (
+                      <input
+                        type="text"
+                        value={columnTitleDraft}
+                        autoFocus
+                        onChange={e => setColumnTitleDraft(e.target.value)}
+                        onBlur={() => saveColumnTitle(col.id)}
+                        onKeyDown={e => e.key === 'Enter' && saveColumnTitle(col.id)}
+                      />
+                    ) : (
+                      <h3 onDoubleClick={() => handleColumnDoubleClick(col)}>{col.title}</h3>
+                    )}
 
-                      {hasLista && (
-                        <div className="export-menu">
-                          <button onClick={() => setMenuOpen(prev => !prev)} className="btn-upload">
-                            <FaUpload />
-                          </button>
-                          {menuOpen && (
-                            <div className="export-dropdown">
-                              <input
-                                type="file"
-                                accept=".xlsx, .xls"
-                                ref={fileInputRef}
-                                onChange={handleFileChange}
-                              />
-                              <button onClick={() => handleSendExcel(col)}>Enviar</button>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      <button className="btn-add" onClick={() => {
-                        setActiveColumnId(col.id);
-                        setShowForm(true);
-                      }}>
-                        <FaPlus />
-                      </button>
-                    </div>
-
-                    <div className="cards-list">
-                      {col.notas.map((task, index) => (
-                        <Draggable key={task.id} draggableId={task.id} index={index}>
-                          {(provided) => (
-                            <div
-                              className={`card-item tipo-${task.tipo.toLowerCase()}`}
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              {...provided.dragHandleProps}
-                              onClick={() => {
-                                if (task.tipo === 'Lista') {
-                                  setListagemProjeto(task);
-                                  setShowListagem(true);
-                                }
-                              }}
-                            >
-                              <strong>{task.nome}</strong>
-                              <p>{task.tipo}</p>
-                            </div>
-                          )}
-                        </Draggable>
-                      ))}
-                      {provided.placeholder}
-                    </div>
+                    <button className="btn-add" onClick={() => {
+                      setActiveColumnId(col.id);
+                      setShowForm(true);
+                    }}>
+                      <FaPlus />
+                    </button>
                   </div>
-                );
-              }}
+
+                  <div className="cards-list">
+                    {col.notas.map((task, index) => (
+                      <Draggable key={String(task.id)} draggableId={String(task.id)} index={index}>
+                        {(provided) => (
+                          <div
+                            className={`card-item tipo-${(task.tipo || 'lista').toLowerCase()}`}
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                            onClick={() => {
+                              setPilhaSelecionada(col.title);
+                              setNotaSelecionada(task);
+                              setShowListagem(true);
+                            }}
+                          >
+                            <strong>{task.nome}</strong>
+                            <p>{task.tipo}</p>
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                  </div>
+                </div>
+              )}
             </Droppable>
           ))}
         </div>
       </DragDropContext>
 
+      {/* Modal de Nova Nota */}
       {showForm && (
         <div className="modal-overlay">
           <div className="modal-content">
             <h2>Nova Nota</h2>
             <label>Nome</label>
-            <input
-              type="text"
-              value={formData.nome}
-              onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-            />
+            <input type="text" value={formData.nome} onChange={e => setFormData({ ...formData, nome: e.target.value })} />
             <label>Responsável</label>
-            <input
-              type="text"
-              value={formData.responsavel}
-              onChange={(e) => setFormData({ ...formData, responsavel: e.target.value })}
-            />
+            <input type="text" value={formData.responsavel} onChange={e => setFormData({ ...formData, responsavel: e.target.value })} />
             <label>Tipo</label>
-            <select
-              value={formData.tipo}
-              onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
-            >
+            <select value={formData.tipo} onChange={e => setFormData({ ...formData, tipo: e.target.value })}>
               <option>Lista</option>
               <option>Diário de Obra</option>
               <option>Livres</option>
@@ -332,14 +301,25 @@ export default function Cards() {
         </div>
       )}
 
+      {/* Modal de Listagem */}
       {showListagem && (
         <div className="modal-overlay">
           <div className="modal-content large">
-            <button className="modal-close-btn" onClick={() => setShowListagem(false)}>X</button>
+            <button
+              className="modal-close-btn"
+              onClick={() => setShowListagem(false)}
+              title="Fechar"
+            >
+              <FaTimes />
+            </button>
+
             <Listagem
-              projetoAtual={listagemProjeto?.nome || project.name}
-              usuarioAtual="Usuário Atual"
-              onClose={() => setShowListagem(false)}
+              projetoAtual={project}
+              pilhaAtual={pilhaSelecionada}
+              notaAtual={notaSelecionada?.nome}
+              usuarioAtual={usuarioAtual}
+              locacoes={project?.pavimentos?.map(p => p.name) || []}
+              eaps={project?.eap?.map(e => e.name) || []}
             />
           </div>
         </div>

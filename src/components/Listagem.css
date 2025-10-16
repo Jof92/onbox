@@ -1,3 +1,6 @@
+/* ==============================
+   🎨 Listagem Card
+   ============================== */
 .listagem-card {
   background: #fff;
   border-radius: 10px;
@@ -5,12 +8,14 @@
   padding: 0;
   max-width: 1100px;
   margin: 20px auto;
-  font-family: Inter, Segoe UI, Helvetica, Arial, sans-serif;
+  font-family: Inter, "Segoe UI", Helvetica, Arial, sans-serif;
   color: #222;
   overflow: hidden;
 }
 
-/* Header */
+/* ==============================
+   🏠 Header
+   ============================== */
 .listagem-header-container {
   display: flex;
   justify-content: space-between;
@@ -18,45 +23,78 @@
   background: linear-gradient(90deg, #0066cc, #0099ff);
   color: #fff;
   padding: 16px 24px;
-  font-size: 18px;
-  font-weight: 600;
   flex-wrap: wrap;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
 }
 
 .projeto-nome {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 700;
 }
 
-.alteracao-info {
+.pilha-info {
+  display: flex;
+  flex-direction: column;
   font-size: 14px;
+  font-weight: 500;
   color: #e0f0ff;
+  text-align: right;
 }
 
-/* Botão de adicionar linha alinhado à esquerda abaixo do header */
-.add-row-container {
+.pilha-info span {
+  font-size: 12px;
+  color: #cce6ff;
+  margin-top: 2px;
+}
+
+/* ==============================
+   🟢 Botões de Ação
+   ============================== */
+.action-buttons {
   padding: 12px 24px;
   background: #f6f8fa;
-  text-align: left;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.add-row-btn,
+.save-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
 }
 
 .add-row-btn {
   background: #0066cc;
   color: #fff;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 600;
-  transition: background 0.2s ease;
 }
 
 .add-row-btn:hover {
   background: #0052a3;
+  transform: scale(1.05);
 }
 
-/* Tabela */
+.save-btn {
+  background: #10b981;
+  color: #fff;
+}
+
+.save-btn:hover {
+  background: #059669;
+  transform: scale(1.05);
+}
+
+/* ==============================
+   📝 Tabela
+   ============================== */
+.listagem-table-wrapper {
+  overflow-x: auto;
+}
+
 .listagem-table {
   width: 100%;
   border-collapse: collapse;
@@ -68,11 +106,13 @@
   border-bottom: 1px solid #eee;
   text-align: left;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .listagem-table td {
   padding: 10px;
   border-bottom: 1px dashed #eee;
+  vertical-align: middle;
 }
 
 .item-col {
@@ -81,15 +121,28 @@
   color: #666;
 }
 
+/* Inputs e selects */
 .code-input,
 .unit-input,
 .sugestao-input,
+input[type="number"],
 select {
   padding: 6px 8px;
   border-radius: 6px;
   border: 1px solid #ddd;
   width: 100%;
   box-sizing: border-box;
+  font-size: 14px;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 select {
@@ -101,14 +154,63 @@ select {
   outline: 2px solid #0066cc;
 }
 
-/* Botão de remover linha */
+/* ==============================
+   ❌ Botão de remover linha
+   ============================== */
 .remove-btn {
-    background: #ff4d4f;
-    color: #fff;
-    border: none;
-    border-radius: 6px;
-    padding: 4px 10px;
-    cursor: pointer;
-    font-weight: 600;
-    transition: background 0.2
+  background: #ff4d4f;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.remove-btn:hover {
+  background: #d9363e;
+  transform: scale(1.1);
+}
+
+/* ==============================
+   📌 Sugestão e layout responsivo
+   ============================== */
+.sugestao-col {
+  font-weight: 500;
+  color: #222;
+}
+
+@media (max-width: 768px) {
+  .listagem-header-container {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .pilha-info {
+    text-align: left;
+  }
+
+  .action-buttons {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .listagem-table th,
+  .listagem-table td {
+    font-size: 13px;
+    padding: 6px;
+  }
+}
+
+@media (max-width: 480px) {
+  .projeto-nome {
+    font-size: 20px;
+  }
+
+  .pilha-info {
+    font-size: 13px;
+  }
 }

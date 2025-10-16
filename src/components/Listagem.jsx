@@ -1,56 +1,90 @@
 import React, { useState, useEffect } from "react";
+import { supabase } from "../supabaseClient";
 import "./Listagem.css";
 
-export default function Listagem({
-  projetoAtual,
-  usuarioAtual = "Usuário Exemplo",
-  locacoes = [],
-  eaps = [],
-}) {
-  const itemsByCode = {
-    1001: { descricao: "Cimento CP II 50kg", unidade: "saco", sugestao: "Fornecedor A" },
-    1002: { descricao: "Areia média m³", unidade: "m³", sugestao: "Fornecedor B" },
-    1003: { descricao: "Tijolo maciço 6 furos", unidade: "un", sugestao: "Fornecedor C" },
-    "200A": { descricao: "Fio 2,5 mm²", unidade: "rolo", sugestao: "Fornecedor D" },
-    "300B": { descricao: 'Válvula esfera 1/2"', unidade: "un", sugestao: "Fornecedor E" },
-  };
-
+export default function Listagem({ projetoAtual, pilhaAtual, notaAtual, usuarioAtual }) {
   const [rows, setRows] = useState([]);
   const [ultimaAlteracao, setUltimaAlteracao] = useState("");
+  const [locacoes, setLocacoes] = useState([]);
+  const [eaps, setEaps] = useState([]);
 
+  // Inicializa as linhas e última alteração
   useEffect(() => {
-    // 10 linhas iniciais
-    const initialRows = [];
-    for (let i = 0; i < 10; i++) {
-      initialRows.push({ codigo: "", descricao: "", unidade: "", locacao: "", eap: "", sugestao: "" });
-    }
+    const initialRows = Array.from({ length: 10 }, () => ({
+      codigo: "",
+      descricao: "",
+      unidade: "",
+      quantidade: "",
+      locacao: "",
+      eap: "",
+    }));
     setRows(initialRows);
-  }, []);
+
+    const now = new Date();
+    setUltimaAlteracao(`${usuarioAtual} alterou em ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`);
+  }, [usuarioAtual]);
+
+  // Carrega locações e EAPs do projeto
+  useEffect(() => {
+    if (!projetoAtual?.id) return;
+
+    const fetchLists = async () => {
+      const { data: pavimentosData } = await supabase
+        .from("pavimentos")
+        .select("*")
+        .eq("project_id", projetoAtual.id);
+
+      const { data: eapsData } = await supabase
+        .from("eap")
+        .select("*")
+        .eq("project_id", projetoAtual.id);
+
+      setLocacoes(pavimentosData?.map((p) => p.name) || []);
+      setEaps(eapsData?.map((e) => e.name) || []);
+    };
+
+    fetchLists();
+  }, [projetoAtual]);
 
   const updateAlteracao = () => {
     const now = new Date();
-    const formatted = `${now.toLocaleDateString()} ${now.toLocaleTimeString()}`;
-    setUltimaAlteracao(`${usuarioAtual} alterou, ${formatted}`);
+    setUltimaAlteracao(`${usuarioAtual} alterou em ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`);
   };
 
-  const handleCodeChange = (index, value) => {
-    const newRows = [...rows];
-    newRows[index].codigo = value;
+  // Busca diretamente o item pelo código no Supabase
+  const fetchItemDirect = async (index, codigo) => {
+    if (!codigo.trim()) return;
 
-    if (itemsByCode[value]) {
-      newRows[index].descricao = itemsByCode[value].descricao;
-      newRows[index].unidade = itemsByCode[value].unidade;
-      newRows[index].sugestao = itemsByCode[value].sugestao;
-    } else {
-      newRows[index].descricao = "";
-      newRows[index].unidade = "";
-      newRows[index].sugestao = "";
+    try {
+      const { data: itemData, error } = await supabase
+        .from("itens")
+        .select("descricao, unidade")
+        .eq("codigo", codigo)
+        .single();
+
+      const newRows = [...rows];
+      if (!error && itemData) {
+        newRows[index] = {
+          ...newRows[index],
+          descricao: itemData.descricao || "",
+          unidade: itemData.unidade || "",
+        };
+      } else {
+        newRows[index] = {
+          ...newRows[index],
+          descricao: "",
+          unidade: "",
+        };
+      }
+
+      setRows(newRows);
+      updateAlteracao();
+    } catch (err) {
+      console.error("Erro ao buscar item direto do Supabase:", err);
     }
-
-    setRows(newRows);
-    updateAlteracao();
   };
 
+  // Atualiza qualquer campo da linha
   const handleInputChange = (index, field, value) => {
     const newRows = [...rows];
     newRows[index][field] = value;
@@ -58,33 +92,66 @@ export default function Listagem({
     updateAlteracao();
   };
 
+  // Busca ao pressionar Enter no campo código
+  const handleCodigoKeyPress = (e, index, codigo) => {
+    if (e.key === "Enter") fetchItemDirect(index, codigo);
+  };
+
   const addRow = () => {
-    setRows([...rows, { codigo: "", descricao: "", unidade: "", locacao: "", eap: "", sugestao: "" }]);
+    setRows([
+      ...rows,
+      { codigo: "", descricao: "", unidade: "", quantidade: "", locacao: "", eap: "" },
+    ]);
     updateAlteracao();
   };
 
   const removeRow = (index) => {
-    const newRows = rows.filter((_, i) => i !== index);
-    setRows(newRows);
+    setRows(rows.filter((_, i) => i !== index));
     updateAlteracao();
+  };
+
+  const handleSave = async () => {
+    try {
+      const itensToSave = rows.map((row) => ({
+        codigo: row.codigo,
+        descricao: row.descricao,
+        unidade: row.unidade,
+        quantidade: row.quantidade,
+        locacao: row.locacao,
+        eap: row.eap,
+        projeto_id: projetoAtual?.id || null,
+        pilha: pilhaAtual || null,
+        nota: notaAtual || null,
+      }));
+
+      const { error } = await supabase.from("itens").upsert(itensToSave, { onConflict: ["codigo", "projeto_id"] });
+      if (error) throw error;
+
+      alert("Lista salva com sucesso!");
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao salvar lista: " + err.message);
+    }
   };
 
   return (
     <div className="listagem-card">
-      {/* Header */}
       <div className="listagem-header-container">
-        <div className="projeto-nome">{projetoAtual}</div>
+        <div className="listagem-header-titles">
+          <span className="project-name">{projetoAtual?.name || "Sem projeto"}</span>
+          <div className="sub-info">
+            <span className="pilha-name">{pilhaAtual || "Sem pilha"}</span> &nbsp;•&nbsp;
+            <span className="nota-name">{notaAtual || "Sem nota"}</span>
+          </div>
+        </div>
         <div className="alteracao-info">{ultimaAlteracao}</div>
       </div>
 
-      {/* Botão de adicionar linha */}
-      <div className="add-row-container">
-        <button className="add-row-btn" onClick={addRow}>
-          Adicionar linha
-        </button>
+      <div className="action-buttons">
+        <button className="add-row-btn" onClick={addRow}>Adicionar linha</button>
+        <button className="save-btn" onClick={handleSave}>Salvar</button>
       </div>
 
-      {/* Tabela */}
       <div className="listagem-table-wrapper">
         <table className="listagem-table">
           <thead>
@@ -93,72 +160,49 @@ export default function Listagem({
               <th>Código</th>
               <th>Descrição</th>
               <th>Unidade</th>
+              <th>Quantidade</th>
               <th>Locação</th>
               <th>EAP</th>
-              <th>Sugestão</th>
-              <th>Ações</th>
+              <th>Excluir</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row, idx) => (
               <tr key={idx}>
-                <td className="item-col">{idx + 1}</td>
-
-                {/* Código */}
+                <td>{idx + 1}</td>
                 <td>
                   <input
                     type="text"
-                    className="code-input"
                     value={row.codigo}
-                    onChange={(e) => handleCodeChange(idx, e.target.value)}
+                    onChange={(e) => handleInputChange(idx, "codigo", e.target.value)}
+                    onBlur={() => fetchItemDirect(idx, row.codigo)}
+                    onKeyPress={(e) => handleCodigoKeyPress(e, idx, row.codigo)}
+                    placeholder="Digite o código"
                   />
                 </td>
-
-                {/* Descrição */}
                 <td>{row.descricao}</td>
-
-                {/* Unidade */}
+                <td>{row.unidade}</td>
                 <td>
                   <input
-                    type="text"
-                    className="unit-input"
-                    value={row.unidade}
-                    onChange={(e) => handleInputChange(idx, "unidade", e.target.value)}
+                    type="number"
+                    value={row.quantidade}
+                    onChange={(e) => handleInputChange(idx, "quantidade", e.target.value)}
                   />
                 </td>
-
-                {/* Locação */}
                 <td>
                   <select value={row.locacao} onChange={(e) => handleInputChange(idx, "locacao", e.target.value)}>
                     <option value="">(selecionar)</option>
-                    {locacoes.map((loc) => (
-                      <option key={loc} value={loc}>
-                        {loc}
-                      </option>
-                    ))}
+                    {locacoes.map((loc) => <option key={loc} value={loc}>{loc}</option>)}
                   </select>
                 </td>
-
-                {/* EAP */}
                 <td>
                   <select value={row.eap} onChange={(e) => handleInputChange(idx, "eap", e.target.value)}>
                     <option value="">(selecionar)</option>
-                    {eaps.map((eap) => (
-                      <option key={eap} value={eap}>
-                        {eap}
-                      </option>
-                    ))}
+                    {eaps.map((eap) => <option key={eap} value={eap}>{eap}</option>)}
                   </select>
                 </td>
-
-                {/* Sugestão */}
-                <td className="sugestao-col">{row.sugestao}</td>
-
-                {/* Remover linha */}
-                <td className="actions-col">
-                  <button className="remove-btn" onClick={() => removeRow(idx)}>
-                    X
-                  </button>
+                <td>
+                  <button className="remove-btn" onClick={() => removeRow(idx)}>X</button>
                 </td>
               </tr>
             ))}

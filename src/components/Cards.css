@@ -139,12 +139,6 @@
 }
 
 /* Botões da coluna */
-.column-header .column-actions {
-  display: flex;
-  gap: 6px;
-}
-
-/* Botão adicionar nota */
 .column-header .btn-add {
   background: #fbbf24;
   border: none;
@@ -159,65 +153,6 @@
 .column-header .btn-add:hover {
   background: #f59e0b;
   transform: scale(1.05);
-}
-
-/* ==============================
-   ⬆ Menu suspenso de Excel
-   ============================== */
-.export-menu {
-  position: relative;
-}
-
-.btn-upload {
-  background: #10b981;
-  border: none;
-  color: #fff;
-  font-size: 16px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.2s ease, transform 0.2s ease;
-}
-
-.btn-upload:hover {
-  background: #059669;
-  transform: scale(1.05);
-}
-
-/* Dropdown */
-.export-dropdown {
-  position: absolute;
-  top: 38px;
-  right: 0;
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  padding: 10px;
-  box-shadow: 0 6px 14px rgba(0,0,0,0.15);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  z-index: 50;
-  min-width: 180px;
-}
-
-.export-dropdown input[type="file"] {
-  cursor: pointer;
-}
-
-.export-dropdown button {
-  background: #3b82f6;
-  color: #fff;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: background 0.2s ease;
-}
-
-.export-dropdown button:hover {
-  background: #2563eb;
 }
 
 /* ==============================
@@ -295,19 +230,19 @@
   z-index: 1000;
   padding: 10px;
   overflow-y: auto;
-}
-
-.modal-content {
-  background: #ffffff;
+  
+  .modal-content {
   padding: 20px;
   border-radius: 12px;
-  width: 90%;
+  width: 100%;
   max-width: 1200px;
   height: 90vh;
   overflow-y: auto;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-  position: relative;
+  }
+
 }
+
 
 .modal-content h2 {
   margin-top: 0;
@@ -393,34 +328,20 @@
   background: #b91c1c;
 }
 
-/* ==============================
-   ⏳ Loading - Caixa abrindo
-   ============================== */
-.loading-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 60vh;
-  gap: 1.2rem;
+.btn-voltar {
+  background: none;
+  border: none;
+  color: #333;
+  font-size: 1.3rem;
+  margin-right: 12px;
+  cursor: pointer;
+  transition: transform 0.2s;
 }
 
-.loading-box {
-  width: 90px;
-  height: 90px;
-  background-color: #3b82f6;
-  border-radius: 18px;
-  animation: openBox 1.2s ease-in-out infinite alternate;
+.btn-voltar:hover {
+  transform: scale(1.1);
+  color: #007bff;
 }
 
-@keyframes openBox {
-  0% { transform: scaleY(0.3); opacity: 0.5; }
-  50% { transform: scaleY(1.1); opacity: 0.8; }
-  100% { transform: scaleY(1); opacity: 1; }
-}
 
-.loading-card p {
-  font-size: 1rem;
-  color: #4b5563;
-  font-weight: 500;
-}
+
