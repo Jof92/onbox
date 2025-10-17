@@ -17,6 +17,7 @@ export default function Listagem({ projetoAtual, pilhaAtual, notaAtual, usuarioA
       quantidade: "",
       locacao: "",
       eap: "",
+      fornecedor: "",
     }));
     setRows(initialRows);
 
@@ -84,7 +85,6 @@ export default function Listagem({ projetoAtual, pilhaAtual, notaAtual, usuarioA
     }
   };
 
-  // Atualiza qualquer campo da linha
   const handleInputChange = (index, field, value) => {
     const newRows = [...rows];
     newRows[index][field] = value;
@@ -92,7 +92,6 @@ export default function Listagem({ projetoAtual, pilhaAtual, notaAtual, usuarioA
     updateAlteracao();
   };
 
-  // Busca ao pressionar Enter no campo código
   const handleCodigoKeyPress = (e, index, codigo) => {
     if (e.key === "Enter") fetchItemDirect(index, codigo);
   };
@@ -100,7 +99,7 @@ export default function Listagem({ projetoAtual, pilhaAtual, notaAtual, usuarioA
   const addRow = () => {
     setRows([
       ...rows,
-      { codigo: "", descricao: "", unidade: "", quantidade: "", locacao: "", eap: "" },
+      { codigo: "", descricao: "", unidade: "", quantidade: "", locacao: "", eap: "", fornecedor: "" },
     ]);
     updateAlteracao();
   };
@@ -119,6 +118,7 @@ export default function Listagem({ projetoAtual, pilhaAtual, notaAtual, usuarioA
         quantidade: row.quantidade,
         locacao: row.locacao,
         eap: row.eap,
+        fornecedor: row.fornecedor,
         projeto_id: projetoAtual?.id || null,
         pilha: pilhaAtual || null,
         nota: notaAtual || null,
@@ -140,7 +140,7 @@ export default function Listagem({ projetoAtual, pilhaAtual, notaAtual, usuarioA
         <div className="listagem-header-titles">
           <span className="project-name">{projetoAtual?.name || "Sem projeto"}</span>
           <div className="sub-info">
-            <span className="pilha-name">{pilhaAtual || "Sem pilha"}</span> &nbsp;•&nbsp;
+            <span className="pilha-name">{pilhaAtual || "Sem pilha"}</span> &nbsp;- &nbsp;
             <span className="nota-name">{notaAtual || "Sem nota"}</span>
           </div>
         </div>
@@ -163,7 +163,8 @@ export default function Listagem({ projetoAtual, pilhaAtual, notaAtual, usuarioA
               <th>Quantidade</th>
               <th>Locação</th>
               <th>EAP</th>
-              <th>Excluir</th>
+              <th>Fornecedor</th>
+              <th>Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -201,8 +202,12 @@ export default function Listagem({ projetoAtual, pilhaAtual, notaAtual, usuarioA
                     {eaps.map((eap) => <option key={eap} value={eap}>{eap}</option>)}
                   </select>
                 </td>
+                <td>{row.fornecedor}</td>
                 <td>
-                  <button className="remove-btn" onClick={() => removeRow(idx)}>X</button>
+                  <div className="button-group">
+                    <button className="remove-btn" onClick={() => removeRow(idx)}>X</button>
+                    <button className="add-supabase-btn" onClick={() => alert("Adicionar insumo no Supabase")}>+</button>
+                  </div>
                 </td>
               </tr>
             ))}

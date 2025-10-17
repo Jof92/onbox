@@ -1,0 +1,66 @@
+.ata-card {
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  display: flex;
+  flex-direction: column;
+}
+
+.ata-header {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ata-header h2 { margin: 0; font-size: 18px; }
+
+.ata-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ata-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ata-section label { font-weight: 600; font-size: 14px; color: #374151; }
+
+.ata-section input, .ata-section textarea {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  padding: 8px;
+  font-size: 14px;
+  outline: none;
+  resize: none;
+}
+
+.ata-objectives {
+  background: #f3f4f6;
+  padding: 10px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.progress-container {
+  background: #e5e7eb;
+  height: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+.progress-bar {
+  height: 100%;
+  background: #10b981;
+  width: 0%;
+  transition: width 0.3s ease;
+}

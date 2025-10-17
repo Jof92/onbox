@@ -3,14 +3,13 @@
    ============================== */
 .listagem-card {
   background: #fff;
-  border-radius: 10px;
+
   box-shadow: 0 6px 18px rgba(20, 20, 30, 0.06);
   padding: 0;
-  max-width: 1100px;
-  margin: 20px auto;
   font-family: Inter, "Segoe UI", Helvetica, Arial, sans-serif;
   color: #222;
-  overflow: hidden;
+  
+  
 }
 
 /* ==============================
@@ -157,21 +156,34 @@ select {
 /* ==============================
    ❌ Botão de remover linha
    ============================== */
-.remove-btn {
-  background: #ff4d4f;
-  color: #fff;
+/* ==============================
+   ❌ Botão de remover linha e adicionar fornecedor/EAP
+   ============================== */
+/* ==============================
+   ❌ Botões Remove + Add lado a lado
+   ============================== */
+.button-group {
+  display: flex;        /* Lado a lado */
+  gap: 6px;             /* Espaçamento entre eles */
+}
+
+.remove-btn,
+.add-supabase-btn {
+  background: none;     
+  color: inherit;       
   border: none;
   border-radius: 6px;
   padding: 4px 10px;
   cursor: pointer;
   font-weight: 600;
-  transition: background 0.2s ease, transform 0.2s ease;
+  transition: transform 0.2s ease;
 }
 
-.remove-btn:hover {
-  background: #d9363e;
+.remove-btn:hover,
+.add-supabase-btn:hover {
   transform: scale(1.1);
 }
+
 
 /* ==============================
    📌 Sugestão e layout responsivo
