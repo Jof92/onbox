@@ -58,7 +58,7 @@
 }
 
 .add-row-btn,
-.save-btn {
+.save-btn1 {
   padding: 8px 16px;
   border-radius: 8px;
   border: none;
@@ -77,12 +77,12 @@
   transform: scale(1.05);
 }
 
-.save-btn {
+.save-btn1 {
   background: #10b981;
   color: #fff;
 }
 
-.save-btn:hover {
+.save-btn1:hover {
   background: #059669;
   transform: scale(1.05);
 }
@@ -177,6 +177,15 @@ select {
   cursor: pointer;
   font-weight: 600;
   transition: transform 0.2s ease;
+}
+.remove-btn{  
+  color: red;    
+  
+}
+
+.add-supabase-btn{  
+  color: green;    
+  
 }
 
 .remove-btn:hover,

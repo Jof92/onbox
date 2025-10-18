@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
 import "./Listagem.css";
+import { FaPlus, FaTimes } from "react-icons/fa";
+
 
 export default function Listagem({ projetoAtual, pilhaAtual, notaAtual, usuarioAtual }) {
   const [rows, setRows] = useState([]);
@@ -149,7 +151,7 @@ export default function Listagem({ projetoAtual, pilhaAtual, notaAtual, usuarioA
 
       <div className="action-buttons">
         <button className="add-row-btn" onClick={addRow}>Adicionar linha</button>
-        <button className="save-btn" onClick={handleSave}>Salvar</button>
+        <button className="save-btn1" onClick={handleSave}>Salvar</button>
       </div>
 
       <div className="listagem-table-wrapper">
@@ -205,8 +207,8 @@ export default function Listagem({ projetoAtual, pilhaAtual, notaAtual, usuarioA
                 <td>{row.fornecedor}</td>
                 <td>
                   <div className="button-group">
-                    <button className="remove-btn" onClick={() => removeRow(idx)}>X</button>
-                    <button className="add-supabase-btn" onClick={() => alert("Adicionar insumo no Supabase")}>+</button>
+                    <button className="remove-btn" onClick={() => removeRow(idx)}><FaTimes /></button>
+                    <button className="add-supabase-btn" onClick={() => alert("Adicionar insumo no Supabase")}><FaPlus /></button>
                   </div>
                 </td>
               </tr>

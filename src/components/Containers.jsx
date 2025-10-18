@@ -1,7 +1,7 @@
 // Containers.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaCog, FaPlus, FaTrash, FaCamera, FaFileUpload } from "react-icons/fa";
+import { FaArrowLeft, FaCog, FaPlus, FaTrash, FaCamera, FaFileUpload } from "react-icons/fa";
 import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
 import "./Containers.css";
@@ -269,30 +269,57 @@ export default function Containers() {
           ) : (
             <div className="project-details">
               <button className="back-btn" onClick={() => setSelectedProject(null)}>
-                &larr; Voltar
+                <FaArrowLeft />
               </button>
 
               <div
                 className="details-photo"
-                style={{ backgroundColor: selectedProject.photo_url ? undefined : getRandomColor(), color: "#fff" }}
+                style={{
+                  backgroundColor: selectedProject.photo_url
+                    ? undefined
+                    : getRandomColor(),
+                  color: "#fff",
+                }}
               >
-                {selectedProject.photo_url ? <img src={selectedProject.photo_url} alt={selectedProject.name} /> : selectedProject.name.charAt(0)}
+                {selectedProject.photo_url ? (
+                  <img src={selectedProject.photo_url} alt={selectedProject.name} />
+                ) : (
+                  selectedProject.name.charAt(0)
+                )}
               </div>
 
               <h2>{selectedProject.name}</h2>
-              <p>Tipo: {selectedProject.type === "vertical" ? "Edificação Vertical" : "Edificação Horizontal"}</p>
+              <p>
+                Tipo:{" "}
+                {selectedProject.type === "vertical"
+                  ? "Edificação Vertical"
+                  : "Edificação Horizontal"}
+              </p>
 
-              {selectedProject.pavimentos?.length > 0 && (
-                <div className="project-section">
-                  <h3>Pavimentos:</h3>
-                  <ul>{selectedProject.pavimentos.map((p) => <li key={p.id}>{p.name}</li>)}</ul>
-                </div>
-              )}
+              {(selectedProject.pavimentos?.length > 0 ||
+                selectedProject.eap?.length > 0) && (
+                <div className="project-sections">
+                  {selectedProject.pavimentos?.length > 0 && (
+                    <div className="project-section">
+                      <h3>Pavimentos</h3>
+                      <ul>
+                        {selectedProject.pavimentos.map((p) => (
+                          <li key={p.id}>{p.name}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
 
-              {selectedProject.eap?.length > 0 && (
-                <div className="project-section">
-                  <h3>EAP:</h3>
-                  <ul>{selectedProject.eap.map((e) => <li key={e.id}>{e.name}</li>)}</ul>
+                  {selectedProject.eap?.length > 0 && (
+                    <div className="project-section">
+                      <h3>EAP</h3>
+                      <ul>
+                        {selectedProject.eap.map((e) => (
+                          <li key={e.id}>{e.name}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -300,14 +327,15 @@ export default function Containers() {
                 Editar
               </button>
             </div>
+
           )}
         </main>
       </div>
 
       {/* Modal */}
       {showForm && (
-        <div className="modal-overlay">
-          <div className="modal-content">
+        <div className="modal-overlay1">
+          <div className="modal-content1">
             <h2>{isEditing ? "Editar Projeto" : "Novo Projeto"}</h2>
 
             <div className="project-photo-upload">
