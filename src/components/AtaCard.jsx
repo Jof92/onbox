@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import "./AtaCard.css";
 
 const verbosInfinitivo = [
@@ -6,24 +6,32 @@ const verbosInfinitivo = [
   "revisar","enviar","agendar","checar"
 ];
 
-export default function AtaCard() {
+export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlteracao }) {
   const [pauta, setPauta] = useState("");
-  const [data, setData] = useState("");
   const [local, setLocal] = useState("");
-  const [presentes, setPresentes] = useState("");
   const [texto, setTexto] = useState("");
   const [objetivosList, setObjetivosList] = useState([]);
   const [objetivosConcluidos, setObjetivosConcluidos] = useState([]);
   const [proxima, setProxima] = useState("");
+  const [data, setData] = useState("");
 
-  // Inicializa data
+  // Inline edit states
+  const [editingPauta, setEditingPauta] = useState(false);
+  const [editingLocal, setEditingLocal] = useState(false);
+
+  // Participantes
+  const [participanteInput, setParticipanteInput] = useState("");
+  const [participantes, setParticipantes] = useState([]);
+
+  // Refs para detectar blur
+  const pautaRef = useRef();
+  const localRef = useRef();
+
   useEffect(() => {
     const hoje = new Date();
-    const dataStr = hoje.toLocaleDateString();
-    setData(dataStr);
+    setData(hoje.toLocaleDateString());
   }, []);
 
-  // Extrai objetivos resumidos
   const extrairObjetivoResumido = (linha) => {
     for (const verbo of verbosInfinitivo) {
       const regex = new RegExp(`\\b${verbo}\\b`, "i");
@@ -37,7 +45,6 @@ export default function AtaCard() {
     return null;
   };
 
-  // Atualiza objetivos ao digitar texto
   const atualizarObjetivos = (value) => {
     const linhas = value.split(/\n|\.|;/).map(l => l.trim()).filter(l => l.length > 0);
     const objs = [];
@@ -55,38 +62,130 @@ export default function AtaCard() {
     );
   };
 
-  const progresso = objetivosList.length ? (objetivosConcluidos.length / objetivosList.length) * 100 : 0;
+  // Participantes
+  const handleParticipanteKeyDown = (e) => {
+    if (e.key === "Enter" && participanteInput.startsWith("@")) {
+      e.preventDefault();
+      const nome = participanteInput.trim();
+      if (!participantes.includes(nome)) {
+        setParticipantes([...participantes, nome]);
+      }
+      setParticipanteInput("");
+    }
+  };
+
+  const removerParticipante = (nome) => {
+    setParticipantes(participantes.filter(p => p !== nome));
+  };
+
+  // Salvar inline edit ao sair do input
+  const handleBlur = (campo) => {
+    if (campo === "pauta") setEditingPauta(false);
+    if (campo === "local") setEditingLocal(false);
+  };
 
   return (
     <div className="ata-card">
-      <div className="ata-header">
-        <h2>ATA DE REUNIÃO</h2>
-        <span>{data}</span>
+      {/* HEADER idêntico ao Listagem */}
+      <div className="listagem-card">
+        <div className="listagem-header-container">
+          <div className="listagem-header-titles">
+            <span className="project-name">{projetoAtual?.nome || "Sem projeto"}</span>
+            <div className="sub-info">
+              <span className="pilha-name">{pilhaAtual?.nome || pilhaAtual || "Sem pilha"}</span>
+              &nbsp;-&nbsp;
+              <span className="nota-name">{notaAtual?.nome || notaAtual || "Sem nota"}</span>
+            </div>
+          </div>
+          <div className="alteracao-info">{ultimaAlteracao || data}</div>
+        </div>
       </div>
 
       <div className="ata-body">
+
+        {/* Pauta */}
         <div className="ata-section">
-          <label>Pauta:</label>
-          <input type="text" value={pauta} onChange={e => setPauta(e.target.value)} placeholder="Digite a pauta da reunião" />
+          {editingPauta ? (
+            <input
+              ref={pautaRef}
+              type="text"
+              value={pauta}
+              onChange={e => setPauta(e.target.value)}
+              onBlur={() => handleBlur("pauta")}
+              onKeyDown={e => { if(e.key === "Enter") setEditingPauta(false); }}
+              autoFocus
+            />
+          ) : (
+            <span
+              onDoubleClick={() => setEditingPauta(true)}
+              style={{ cursor: "pointer", padding: "8px", display: "inline-block", border: "1px solid #ccc", borderRadius: "6px" }}
+            >
+              {pauta || "Digite a pauta da reunião"}
+            </span>
+          )}
         </div>
 
+        {/* Local */}
         <div className="ata-section">
-          <label>Data:</label>
-          <input type="text" value={data} readOnly />
+          {editingLocal ? (
+            <input
+              ref={localRef}
+              type="text"
+              value={local}
+              onChange={e => setLocal(e.target.value)}
+              onBlur={() => handleBlur("local")}
+              onKeyDown={e => { if(e.key === "Enter") setEditingLocal(false); }}
+              autoFocus
+            />
+          ) : (
+            <span
+              onDoubleClick={() => setEditingLocal(true)}
+              style={{ cursor: "pointer", padding: "8px", display: "inline-block", border: "1px solid #ccc", borderRadius: "6px" }}
+            >
+              {local || "Digite o local"}
+            </span>
+          )}
         </div>
 
+        {/* Participantes */}
         <div className="ata-section">
-          <label>Local:</label>
-          <input type="text" value={local} onChange={e => setLocal(e.target.value)} placeholder="Digite o local" />
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+            {participantes.map((p, i) => (
+              <div
+                key={i}
+                style={{
+                  background: "#3b82f6",
+                  color: "#fff",
+                  padding: "4px 8px",
+                  borderRadius: "6px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  fontSize: "13px"
+                }}
+              >
+                {p}
+                <span
+                  style={{ cursor: "pointer" }}
+                  onClick={() => removerParticipante(p)}
+                >
+                  ×
+                </span>
+              </div>
+            ))}
+          </div>
+          <input
+            type="text"
+            value={participanteInput}
+            onChange={e => setParticipanteInput(e.target.value)}
+            onKeyDown={handleParticipanteKeyDown}
+            placeholder="Digite @Nome e pressione Enter"
+            style={{ marginTop: "6px", width: "200px" }}
+          />
         </div>
 
+        {/* Texto da Ata */}
         <div className="ata-section">
-          <label>Presentes:</label>
-          <input type="text" value={presentes} onChange={e => setPresentes(e.target.value)} placeholder="Digite os participantes" />
-        </div>
-
-        <div className="ata-section">
-          <label>Texto da Ata:</label>
           <textarea
             value={texto}
             onChange={e => { setTexto(e.target.value); atualizarObjetivos(e.target.value); }}
@@ -95,8 +194,8 @@ export default function AtaCard() {
           />
         </div>
 
+        {/* Objetivos */}
         <div className="ata-section">
-          <label>Objetivos:</label>
           <div className="ata-objectives">
             {objetivosList.map((obj, i) => (
               <label key={i}>
@@ -110,14 +209,20 @@ export default function AtaCard() {
             ))}
           </div>
           <div className="progress-container">
-            <div className="progress-bar" style={{ width: `${progresso}%` }}></div>
+            <div className="progress-bar" style={{ width: `${(objetivosList.length ? (objetivosConcluidos.length / objetivosList.length) * 100 : 0)}%` }}></div>
           </div>
         </div>
 
+        {/* Próxima reunião */}
         <div className="ata-section">
-          <label>Próxima Reunião:</label>
-          <input type="text" value={proxima} onChange={e => setProxima(e.target.value)} placeholder="Data ou observações" />
+          <input
+            type="text"
+            value={proxima}
+            onChange={e => setProxima(e.target.value)}
+            placeholder="Próxima reunião: Data ou observações"
+          />
         </div>
+
       </div>
     </div>
   );

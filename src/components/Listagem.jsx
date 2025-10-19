@@ -207,8 +207,9 @@ export default function Listagem({ projetoAtual, pilhaAtual, notaAtual, usuarioA
                 <td>{row.fornecedor}</td>
                 <td>
                   <div className="button-group">
-                    <button className="remove-btn" onClick={() => removeRow(idx)}><FaTimes /></button>
                     <button className="add-supabase-btn" onClick={() => alert("Adicionar insumo no Supabase")}><FaPlus /></button>
+                    <button className="remove-btn" onClick={() => removeRow(idx)}><FaTimes /></button>
+                    
                   </div>
                 </td>
               </tr>
