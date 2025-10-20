@@ -1,43 +1,98 @@
 import React, { useState, useEffect, useRef } from "react";
+import { supabase } from "../supabaseClient";
 import "./AtaCard.css";
 
 const verbosInfinitivo = [
-  "verificar","acompanhar","implementar","analisar","finalizar",
-  "revisar","enviar","agendar","checar"
+  "verificar", "acompanhar", "implementar", "analisar", "finalizar",
+  "revisar", "enviar", "agendar", "checar"
 ];
 
 export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlteracao }) {
+  const [projetoNome, setProjetoNome] = useState("");
+  const [dataLocal, setDataLocal] = useState("");
+
   const [pauta, setPauta] = useState("");
   const [local, setLocal] = useState("");
   const [texto, setTexto] = useState("");
   const [objetivosList, setObjetivosList] = useState([]);
   const [objetivosConcluidos, setObjetivosConcluidos] = useState([]);
   const [proxima, setProxima] = useState("");
-  const [data, setData] = useState("");
+  const [criarObjetivos, setCriarObjetivos] = useState(false);
 
-  // Inline edit states
   const [editingPauta, setEditingPauta] = useState(false);
   const [editingLocal, setEditingLocal] = useState(false);
 
-  // Participantes
   const [participanteInput, setParticipanteInput] = useState("");
   const [participantes, setParticipantes] = useState([]);
+  const [sugestoes, setSugestoes] = useState([]);
 
-  // Refs para detectar blur
   const pautaRef = useRef();
   const localRef = useRef();
 
+  // ===== BUSCA NOME DO PROJETO =====
+  useEffect(() => {
+    const fetchProjetoNome = async () => {
+      try {
+        if (!projetoAtual) return;
+        const { data, error } = await supabase
+          .from("projects")
+          .select("name")
+          .eq("id", projetoAtual.id || projetoAtual)
+          .single();
+        if (error) throw error;
+        setProjetoNome(data?.name || "Projeto sem nome");
+      } catch (err) {
+        console.error("Erro ao buscar nome do projeto:", err);
+        setProjetoNome("Projeto não encontrado");
+      }
+    };
+    fetchProjetoNome();
+  }, [projetoAtual]);
+
+  // ===== LOCAL E DATA =====
   useEffect(() => {
     const hoje = new Date();
-    setData(hoje.toLocaleDateString());
+    const formatarData = (cidade) => {
+      const dataFormatada = hoje.toLocaleDateString("pt-BR", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      });
+      return cidade ? `${cidade}, ${dataFormatada}` : dataFormatada;
+    };
+
+    const obterLocalizacao = async () => {
+      try {
+        const res = await fetch("https://ipapi.co/json/");
+        const data = await res.json();
+        setDataLocal(formatarData(data.city));
+      } catch {
+        try {
+          const res2 = await fetch("https://ipwho.is/");
+          const data2 = await res2.json();
+          setDataLocal(formatarData(data2.city));
+        } catch {
+          setDataLocal(
+            hoje.toLocaleDateString("pt-BR", {
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+            })
+          );
+        }
+      }
+    };
+
+    obterLocalizacao();
   }, []);
 
+  // ===== OBJETIVOS =====
   const extrairObjetivoResumido = (linha) => {
     for (const verbo of verbosInfinitivo) {
       const regex = new RegExp(`\\b${verbo}\\b`, "i");
       if (regex.test(linha)) {
         const palavras = linha.split(/\s+/);
-        const idxVerbo = palavras.findIndex(w => w.match(regex));
+        const idxVerbo = palavras.findIndex((w) => w.match(regex));
         const objetivo = palavras.slice(idxVerbo, idxVerbo + 5).join(" ");
         return objetivo.charAt(0).toUpperCase() + objetivo.slice(1);
       }
@@ -46,9 +101,14 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
   };
 
   const atualizarObjetivos = (value) => {
-    const linhas = value.split(/\n|\.|;/).map(l => l.trim()).filter(l => l.length > 0);
+    if (!criarObjetivos) return; // 🚫 Se não estiver ativado, não faz nada
+
+    const linhas = value
+      .split(/\n|\.|;/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
     const objs = [];
-    linhas.forEach(linha => {
+    linhas.forEach((linha) => {
       const obj = extrairObjetivoResumido(linha);
       if (obj && !objs.includes(obj)) objs.push(obj);
     });
@@ -57,28 +117,56 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
   };
 
   const toggleObjetivo = (idx) => {
-    setObjetivosConcluidos(prev =>
-      prev.includes(idx) ? prev.filter(x => x !== idx) : [...prev, idx]
+    setObjetivosConcluidos((prev) =>
+      prev.includes(idx) ? prev.filter((x) => x !== idx) : [...prev, idx]
     );
   };
 
-  // Participantes
-  const handleParticipanteKeyDown = (e) => {
-    if (e.key === "Enter" && participanteInput.startsWith("@")) {
-      e.preventDefault();
-      const nome = participanteInput.trim();
-      if (!participantes.includes(nome)) {
-        setParticipantes([...participantes, nome]);
+  // ===== PARTICIPANTES =====
+  const buscarSugestoes = async (query) => {
+    if (!query.startsWith("@") || query.length < 2) {
+      setSugestoes([]);
+      return;
+    }
+    const termo = query.slice(1);
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, nome, funcao")
+        .ilike("nome", `%${termo}%`)
+        .limit(10);
+
+      if (error) {
+        console.error("Erro ao buscar participantes:", error.message);
+        setSugestoes([]);
+        return;
       }
-      setParticipanteInput("");
+
+      setSugestoes(data || []);
+    } catch (err) {
+      console.error("Erro inesperado ao buscar participantes:", err.message || err);
+      setSugestoes([]);
     }
   };
 
-  const removerParticipante = (nome) => {
-    setParticipantes(participantes.filter(p => p !== nome));
+  const handleParticipanteChange = (e) => {
+    const val = e.target.value;
+    setParticipanteInput(val);
+    buscarSugestoes(val);
   };
 
-  // Salvar inline edit ao sair do input
+  const selecionarSugestao = (item) => {
+    if (!participantes.some((p) => p.id === item.id)) {
+      setParticipantes([...participantes, item]);
+    }
+    setParticipanteInput("");
+    setSugestoes([]);
+  };
+
+  const removerParticipante = (id) => {
+    setParticipantes(participantes.filter((p) => p.id !== id));
+  };
+
   const handleBlur = (campo) => {
     if (campo === "pauta") setEditingPauta(false);
     if (campo === "local") setEditingLocal(false);
@@ -86,143 +174,164 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
 
   return (
     <div className="ata-card">
-      {/* HEADER idêntico ao Listagem */}
       <div className="listagem-card">
         <div className="listagem-header-container">
           <div className="listagem-header-titles">
-            <span className="project-name">{projetoAtual?.nome || "Sem projeto"}</span>
+            <span className="project-name">{projetoNome}</span>
             <div className="sub-info">
               <span className="pilha-name">{pilhaAtual?.nome || pilhaAtual || "Sem pilha"}</span>
               &nbsp;-&nbsp;
               <span className="nota-name">{notaAtual?.nome || notaAtual || "Sem nota"}</span>
             </div>
           </div>
-          <div className="alteracao-info">{ultimaAlteracao || data}</div>
+          <div className="alteracao-info">{dataLocal || ultimaAlteracao}</div>
         </div>
       </div>
 
       <div className="ata-body">
-
-        {/* Pauta */}
+        {/* ===== PAUTA ===== */}
         <div className="ata-section">
           {editingPauta ? (
             <input
               ref={pautaRef}
+              className="pauta-input"
               type="text"
               value={pauta}
-              onChange={e => setPauta(e.target.value)}
+              onChange={(e) => setPauta(e.target.value)}
               onBlur={() => handleBlur("pauta")}
-              onKeyDown={e => { if(e.key === "Enter") setEditingPauta(false); }}
+              onKeyDown={(e) => e.key === "Enter" && setEditingPauta(false)}
               autoFocus
             />
           ) : (
             <span
+              className="pauta-text"
               onDoubleClick={() => setEditingPauta(true)}
-              style={{ cursor: "pointer", padding: "8px", display: "inline-block", border: "1px solid #ccc", borderRadius: "6px" }}
             >
               {pauta || "Digite a pauta da reunião"}
             </span>
           )}
         </div>
 
-        {/* Local */}
+        {/* ===== LOCAL ===== */}
         <div className="ata-section">
           {editingLocal ? (
             <input
               ref={localRef}
+              className="local-input"
               type="text"
               value={local}
-              onChange={e => setLocal(e.target.value)}
+              onChange={(e) => setLocal(e.target.value)}
               onBlur={() => handleBlur("local")}
-              onKeyDown={e => { if(e.key === "Enter") setEditingLocal(false); }}
+              onKeyDown={(e) => e.key === "Enter" && setEditingLocal(false)}
               autoFocus
             />
           ) : (
             <span
+              className="local-text"
               onDoubleClick={() => setEditingLocal(true)}
-              style={{ cursor: "pointer", padding: "8px", display: "inline-block", border: "1px solid #ccc", borderRadius: "6px" }}
             >
               {local || "Digite o local"}
             </span>
           )}
         </div>
 
-        {/* Participantes */}
+        {/* ===== PARTICIPANTES ===== */}
         <div className="ata-section">
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-            {participantes.map((p, i) => (
-              <div
-                key={i}
-                style={{
-                  background: "#3b82f6",
-                  color: "#fff",
-                  padding: "4px 8px",
-                  borderRadius: "6px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  fontSize: "13px"
-                }}
-              >
-                {p}
-                <span
-                  style={{ cursor: "pointer" }}
-                  onClick={() => removerParticipante(p)}
-                >
-                  ×
-                </span>
-              </div>
-            ))}
-          </div>
           <input
             type="text"
             value={participanteInput}
-            onChange={e => setParticipanteInput(e.target.value)}
-            onKeyDown={handleParticipanteKeyDown}
-            placeholder="Digite @Nome e pressione Enter"
-            style={{ marginTop: "6px", width: "200px" }}
+            onChange={handleParticipanteChange}
+            placeholder="Digite @Nome e selecione"
+            className="participante-input"
           />
+
+          {sugestoes.length > 0 && (
+            <div className="sugestoes-list">
+              {sugestoes.map((item) => (
+                <div key={item.id} className="sugestao-item" onClick={() => selecionarSugestao(item)}>
+                  <span>@{item.nome}</span>
+                  <span className="sugestao-funcao">{item.funcao}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="participantes-list">
+            {participantes.map((p) => (
+              <div key={p.id} className="participante-item">
+                <span>{p.nome} ({p.funcao})</span>
+                <span className="remover-participante" onClick={() => removerParticipante(p.id)}>×</span>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* Texto da Ata */}
+        {/* ===== TEXTO DA ATA ===== */}
         <div className="ata-section">
           <textarea
             value={texto}
-            onChange={e => { setTexto(e.target.value); atualizarObjetivos(e.target.value); }}
+            onChange={(e) => {
+              setTexto(e.target.value);
+              atualizarObjetivos(e.target.value);
+            }}
             rows={6}
-            placeholder="Digite o texto da ata. Verbos no infinitivo serão detectados como objetivos."
+            placeholder="Digite o texto da ata..."
           />
         </div>
 
-        {/* Objetivos */}
+        {/* ===== CHECKBOX PARA CRIAR OBJETIVOS ===== */}
         <div className="ata-section">
-          <div className="ata-objectives">
-            {objetivosList.map((obj, i) => (
-              <label key={i}>
-                <input
-                  type="checkbox"
-                  checked={objetivosConcluidos.includes(i)}
-                  onChange={() => toggleObjetivo(i)}
-                />
-                {obj}
-              </label>
-            ))}
+          <label className="checkbox-objetivos">
+            <input
+              type="checkbox"
+              checked={criarObjetivos}
+              onChange={() => setCriarObjetivos(!criarObjetivos)}
+            />
+            Criar objetivos a partir da ata?
+          </label>
+        </div>
+
+        {/* ===== OBJETIVOS ===== */}
+        <div className="ata-section">
+          <div className={`ata-objectives ${!criarObjetivos ? "desativado" : ""}`}>
+            {criarObjetivos ? (
+              objetivosList.map((obj, i) => (
+                <label key={i}>
+                  <input
+                    type="checkbox"
+                    checked={objetivosConcluidos.includes(i)}
+                    onChange={() => toggleObjetivo(i)}
+                  />
+                  {obj}
+                </label>
+              ))
+            ) : (
+              <p className="texto-desativado">Ative para gerar objetivos automaticamente.</p>
+            )}
           </div>
           <div className="progress-container">
-            <div className="progress-bar" style={{ width: `${(objetivosList.length ? (objetivosConcluidos.length / objetivosList.length) * 100 : 0)}%` }}></div>
+            <div
+              className="progress-bar"
+              style={{
+                width: `${
+                  criarObjetivos && objetivosList.length
+                    ? (objetivosConcluidos.length / objetivosList.length) * 100
+                    : 0
+                }%`,
+              }}
+            ></div>
           </div>
         </div>
 
-        {/* Próxima reunião */}
+        {/* ===== PRÓXIMA REUNIÃO ===== */}
         <div className="ata-section">
           <input
             type="text"
             value={proxima}
-            onChange={e => setProxima(e.target.value)}
+            onChange={(e) => setProxima(e.target.value)}
             placeholder="Próxima reunião: Data ou observações"
           />
         </div>
-
       </div>
     </div>
   );

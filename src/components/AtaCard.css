@@ -3,18 +3,8 @@
   box-shadow: 0 4px 12px rgba(0,0,0,0.08);
   display: flex;
   flex-direction: column;
+  width: 50%;
 }
-
-.ata-header {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
-  color: white;
-  padding: 16px 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.ata-header h2 { margin: 0; font-size: 18px; }
 
 .ata-body {
   padding: 20px;
@@ -23,13 +13,80 @@
   gap: 16px;
 }
 
-.ata-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+/* PAUTA E LOCAL */
+.pauta-text, .local-text {
+  cursor: pointer;
+  padding: 4px;
+  display: inline-block;
 }
 
-.ata-section label { font-weight: 600; font-size: 14px; color: #374151; }
+.pauta-input {
+  font-size: 25px;
+  font-weight: bold;
+  border: none;
+  outline: none;
+  background: transparent;
+  width: 100%;
+}
+
+.local-input {
+  border: none;
+  outline: none;
+  background: transparent;
+  width: 100%;
+}
+
+/* PARTICIPANTES */
+.participante-input {
+  margin-bottom: 6px;
+  width: 250px;
+}
+
+.sugestoes-list {
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 4px;
+  margin-bottom: 6px;
+  background: #fff;
+}
+
+.sugestao-item {
+  padding: 6px 8px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.sugestao-item:hover {
+  background: #f9fafb;
+}
+
+.sugestao-funcao {
+  font-style: italic;
+  color: #555;
+}
+
+.participantes-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.participante-item {
+  background: #3b82f6;
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+}
+
+.remover-participante {
+  cursor: pointer;
+  margin-left: 8px;
+}
 
 .ata-section input, .ata-section textarea {
   width: 100%;
