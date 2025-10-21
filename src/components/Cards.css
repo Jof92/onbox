@@ -98,7 +98,7 @@
 }
 .modal-content.large { max-width:1400px; }
 .modal-content h2 { margin:0 0 16px;font-size:22px;color:#1e293b; }
-.modal-content label { display:block;margin:10px 0 6px;font-size:14px;font-weight:600;color:#374151; }
+.modal-content label {margin:10px 0 6px;font-size:14px;color:#374151; }
 .modal-content input, .modal-content select {
   width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1;font-size:14px;margin-bottom:12px;transition:0.2s;
 }

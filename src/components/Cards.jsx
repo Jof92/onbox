@@ -7,6 +7,7 @@ import { FaPlus, FaArrowLeft, FaTimes, FaEllipsisV, FaEdit, FaTrash } from 'reac
 import { supabase } from '../supabaseClient';
 import Listagem from './Listagem';
 import AtaCard from './AtaCard';
+import Task from './Task';
 import Loading from './Loading';
 
 export default function Cards() {
@@ -30,6 +31,7 @@ export default function Cards() {
   const [editNotaModal, setEditNotaModal] = useState(false);
   const [notaEditData, setNotaEditData] = useState({ id: null, nome: '', responsavel: '', pilhaId: null });
 
+  // Carregar projeto e pilhas
   useEffect(() => {
     const projectId = location.state?.projectId;
     if (!projectId) return navigate('/containers', { replace: true });
@@ -57,12 +59,14 @@ export default function Cards() {
     })();
   }, [location.state, navigate]);
 
+  // Criar nova pilha
   const handleAddColumn = async () => {
     if (!project) return;
     const { data: newPilha, error } = await supabase.from('pilhas').insert([{ project_id: project.id, title: 'Nova Pilha' }]).select().single();
     if (!error) setColumns([...columns, { id: String(newPilha.id), title: newPilha.title, notas: [] }]);
   };
 
+  // Salvar título editado da pilha
   const saveColumnTitle = async id => {
     if (!columnTitleDraft.trim()) return setEditingColumnId(null);
     const { error } = await supabase.from('pilhas').update({ title: columnTitleDraft }).eq('id', id);
@@ -70,14 +74,15 @@ export default function Cards() {
     setEditingColumnId(null);
   };
 
+  // Salvar nova nota
   const handleSaveTask = async () => {
     if (!formData.nome.trim() || !activeColumnId) return;
     const { data: newNota, error } = await supabase.from('notas').insert([{ ...formData, pilha_id: activeColumnId }]).select().single();
     if (!error) {
       setColumns(columns.map(c => c.id === activeColumnId ? { ...c, notas: [newNota, ...c.notas] } : c));
 
-      // Abrir modal automaticamente se for do tipo "Atas"
-      if (newNota.tipo === 'Atas') {
+      // Abrir modal automaticamente se for tipo Atas ou Tarefas
+      if (newNota.tipo === 'Atas' || newNota.tipo === 'Tarefas') {
         setPilhaSelecionada(columns.find(c => c.id === activeColumnId)?.title);
         setNotaSelecionada(newNota);
         setShowModalNota(true);
@@ -87,6 +92,7 @@ export default function Cards() {
     setShowForm(false);
   };
 
+  // Excluir nota
   const handleDeleteNota = async (notaId, pilhaId) => {
     if (!window.confirm("Deseja realmente excluir esta nota?")) return;
     const { error } = await supabase.from('notas').delete().eq('id', notaId);
@@ -96,6 +102,7 @@ export default function Cards() {
     }
   };
 
+  // Editar nota
   const handleEditNota = (nota, pilhaId) => {
     setNotaEditData({ id: nota.id, nome: nota.nome, responsavel: nota.responsavel || '', pilhaId });
     setEditNotaModal(true);
@@ -115,6 +122,7 @@ export default function Cards() {
     }
   };
 
+  // Drag & Drop
   const onDragEnd = ({ source, destination }) => {
     if (!destination) return;
     let movedTask;
@@ -222,7 +230,7 @@ export default function Cards() {
             ))}
             <label>Tipo</label>
             <select value={formData.tipo} onChange={e => setFormData({ ...formData, tipo: e.target.value })}>
-              {['Lista', 'Diário de Obra', 'Livres', 'Atas', 'Medição'].map(t => <option key={t}>{t}</option>)}
+              {['Lista', 'Diário de Obra', 'Tarefas', 'Atas', 'Medição'].map(t => <option key={t}>{t}</option>)}
             </select>
             <div className="modal-actions">
               <button className="btn-salvar" onClick={handleSaveTask}>Salvar</button>
@@ -255,14 +263,25 @@ export default function Cards() {
           <div className="modal-content large">
             <button className="modal-close-btn" onClick={() => setShowModalNota(false)} title="Fechar"><FaTimes /></button>
 
-            {notaSelecionada?.tipo === 'Atas' ? (
+            {notaSelecionada?.tipo === 'Atas' && (
               <AtaCard
                 projetoAtual={project}
                 pilhaAtual={pilhaSelecionada}
                 notaAtual={notaSelecionada}
                 usuarioAtual={usuarioAtual}
               />
-            ) : (
+            )}
+
+            {notaSelecionada?.tipo === 'Tarefas' && (
+              <Task
+                projetoAtual={project}
+                pilhaAtual={pilhaSelecionada}
+                notaAtual={notaSelecionada}
+                usuarioAtual={usuarioAtual}
+              />
+            )}
+
+            {notaSelecionada?.tipo !== 'Atas' && notaSelecionada?.tipo !== 'Tarefas' && (
               <Listagem
                 projetoAtual={project}
                 pilhaAtual={pilhaSelecionada}

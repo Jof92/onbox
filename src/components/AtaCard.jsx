@@ -26,14 +26,16 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
   const [participantes, setParticipantes] = useState([]);
   const [sugestoes, setSugestoes] = useState([]);
 
+  const [sugestoesResponsavel, setSugestoesResponsavel] = useState({});
+
   const pautaRef = useRef();
   const localRef = useRef();
 
   // ===== BUSCA NOME DO PROJETO =====
   useEffect(() => {
     const fetchProjetoNome = async () => {
+      if (!projetoAtual) return;
       try {
-        if (!projetoAtual) return;
         const { data, error } = await supabase
           .from("projects")
           .select("name")
@@ -41,8 +43,7 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
           .single();
         if (error) throw error;
         setProjetoNome(data?.name || "Projeto sem nome");
-      } catch (err) {
-        console.error("Erro ao buscar nome do projeto:", err);
+      } catch {
         setProjetoNome("Projeto não encontrado");
       }
     };
@@ -82,36 +83,51 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
         }
       }
     };
-
     obterLocalizacao();
   }, []);
 
   // ===== OBJETIVOS =====
-  const extrairObjetivoResumido = (linha) => {
-    for (const verbo of verbosInfinitivo) {
-      const regex = new RegExp(`\\b${verbo}\\b`, "i");
-      if (regex.test(linha)) {
-        const palavras = linha.split(/\s+/);
-        const idxVerbo = palavras.findIndex((w) => w.match(regex));
-        const objetivo = palavras.slice(idxVerbo, idxVerbo + 5).join(" ");
-        return objetivo.charAt(0).toUpperCase() + objetivo.slice(1);
-      }
-    }
-    return null;
-  };
-
-  const atualizarObjetivos = (value) => {
-    if (!criarObjetivos) return; // 🚫 Se não estiver ativado, não faz nada
-
-    const linhas = value
+  const extrairObjetivos = (texto) => {
+    if (!criarObjetivos) return [];
+    const linhas = texto
       .split(/\n|\.|;/)
       .map((l) => l.trim())
       .filter((l) => l.length > 0);
+
     const objs = [];
+
     linhas.forEach((linha) => {
-      const obj = extrairObjetivoResumido(linha);
-      if (obj && !objs.includes(obj)) objs.push(obj);
+      let restanteLinha = linha;
+      let matchFound = true;
+
+      while (matchFound) {
+        matchFound = false;
+        for (const verbo of verbosInfinitivo) {
+          const regex = new RegExp(`\\b${verbo}\\b`, "i");
+          const match = regex.exec(restanteLinha);
+          if (match) {
+            matchFound = true;
+            const idx = match.index;
+            let objetivo = restanteLinha.slice(idx);
+            const idxVirgula = objetivo.indexOf(",");
+            if (idxVirgula > -1) objetivo = objetivo.slice(0, idxVirgula);
+            objetivo = objetivo.trim();
+            if (objetivo && !objs.some((o) => o.texto === objetivo)) {
+              objs.push({ texto: objetivo, responsavel: "", dataEntrega: "" });
+            }
+            restanteLinha = restanteLinha.slice(idx + objetivo.length);
+            break;
+          }
+        }
+      }
     });
+
+    return objs;
+  };
+
+  const atualizarObjetivos = (value) => {
+    if (!criarObjetivos) return;
+    const objs = extrairObjetivos(value);
     setObjetivosList(objs);
     setObjetivosConcluidos([]);
   };
@@ -123,9 +139,10 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
   };
 
   // ===== PARTICIPANTES =====
-  const buscarSugestoes = async (query) => {
+  const buscarSugestoes = async (query, campo) => {
     if (!query.startsWith("@") || query.length < 2) {
-      setSugestoes([]);
+      if (campo === "participante") setSugestoes([]);
+      else setSugestoesResponsavel((prev) => ({ ...prev, [campo]: [] }));
       return;
     }
     const termo = query.slice(1);
@@ -135,24 +152,19 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
         .select("id, nome, funcao")
         .ilike("nome", `%${termo}%`)
         .limit(10);
-
-      if (error) {
-        console.error("Erro ao buscar participantes:", error.message);
-        setSugestoes([]);
-        return;
-      }
-
-      setSugestoes(data || []);
-    } catch (err) {
-      console.error("Erro inesperado ao buscar participantes:", err.message || err);
-      setSugestoes([]);
+      if (error) throw error;
+      if (campo === "participante") setSugestoes(data || []);
+      else setSugestoesResponsavel((prev) => ({ ...prev, [campo]: data || [] }));
+    } catch {
+      if (campo === "participante") setSugestoes([]);
+      else setSugestoesResponsavel((prev) => ({ ...prev, [campo]: [] }));
     }
   };
 
   const handleParticipanteChange = (e) => {
     const val = e.target.value;
     setParticipanteInput(val);
-    buscarSugestoes(val);
+    buscarSugestoes(val, "participante");
   };
 
   const selecionarSugestao = (item) => {
@@ -165,6 +177,21 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
 
   const removerParticipante = (id) => {
     setParticipantes(participantes.filter((p) => p.id !== id));
+  };
+
+  const handleResponsavelChange = (e, idx) => {
+    const val = e.target.value;
+    const novos = [...objetivosList];
+    novos[idx].responsavel = val;
+    setObjetivosList(novos);
+    buscarSugestoes(val, idx);
+  };
+
+  const selecionarResponsavel = (item, idx) => {
+    const novos = [...objetivosList];
+    novos[idx].responsavel = item.nome;
+    setObjetivosList(novos);
+    setSugestoesResponsavel((prev) => ({ ...prev, [idx]: [] }));
   };
 
   const handleBlur = (campo) => {
@@ -203,10 +230,7 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
               autoFocus
             />
           ) : (
-            <span
-              className="pauta-text"
-              onDoubleClick={() => setEditingPauta(true)}
-            >
+            <span className="pauta-text" onDoubleClick={() => setEditingPauta(true)}>
               {pauta || "Digite a pauta da reunião"}
             </span>
           )}
@@ -226,10 +250,7 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
               autoFocus
             />
           ) : (
-            <span
-              className="local-text"
-              onDoubleClick={() => setEditingLocal(true)}
-            >
+            <span className="local-text" onDoubleClick={() => setEditingLocal(true)}>
               {local || "Digite o local"}
             </span>
           )}
@@ -244,7 +265,6 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
             placeholder="Digite @Nome e selecione"
             className="participante-input"
           />
-
           {sugestoes.length > 0 && (
             <div className="sugestoes-list">
               {sugestoes.map((item) => (
@@ -255,7 +275,6 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
               ))}
             </div>
           )}
-
           <div className="participantes-list">
             {participantes.map((p) => (
               <div key={p.id} className="participante-item">
@@ -277,15 +296,14 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
             rows={6}
             placeholder="Digite o texto da ata..."
           />
-        </div>
-
-        {/* ===== CHECKBOX PARA CRIAR OBJETIVOS ===== */}
-        <div className="ata-section">
           <label className="checkbox-objetivos">
             <input
               type="checkbox"
               checked={criarObjetivos}
-              onChange={() => setCriarObjetivos(!criarObjetivos)}
+              onChange={() => {
+                setCriarObjetivos(!criarObjetivos);
+                if (!criarObjetivos) atualizarObjetivos(texto);
+              }}
             />
             Criar objetivos a partir da ata?
           </label>
@@ -296,14 +314,41 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
           <div className={`ata-objectives ${!criarObjetivos ? "desativado" : ""}`}>
             {criarObjetivos ? (
               objetivosList.map((obj, i) => (
-                <label key={i}>
+                <div key={i} className="objetivo-item">
                   <input
                     type="checkbox"
                     checked={objetivosConcluidos.includes(i)}
                     onChange={() => toggleObjetivo(i)}
                   />
-                  {obj}
-                </label>
+                  <span>{obj.texto}</span>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type="text"
+                      placeholder="@Responsável"
+                      value={obj.responsavel}
+                      onChange={(e) => handleResponsavelChange(e, i)}
+                    />
+                    {sugestoesResponsavel[i]?.length > 0 && (
+                      <div className="sugestoes-list" style={{ position: "absolute", zIndex: 10 }}>
+                        {sugestoesResponsavel[i].map((item) => (
+                          <div key={item.id} className="sugestao-item" onClick={() => selecionarResponsavel(item, i)}>
+                            <span>@{item.nome}</span>
+                            <span className="sugestao-funcao">{item.funcao}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <input
+                    type="date"
+                    value={obj.dataEntrega}
+                    onChange={(e) => {
+                      const novos = [...objetivosList];
+                      novos[i].dataEntrega = e.target.value;
+                      setObjetivosList(novos);
+                    }}
+                  />
+                </div>
               ))
             ) : (
               <p className="texto-desativado">Ative para gerar objetivos automaticamente.</p>
