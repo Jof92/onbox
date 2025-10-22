@@ -31,7 +31,7 @@ export default function Cards() {
   const [editNotaModal, setEditNotaModal] = useState(false);
   const [notaEditData, setNotaEditData] = useState({ id: null, nome: '', responsavel: '', pilhaId: null });
 
-  // Carregar projeto e pilhas
+  // --- Carregar projeto e pilhas ---
   useEffect(() => {
     const projectId = location.state?.projectId;
     if (!projectId) return navigate('/containers', { replace: true });
@@ -59,14 +59,14 @@ export default function Cards() {
     })();
   }, [location.state, navigate]);
 
-  // Criar nova pilha
+  // --- Criar nova pilha ---
   const handleAddColumn = async () => {
     if (!project) return;
     const { data: newPilha, error } = await supabase.from('pilhas').insert([{ project_id: project.id, title: 'Nova Pilha' }]).select().single();
     if (!error) setColumns([...columns, { id: String(newPilha.id), title: newPilha.title, notas: [] }]);
   };
 
-  // Salvar título editado da pilha
+  // --- Salvar título editado da pilha ---
   const saveColumnTitle = async id => {
     if (!columnTitleDraft.trim()) return setEditingColumnId(null);
     const { error } = await supabase.from('pilhas').update({ title: columnTitleDraft }).eq('id', id);
@@ -74,14 +74,12 @@ export default function Cards() {
     setEditingColumnId(null);
   };
 
-  // Salvar nova nota
+  // --- Salvar nova nota ---
   const handleSaveTask = async () => {
     if (!formData.nome.trim() || !activeColumnId) return;
     const { data: newNota, error } = await supabase.from('notas').insert([{ ...formData, pilha_id: activeColumnId }]).select().single();
     if (!error) {
       setColumns(columns.map(c => c.id === activeColumnId ? { ...c, notas: [newNota, ...c.notas] } : c));
-
-      // Abrir modal automaticamente se for tipo Atas ou Tarefas
       if (newNota.tipo === 'Atas' || newNota.tipo === 'Tarefas') {
         setPilhaSelecionada(columns.find(c => c.id === activeColumnId)?.title);
         setNotaSelecionada(newNota);
@@ -92,7 +90,7 @@ export default function Cards() {
     setShowForm(false);
   };
 
-  // Excluir nota
+  // --- Excluir nota ---
   const handleDeleteNota = async (notaId, pilhaId) => {
     if (!window.confirm("Deseja realmente excluir esta nota?")) return;
     const { error } = await supabase.from('notas').delete().eq('id', notaId);
@@ -102,7 +100,7 @@ export default function Cards() {
     }
   };
 
-  // Editar nota
+  // --- Editar nota ---
   const handleEditNota = (nota, pilhaId) => {
     setNotaEditData({ id: nota.id, nome: nota.nome, responsavel: nota.responsavel || '', pilhaId });
     setEditNotaModal(true);
@@ -122,7 +120,7 @@ export default function Cards() {
     }
   };
 
-  // Drag & Drop
+  // --- Drag & Drop ---
   const onDragEnd = ({ source, destination }) => {
     if (!destination) return;
     let movedTask;
@@ -221,20 +219,22 @@ export default function Cards() {
       {showForm && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <h2>Nova Nota</h2>
-            {['nome', 'responsavel'].map(field => (
-              <React.Fragment key={field}>
-                <label>{field.charAt(0).toUpperCase() + field.slice(1)}</label>
-                <input type="text" value={formData[field]} onChange={e => setFormData({ ...formData, [field]: e.target.value })} />
-              </React.Fragment>
-            ))}
-            <label>Tipo</label>
-            <select value={formData.tipo} onChange={e => setFormData({ ...formData, tipo: e.target.value })}>
-              {['Lista', 'Diário de Obra', 'Tarefas', 'Atas', 'Medição'].map(t => <option key={t}>{t}</option>)}
-            </select>
-            <div className="modal-actions">
-              <button className="btn-salvar" onClick={handleSaveTask}>Salvar</button>
-              <button className="btn-cancelar" onClick={() => setShowForm(false)}>Cancelar</button>
+            <div className="modal-inner">
+              <h2>Nova Nota</h2>
+              {['nome', 'responsavel'].map(field => (
+                <React.Fragment key={field}>
+                  <label>{field.charAt(0).toUpperCase() + field.slice(1)}</label>
+                  <input type="text" value={formData[field]} onChange={e => setFormData({ ...formData, [field]: e.target.value })} />
+                </React.Fragment>
+              ))}
+              <label>Tipo</label>
+              <select value={formData.tipo} onChange={e => setFormData({ ...formData, tipo: e.target.value })}>
+                {['Lista', 'Diário de Obra', 'Tarefas', 'Atas', 'Medição'].map(t => <option key={t}>{t}</option>)}
+              </select>
+              <div className="modal-actions">
+                <button className="btn-salvar" onClick={handleSaveTask}>Salvar</button>
+                <button className="btn-cancelar" onClick={() => setShowForm(false)}>Cancelar</button>
+              </div>
             </div>
           </div>
         </div>
@@ -244,14 +244,16 @@ export default function Cards() {
       {editNotaModal && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <h2>Editar Nota</h2>
-            <label>Nome</label>
-            <input type="text" value={notaEditData.nome} onChange={e => setNotaEditData({ ...notaEditData, nome: e.target.value })} />
-            <label>Responsável</label>
-            <input type="text" value={notaEditData.responsavel} onChange={e => setNotaEditData({ ...notaEditData, responsavel: e.target.value })} />
-            <div className="modal-actions">
-              <button className="btn-salvar" onClick={saveEditedNota}>Salvar</button>
-              <button className="btn-cancelar" onClick={() => setEditNotaModal(false)}>Cancelar</button>
+            <div className="modal-inner">
+              <h2>Editar Nota</h2>
+              <label>Nome</label>
+              <input type="text" value={notaEditData.nome} onChange={e => setNotaEditData({ ...notaEditData, nome: e.target.value })} />
+              <label>Responsável</label>
+              <input type="text" value={notaEditData.responsavel} onChange={e => setNotaEditData({ ...notaEditData, responsavel: e.target.value })} />
+              <div className="modal-actions">
+                <button className="btn-salvar" onClick={saveEditedNota}>Salvar</button>
+                <button className="btn-cancelar" onClick={() => setEditNotaModal(false)}>Cancelar</button>
+              </div>
             </div>
           </div>
         </div>
@@ -261,36 +263,38 @@ export default function Cards() {
       {showModalNota && (
         <div className="modal-overlay">
           <div className="modal-content large">
-            <button className="modal-close-btn" onClick={() => setShowModalNota(false)} title="Fechar"><FaTimes /></button>
+            <div className="modal-inner">
+              <button className="modal-close-btn" onClick={() => setShowModalNota(false)} title="Fechar"><FaTimes /></button>
 
-            {notaSelecionada?.tipo === 'Atas' && (
-              <AtaCard
-                projetoAtual={project}
-                pilhaAtual={pilhaSelecionada}
-                notaAtual={notaSelecionada}
-                usuarioAtual={usuarioAtual}
-              />
-            )}
+              {notaSelecionada?.tipo === 'Atas' && (
+                <AtaCard
+                  projetoAtual={project}
+                  pilhaAtual={pilhaSelecionada}
+                  notaAtual={notaSelecionada}
+                  usuarioAtual={usuarioAtual}
+                />
+              )}
 
-            {notaSelecionada?.tipo === 'Tarefas' && (
-              <Task
-                projetoAtual={project}
-                pilhaAtual={pilhaSelecionada}
-                notaAtual={notaSelecionada}
-                usuarioAtual={usuarioAtual}
-              />
-            )}
+              {notaSelecionada?.tipo === 'Tarefas' && (
+                <Task
+                  projetoAtual={project}
+                  pilhaAtual={pilhaSelecionada}
+                  notaAtual={notaSelecionada}
+                  usuarioAtual={usuarioAtual}
+                />
+              )}
 
-            {notaSelecionada?.tipo !== 'Atas' && notaSelecionada?.tipo !== 'Tarefas' && (
-              <Listagem
-                projetoAtual={project}
-                pilhaAtual={pilhaSelecionada}
-                notaAtual={notaSelecionada?.nome}
-                usuarioAtual={usuarioAtual}
-                locacoes={project?.pavimentos?.map(p => p.name) || []}
-                eaps={project?.eap?.map(e => e.name) || []}
-              />
-            )}
+              {notaSelecionada?.tipo !== 'Atas' && notaSelecionada?.tipo !== 'Tarefas' && (
+                <Listagem
+                  projetoAtual={project}
+                  pilhaAtual={pilhaSelecionada}
+                  notaAtual={notaSelecionada?.nome}
+                  usuarioAtual={usuarioAtual}
+                  locacoes={project?.pavimentos?.map(p => p.name) || []}
+                  eaps={project?.eap?.map(e => e.name) || []}
+                />
+              )}
+            </div>
           </div>
         </div>
       )}

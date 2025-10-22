@@ -183,29 +183,81 @@
 
 /* PROGRESSO */
 .progress-container {
-  background: #e5e7eb;
-  height: 12px;
-  border-radius: 6px;
-  overflow: hidden;
-  margin-top: 6px;
+  background: #e5e7eb; height: 20px; border-radius: 10px;
+  overflow: hidden; margin-top: 6px; position: relative;
 }
 
 .progress-bar {
-  height: 100%;
-  background: #10b981;
-  width: 0%;
-  transition: width 0.3s ease;
+  height: 100%; background: #10b981;
+  width: 0%; transition: width 0.3s ease;
+  border-radius: 10px 0 0 10px; display: flex;
+  align-items: center; justify-content: flex-end; padding-right: 6px;
+  color: #fff; font-weight: 600; font-size: 12px;
 }
 
-/* RESPONSIVO */
-@media (max-width: 700px) {
-  .objetivo-item {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .objetivo-item input[type="text"],
-  .objetivo-item input[type="date"] {
-    width: 100%;
-  }
+.progress-percent {
+  position: absolute; right: 10px; top: 50%;
+  transform: translateY(-50%); font-size: 12px; font-weight: 600;
+  color: #000;
 }
+
+/* CONTAINER DE PRÓXIMA REUNIÃO, SALVAR E AUTOR */
+.proxima-reuniao-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  align-items: center; /* centraliza horizontalmente os itens */
+}
+
+/* Linha 1: Próxima Reunião à esquerda */
+.proxima-reuniao-linha {
+  display: flex;
+  gap: 8px;
+  text-align: left;
+}
+
+.proxima-reuniao-linha label {
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.proxima-data-input {
+  width: 160px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+  outline: none;
+}
+
+/* Linha 2: Botão centralizado */
+.btn-salvar-ata {
+  background: #3b82f6;
+  color: #fff;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.1s ease;
+  align-self: center; /* garante centralização */
+}
+
+.btn-salvar-ata:hover {
+  background: #2563eb;
+}
+
+.btn-salvar-ata:active {
+  background: #1d4ed8;
+  transform: translateY(1px);
+}
+
+/* Linha 3: Autor centralizado */
+.ata-autor {
+  font-size: 13px;
+  color: #555;
+  text-align: center;
+  width: 100%;
+}
+
