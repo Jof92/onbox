@@ -1,23 +1,14 @@
 import React, { useState } from "react";
 import "./Task.css";
 
-export default function Task({ onClose }) {
+export default function Task({ onClose, projetoAtual, pilhaAtual, notaAtual }) {
   const [descricao, setDescricao] = useState(
     "O OnBox funciona melhor com a colaboração da equipe! Digite @ para mencionar colegas."
   );
   const [comentario, setComentario] = useState("");
   const [comentarios, setComentarios] = useState([]);
   const [anexos, setAnexos] = useState([]);
-
-  const handleSalvarDescricao = () => {
-    alert("Descrição salva:\n" + descricao);
-  };
-
-  const handleCancelarDescricao = () => {
-    setDescricao(
-      "O OnBox funciona melhor com a colaboração da equipe! Digite @ para mencionar colegas."
-    );
-  };
+  const [editandoDescricao, setEditandoDescricao] = useState(false);
 
   const handleAddComentario = () => {
     if (comentario.trim() === "") return;
@@ -41,36 +32,49 @@ export default function Task({ onClose }) {
 
   return (
     <div className="task-modal">
-      <div className="modal-header">
-        <button className="close-btn" onClick={onClose}>
-          &times;
-        </button>
+      {/* HEADER (NÃO EDITÁVEL) */}
+      <div className="task-header">
+        <div className="task-header-titles">
+          <span className="project-name">
+            {projetoAtual?.nome || projetoAtual?.name || "Sem projeto"}
+          </span>
+          <div className="sub-info">
+            <span className="pilha-name">
+              {pilhaAtual?.nome || pilhaAtual?.name || pilhaAtual || "Sem pilha"}
+            </span>
+            &nbsp;-&nbsp;
+            <span className="nota-name">
+              {notaAtual?.nome || notaAtual?.name || "Sem nota"}
+            </span>
+          </div>
+        </div>
       </div>
 
-      <h2 contentEditable suppressContentEditableWarning className="task-title">
-        Título do cartão
+      {/* TÍTULO */}
+      <h2
+        contentEditable
+        suppressContentEditableWarning
+        className="task-title"
+      >
+        {notaAtual?.nome || notaAtual?.name || "Título do cartão"}
       </h2>
 
-      {/* Descrição */}
+      {/* DESCRIÇÃO */}
       <div className="descricao-section">
         <h3>Descrição</h3>
         <div
           className="descricao-editor"
-          contentEditable
+          contentEditable={editandoDescricao}
           suppressContentEditableWarning
           onInput={(e) => setDescricao(e.currentTarget.textContent)}
+          onDoubleClick={() => setEditandoDescricao(true)}
+          onBlur={() => setEditandoDescricao(false)}
         >
           {descricao}
         </div>
-        <div className="editor-buttons">
-          <button onClick={handleSalvarDescricao}>Salvar</button>
-          <button id="cancelDesc" onClick={handleCancelarDescricao}>
-            Cancelar
-          </button>
-        </div>
       </div>
 
-      {/* Anexos */}
+      {/* ANEXOS */}
       <div className="anexos-section">
         <div className="anexos-header">
           <h3>Anexos</h3>
@@ -98,7 +102,7 @@ export default function Task({ onClose }) {
         </div>
       </div>
 
-      {/* Comentários */}
+      {/* COMENTÁRIOS */}
       <div className="comentarios-section">
         <h3>Comentários e atividades</h3>
         <textarea

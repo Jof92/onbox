@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabaseClient";
+import Loading from "./Loading"; // ✅ import do loading
 import "./AtaCard.css";
 
 const VERBOS = ["verificar","acompanhar","implementar","analisar","finalizar","revisar","enviar","agendar","checar"];
@@ -23,19 +24,27 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
   const [ataId, setAtaId] = useState(null);
   const [editingPauta, setEditingPauta] = useState(false);
   const [editingLocal, setEditingLocal] = useState(false);
+  const [loading, setLoading] = useState(true); // ✅ estado loading
 
   const pautaRef = useRef();
   const localRef = useRef();
 
   // --- BUSCA NOME DO PROJETO ---
   useEffect(() => {
-    if (!projetoAtual) return;
-    supabase.from("projects")
-      .select("name")
-      .eq("id", projetoAtual.id || projetoAtual)
-      .single()
-      .then(({ data, error }) => setProjetoNome(data?.name || "Projeto sem nome"))
-      .catch(() => setProjetoNome("Projeto não encontrado"));
+    const fetchProjeto = async () => {
+      if (!projetoAtual) return;
+      try {
+        const { data } = await supabase
+          .from("projects")
+          .select("name")
+          .eq("id", projetoAtual.id || projetoAtual)
+          .single();
+        setProjetoNome(data?.name || "Projeto sem nome");
+      } catch {
+        setProjetoNome("Projeto não encontrado");
+      }
+    };
+    fetchProjeto();
   }, [projetoAtual]);
 
   // --- DATA E LOCAL ---
@@ -46,9 +55,19 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
       return cidade ? `${cidade}, ${dataFormatada}` : dataFormatada;
     };
     const obterLocalizacao = async () => {
-      try { const res = await fetch("https://ipapi.co/json/"); const data = await res.json(); setDataLocal(formatarData(data.city)); }
-      catch { try { const res2 = await fetch("https://ipwho.is/"); const data2 = await res2.json(); setDataLocal(formatarData(data2.city)); } 
-      catch { setDataLocal(formatarData()); } }
+      try {
+        const res = await fetch("https://ipapi.co/json/");
+        const data = await res.json();
+        setDataLocal(formatarData(data.city));
+      } catch {
+        try {
+          const res2 = await fetch("https://ipwho.is/");
+          const data2 = await res2.json();
+          setDataLocal(formatarData(data2.city));
+        } catch {
+          setDataLocal(formatarData());
+        }
+      }
     };
     obterLocalizacao();
   }, []);
@@ -59,7 +78,10 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
       try {
         const { data: userData } = await supabase.auth.getUser();
         const user = userData?.user;
-        if (!user) return setAutorNome("Usuário desconhecido");
+        if (!user) {
+          setAutorNome("Usuário desconhecido");
+          return;
+        }
         setUsuarioId(user.id);
 
         let { data: perfil } = await supabase.from("profiles").select("nome").eq("id", user.id).single();
@@ -68,7 +90,12 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
           perfil = resp.data;
         }
 
-        const nomeDoPerfil = perfil?.nome || user.user_metadata?.nome || user.user_metadata?.name || user.email || "Usuário desconhecido";
+        const nomeDoPerfil =
+          perfil?.nome ||
+          user.user_metadata?.nome ||
+          user.user_metadata?.name ||
+          user.email ||
+          "Usuário desconhecido";
         setAutorNome(nomeDoPerfil);
       } catch {
         setAutorNome("Usuário desconhecido");
@@ -79,9 +106,9 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
 
   // --- CARREGA ATA EXISTENTE ---
   useEffect(() => {
-    if (!projetoAtual || !pilhaAtual || !notaAtual) return;
-
     const fetchAta = async () => {
+      if (!projetoAtual || !pilhaAtual || !notaAtual) return;
+
       try {
         const { data: ata } = await supabase
           .from("atas")
@@ -92,50 +119,65 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
           .single();
 
         if (!ata) {
-          setAtaId(null); setPauta(""); setLocal(""); setTexto(""); setProxima(""); setCriarObjetivos(false);
-          setObjetivosList([]); setObjetivosConcluidos([]); setParticipantes([]);
+          setAtaId(null);
+          setPauta("");
+          setLocal("");
+          setTexto("");
+          setProxima("");
+          setCriarObjetivos(false);
+          setObjetivosList([]);
+          setObjetivosConcluidos([]);
+          setParticipantes([]);
+          setLoading(false); // ✅ encerra loading
           return;
         }
 
-        setAtaId(ata.id); setPauta(ata.pauta || ""); setLocal(ata.local || "");
-        setTexto(ata.texto || ""); setProxima(ata.proxima_reuniao || "");
+        setAtaId(ata.id);
+        setPauta(ata.pauta || "");
+        setLocal(ata.local || "");
+        setTexto(ata.texto || "");
+        setProxima(ata.proxima_reuniao || "");
 
         const { data: partData } = await supabase
           .from("ata_participantes")
           .select("profiles(id,nome,funcao)")
           .eq("ata_id", ata.id);
-        setParticipantes(partData?.map(p => p.profiles) || []);
+        setParticipantes(partData?.map((p) => p.profiles) || []);
 
         const { data: objData } = await supabase
           .from("ata_objetivos")
           .select("*")
           .eq("ata_id", ata.id);
         if (objData?.length > 0) {
-          setObjetivosList(objData.map(o => ({
-            texto: o.texto,
-            responsavelId: o.responsavel_id,
-            responsavelNome: "",
-            dataEntrega: o.data_entrega
-          })));
-          setObjetivosConcluidos(objData.filter(o => o.concluido).map((_, i) => i));
+          setObjetivosList(
+            objData.map((o) => ({
+              texto: o.texto,
+              responsavelId: o.responsavel_id,
+              responsavelNome: "",
+              dataEntrega: o.data_entrega,
+            }))
+          );
+          setObjetivosConcluidos(objData.filter((o) => o.concluido).map((_, i) => i));
           setCriarObjetivos(true);
         }
 
+        setLoading(false); // ✅ encerra loading após carregar
       } catch (err) {
         console.error("Erro ao carregar ata:", err);
+        setLoading(false); // ✅ encerra mesmo em caso de erro
       }
     };
 
     fetchAta();
   }, [projetoAtual, pilhaAtual, notaAtual]);
 
-  // --- OBJETIVOS ---
+  // --- FUNÇÕES AUXILIARES ---
   const extrairObjetivos = (txt) => {
     if (!criarObjetivos) return [];
-    const linhas = txt.split(/\n|\.|;/).map(l => l.trim()).filter(Boolean);
+    const linhas = txt.split(/\n|\.|;/).map((l) => l.trim()).filter(Boolean);
     const objs = [];
 
-    linhas.forEach(linha => {
+    linhas.forEach((linha) => {
       let restante = linha;
       let matchFound = true;
       while (matchFound) {
@@ -145,7 +187,8 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
           if (match) {
             matchFound = true;
             const objetivo = restante.slice(match.index).split(",")[0].trim();
-            if (objetivo && !objs.some(o => o.texto === objetivo)) objs.push({ texto: objetivo, responsavelId: null, dataEntrega: "" });
+            if (objetivo && !objs.some((o) => o.texto === objetivo))
+              objs.push({ texto: objetivo, responsavelId: null, dataEntrega: "" });
             restante = restante.slice(match.index + objetivo.length);
             break;
           }
@@ -164,9 +207,10 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
   };
 
   const toggleObjetivo = (idx) =>
-    setObjetivosConcluidos(prev => prev.includes(idx) ? prev.filter(x => x !== idx) : [...prev, idx]);
+    setObjetivosConcluidos((prev) =>
+      prev.includes(idx) ? prev.filter((x) => x !== idx) : [...prev, idx]
+    );
 
-  // --- PARTICIPANTES / RESPONSÁVEIS ---
   const buscarSugestoes = async (query, campo) => {
     if (!query.startsWith("@") || query.length < 2) {
       return campo === "participante"
@@ -201,7 +245,6 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
 
   const handleBlur = campo => { if(campo==="pauta") setEditingPauta(false); if(campo==="local") setEditingLocal(false); };
 
-  // --- SALVAR ATA ---
   const salvarAta = async () => {
     try {
       if (!usuarioId) throw new Error("Usuário não autenticado");
@@ -229,6 +272,16 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
 
   const progressoPercent = objetivosList.length ? Math.round((objetivosConcluidos.length / objetivosList.length) * 100) : 0;
 
+  // --- RENDERIZAÇÃO COM LOADING ---
+  if (loading) {
+    return (
+      <div className="ata-card-loading">
+        <Loading size={200} />
+      </div>
+    );
+  }
+
+  // --- JSX ORIGINAL ---
   return (
     <div className="ata-card">
       {/* HEADER */}
@@ -313,7 +366,6 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
               ))}
             </div>
 
-            {/* Barra de progresso */}
             <div className="progress-container">
               <div className="progress-bar" style={{width:`${progressoPercent}%`}}></div>
               <span className="progress-percent">{progressoPercent}%</span>
@@ -321,7 +373,6 @@ export default function AtaCard({ projetoAtual, pilhaAtual, notaAtual, ultimaAlt
           </div>
         )}
 
-        {/* Próxima reunião / Salvar */}
         <div className="ata-section proxima-reuniao-container">
           <div className="proxima-reuniao-linha">
             <label>Próxima reunião em:</label>

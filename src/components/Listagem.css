@@ -225,13 +225,3 @@ select {
     padding: 6px;
   }
 }
-
-@media (max-width: 480px) {
-  .projeto-nome {
-    font-size: 20px;
-  }
-
-  .pilha-info {
-    font-size: 13px;
-  }
-}
