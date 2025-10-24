@@ -3,7 +3,7 @@
    ============================== */
 .listagem-card {
   background: #fff;
-
+  height: auto ;
   box-shadow: 0 6px 18px rgba(20, 20, 30, 0.06);
   padding: 0;
   font-family: Inter, "Segoe UI", Helvetica, Arial, sans-serif;

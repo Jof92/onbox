@@ -81,7 +81,6 @@ export default function Cards() {
     if (!error) {
       setColumns(columns.map(c => c.id === activeColumnId ? { ...c, notas: [newNota, ...c.notas] } : c));
 
-      // Abrir modal automaticamente se for tipo Atas ou Tarefas
       if (newNota.tipo === 'Atas' || newNota.tipo === 'Tarefas') {
         setPilhaSelecionada(columns.find(c => c.id === activeColumnId)?.title);
         setNotaSelecionada(newNota);
@@ -221,20 +220,35 @@ export default function Cards() {
       {showForm && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <h2>Nova Nota</h2>
-            {['nome', 'responsavel'].map(field => (
-              <React.Fragment key={field}>
-                <label>{field.charAt(0).toUpperCase() + field.slice(1)}</label>
-                <input type="text" value={formData[field]} onChange={e => setFormData({ ...formData, [field]: e.target.value })} />
-              </React.Fragment>
-            ))}
-            <label>Tipo</label>
-            <select value={formData.tipo} onChange={e => setFormData({ ...formData, tipo: e.target.value })}>
-              {['Lista', 'Diário de Obra', 'Tarefas', 'Atas', 'Medição'].map(t => <option key={t}>{t}</option>)}
-            </select>
-            <div className="modal-actions">
-              <button className="btn-salvar" onClick={handleSaveTask}>Salvar</button>
-              <button className="btn-cancelar" onClick={() => setShowForm(false)}>Cancelar</button>
+           
+
+            <div className="nova-nota-wrapper">
+               <h2>Nova Nota</h2>
+              {['nome', 'responsavel'].map(field => (
+                <React.Fragment key={field}>
+                  <label>{field.charAt(0).toUpperCase() + field.slice(1)}</label>
+                  <input
+                    type="text"
+                    value={formData[field]}
+                    onChange={e => setFormData({ ...formData, [field]: e.target.value })}
+                  />
+                </React.Fragment>
+              ))}
+
+              <label>Tipo</label>
+              <select
+                value={formData.tipo}
+                onChange={e => setFormData({ ...formData, tipo: e.target.value })}
+              >
+                {['Lista', 'Diário de Obra', 'Tarefas', 'Atas', 'Medição'].map(t => (
+                  <option key={t}>{t}</option>
+                ))}
+              </select>
+
+              <div className="modal-actions">
+                <button className="btn-salvar" onClick={handleSaveTask}>Salvar</button>
+                <button className="btn-cancelar" onClick={() => setShowForm(false)}>Cancelar</button>
+              </div>
             </div>
           </div>
         </div>

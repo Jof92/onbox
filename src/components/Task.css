@@ -32,11 +32,6 @@
   flex-direction: column;
 }
 
-.project-name {
-  font-size: 24px;
-  font-weight: 700;
-}
-
 .sub-info {
   display: flex;
   font-size: 14px;
@@ -87,12 +82,15 @@
 
 .descricao-section h3 {
   margin-bottom: 8px;
+  text-align: left;
   color: #0066cc;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
 }
 
 .descricao-editor {
+  direction: ltr;
+  text-align: left;
   padding: 10px;
   font-size: 14px;
   line-height: 1.5;
@@ -143,64 +141,101 @@
 /* ==============================
    📎 Anexos
    ============================== */
+/* === SEÇÃO DE ANEXOS === */
 .anexos-section {
-  padding: 16px 24px;
-  border-top: 1px solid #eee;
+  border: 1px solid #e4e6eb;
+  padding: 16px;
+  margin-top: 20px;
+}
+
+.anexos-section:hover {
+  border-color: #d0d3d9;
 }
 
 .anexos-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
+  justify-content: space-between;
+  margin-bottom: 12px;
 }
 
 .anexos-header h3 {
+  margin-bottom: 8px;
+  text-align: left;
   color: #0066cc;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
-  flex: 1;
 }
-
-.clip-btn {
-  font-size: 22px;
+.upload-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #eef2ff;
+  border: 1px solid #d4dcff;
+  color: #3b5bdb;
+  font-weight: 500;
+  padding: 8px 14px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: transform 0.2s ease;
+  transition: all 0.25s ease;
 }
 
-.clip-btn:hover {
-  transform: scale(1.2);
+.upload-btn svg {
+  font-size: 18px;
+}
+
+.upload-btn:hover {
+  background: #dbe4ff;
+  border-color: #b4c2ff;
+  color: #364fc7;
+  transform: translateY(-1px);
 }
 
 .anexos-lista {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .anexo-item {
-  background: #f9f9f9;
-  border: 1px dashed #ddd;
-  border-radius: 6px;
-  padding: 6px 10px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 14px;
+  background: #fff;
+  border: 1px solid #e3e6eb;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.95rem;
+  color: #444;
+  transition: 0.2s ease;
+}
+
+.anexo-item:hover {
+  background: #f9fafc;
+}
+
+.anexo-item span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #3b5bdb;
+  font-weight: 500;
 }
 
 .anexo-item button {
-  background: none;
+  background: transparent;
   border: none;
-  color: red;
-  font-size: 18px;
+  color: #888;
+  font-size: 20px;
+  line-height: 1;
   cursor: pointer;
-  transition: transform 0.2s ease;
+  transition: color 0.2s ease;
 }
 
 .anexo-item button:hover {
-  transform: scale(1.2);
+  color: #ff4d4d;
 }
+
 
 /* ==============================
    💬 Comentários
@@ -211,10 +246,11 @@
 }
 
 .comentarios-section h3 {
-  color: #0066cc;
-  font-size: 16px;
-  font-weight: 600;
   margin-bottom: 8px;
+  text-align: left;
+  color: #0066cc;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .comentarios-section textarea {

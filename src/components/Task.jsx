@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import "./Task.css";
+import { FiUploadCloud } from "react-icons/fi";
 
 export default function Task({ onClose, projetoAtual, pilhaAtual, notaAtual }) {
   const [descricao, setDescricao] = useState(
@@ -32,7 +33,7 @@ export default function Task({ onClose, projetoAtual, pilhaAtual, notaAtual }) {
 
   return (
     <div className="task-modal">
-      {/* HEADER (NÃO EDITÁVEL) */}
+      {/* HEADER */}
       <div className="task-header">
         <div className="task-header-titles">
           <span className="project-name">
@@ -61,25 +62,26 @@ export default function Task({ onClose, projetoAtual, pilhaAtual, notaAtual }) {
 
       {/* DESCRIÇÃO */}
       <div className="descricao-section">
-        <h3>Descrição</h3>
-        <div
-          className="descricao-editor"
-          contentEditable={editandoDescricao}
-          suppressContentEditableWarning
-          onInput={(e) => setDescricao(e.currentTarget.textContent)}
-          onDoubleClick={() => setEditandoDescricao(true)}
-          onBlur={() => setEditandoDescricao(false)}
-        >
-          {descricao}
-        </div>
+    <h3>Descrição</h3>
+      <div
+        className="descricao-editor"
+        contentEditable
+        suppressContentEditableWarning
+        onInput={(e) => setDescricao(e.currentTarget.innerText)}
+        onDoubleClick={() => setEditandoDescricao(true)}
+        onBlur={() => setEditandoDescricao(false)}
+      >
+        {descricao || "Clique aqui para adicionar uma descrição..."}
       </div>
+    </div>
 
       {/* ANEXOS */}
       <div className="anexos-section">
         <div className="anexos-header">
           <h3>Anexos</h3>
-          <label htmlFor="fileInput" className="clip-btn">
-            📎
+          <label htmlFor="fileInput" className="upload-btn">
+            <FiUploadCloud />
+            <span>Enviar</span>
           </label>
           <input
             type="file"
@@ -93,7 +95,7 @@ export default function Task({ onClose, projetoAtual, pilhaAtual, notaAtual }) {
         <div className="anexos-lista">
           {anexos.map((file, i) => (
             <div key={i} className="anexo-item">
-              <span>📎 {file.name}</span>
+              <span>{file.name}</span>
               <button title="Remover" onClick={() => handleRemoverAnexo(i)}>
                 ×
               </button>
