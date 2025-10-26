@@ -1,21 +1,31 @@
 .thin-sidebar {
   width: 60px;
-  background-color: #2c3e50;
+  background-color: #fff;
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 10px 0;
+  gap: 15px;
+  border-right: 2px solid #f6e1a7;
 }
 
+/* Botões laterais */
 .thin-btn {
-  background: none;
-  border: none;
+  background: #bf9010;
   color: #fff;
-  margin: 15px 0;
-  font-size: 1.5rem;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
   cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 16px;
+  transition: all 0.25s ease;
 }
 
+/* Efeito hover */
 .thin-btn:hover {
-  color: #00c48c;
+  background: #e1ac22;
+  transform: scale(1.05);
 }

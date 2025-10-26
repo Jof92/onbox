@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import LoginPanel from "./components/Login";
+import LoginFull from "./components/LoginFull"; // ✅ Import do LoginFull
 import Containers from "./components/Containers";
 import Cards from "./components/Cards";
 import { supabase } from "./supabaseClient";
@@ -125,6 +126,9 @@ export default function App() {
               element={<Containers projects={projects} setProjects={setProjects} />}
             />
             <Route path="/cards/:projectName" element={<Cards projects={projects} />} />
+
+            {/* Rota para o cadastro completo via link de email */}
+            <Route path="/loginfull" element={<LoginFull />} />
           </Routes>
         </main>
 

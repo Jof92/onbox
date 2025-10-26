@@ -1,10 +1,11 @@
 // Containers.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaCog, FaPlus, FaTrash, FaCamera, FaFileUpload } from "react-icons/fa";
+import { FaArrowLeft, FaCog, FaPlus, FaTrash, FaCamera } from "react-icons/fa";
 import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
 import "./Containers.css";
+import ThinSidebar from "./ThinSidebar";
 
 export default function Containers() {
   const navigate = useNavigate();
@@ -203,15 +204,8 @@ export default function Containers() {
 
       {/* Conteúdo principal com sidebars e main */}
       <div className="containers-content">
-        {/* Sidebar fininha */}
-        <aside className="sidebar-thin">
-          <button className="thin-btn" title="Configurações">
-            <FaCog />
-          </button>
-          <button className="thin-btn" title="Enviar/Carregar XML">
-            <FaFileUpload />
-          </button>
-        </aside>
+        {/* Sidebar fininha COM PROP PARA COLABORAÇÃO */}
+        <ThinSidebar containerAtual={selectedProject} user={user} />
 
         {/* Sidebar principal */}
         <aside className="containers-sidebar">
@@ -327,12 +321,11 @@ export default function Containers() {
                 Editar
               </button>
             </div>
-
           )}
         </main>
       </div>
 
-      {/* Modal */}
+      {/* Modal de novo/edição de projeto */}
       {showForm && (
         <div className="modal-overlay1">
           <div className="modal-content1">
