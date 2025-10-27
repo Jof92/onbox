@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
+import { useNavigate } from "react-router-dom";
 import "./LoginFull.css";
 
 export default function LoginFull() {
@@ -11,7 +11,6 @@ export default function LoginFull() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
-  const [emailConfirmed, setEmailConfirmed] = useState(true);
 
   const [formData, setFormData] = useState({
     nome: "",
@@ -20,11 +19,13 @@ export default function LoginFull() {
     avatar_url: "",
   });
 
-  // 🔹 1️⃣ Inicializa sessão e verifica perfil
+  // 🔹 1️⃣ Pega sessão ativa do Supabase
   useEffect(() => {
     const initSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
         if (!session) {
           setError("Sessão inválida ou expirou. Faça login novamente.");
@@ -34,19 +35,11 @@ export default function LoginFull() {
 
         setSession(session);
 
-        // Verifica se o e-mail foi confirmado
-        const user = session.user;
-        if (!user.email_confirmed_at) {
-          setEmailConfirmed(false);
-          setLoading(false);
-          return;
-        }
-
         // Busca perfil existente
         const { data: profile, error: profileError } = await supabase
           .from("profiles")
           .select("nome, empresa, funcao, avatar_url")
-          .eq("id", user.id)
+          .eq("id", session.user.id)
           .single();
 
         if (profileError && profileError.code !== "PGRST116") {
@@ -55,7 +48,7 @@ export default function LoginFull() {
 
         if (profile) setFormData(profile);
       } catch (err) {
-        console.error("Erro ao inicializar sessão:", err);
+        console.error("Erro ao pegar sessão:", err);
         setError("Erro ao carregar sua sessão. Faça login novamente.");
       } finally {
         setLoading(false);
@@ -64,6 +57,7 @@ export default function LoginFull() {
 
     initSession();
 
+    // Atualiza sessão ao logar via link
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) setSession(session);
     });
@@ -84,24 +78,27 @@ export default function LoginFull() {
       const fileName = `${session.user.id}.${fileExt}`;
       const filePath = `avatars/${fileName}`;
 
-      // Remove imagem antiga
+      // Remove imagem anterior
       await supabase.storage.from("avatars").remove([filePath]);
 
-      // Faz upload da nova imagem
+      // Upload da nova imagem
       const { error: uploadError } = await supabase.storage
         .from("avatars")
         .upload(filePath, file);
 
       if (uploadError) throw uploadError;
 
-      // Obtém URL pública
+      // URL pública
       const { data: publicUrlData } = supabase.storage
         .from("avatars")
         .getPublicUrl(filePath);
 
-      setFormData(prev => ({ ...prev, avatar_url: publicUrlData.publicUrl }));
+      setFormData((prev) => ({
+        ...prev,
+        avatar_url: publicUrlData.publicUrl,
+      }));
     } catch (err) {
-      console.error("Erro no upload de avatar:", err);
+      console.error("Erro ao enviar avatar:", err);
       setError("Erro ao enviar imagem. Tente novamente.");
     } finally {
       setUploading(false);
@@ -110,7 +107,7 @@ export default function LoginFull() {
 
   // 🔹 3️⃣ Atualiza campos do formulário
   const handleChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   // 🔹 4️⃣ Salva perfil
@@ -132,10 +129,14 @@ export default function LoginFull() {
 
       const { error: updateError } = await supabase.from("profiles").upsert([updates]);
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error("Erro ao salvar perfil:", updateError);
+        throw new Error(updateError.message);
+      }
 
       setSuccess(true);
 
+      // Redireciona após salvar
       setTimeout(() => navigate("/containers"), 2000);
     } catch (err) {
       console.error("Erro ao salvar perfil:", err);
@@ -157,20 +158,7 @@ export default function LoginFull() {
     );
   }
 
-  // 🔹 6️⃣ Render caso e-mail não confirmado
-  if (!emailConfirmed) {
-    return (
-      <div className="loginfull-container">
-        <div className="loginfull-card">
-          <h2>⚠️ Confirme seu e-mail</h2>
-          <p>Você precisa confirmar seu e-mail antes de concluir o cadastro.</p>
-          <button onClick={() => navigate("/login")}>Voltar ao login</button>
-        </div>
-      </div>
-    );
-  }
-
-  // 🔹 7️⃣ Render erro geral
+  // 🔹 6️⃣ Render erro
   if (error && !session) {
     return (
       <div className="loginfull-container">
@@ -183,7 +171,7 @@ export default function LoginFull() {
     );
   }
 
-  // 🔹 8️⃣ Render formulário completo
+  // 🔹 7️⃣ Render formulário
   return (
     <div className="loginfull-container">
       <div className="loginfull-card">
@@ -207,17 +195,17 @@ export default function LoginFull() {
           {/* Campos */}
           <div className="form-group">
             <label>Nome completo</label>
-            <input type="text" value={formData.nome} onChange={e => handleChange("nome", e.target.value)} required />
+            <input type="text" value={formData.nome} onChange={(e) => handleChange("nome", e.target.value)} required />
           </div>
 
           <div className="form-group">
             <label>Empresa</label>
-            <input type="text" value={formData.empresa} onChange={e => handleChange("empresa", e.target.value)} required />
+            <input type="text" value={formData.empresa} onChange={(e) => handleChange("empresa", e.target.value)} required />
           </div>
 
           <div className="form-group">
             <label>Função</label>
-            <input type="text" value={formData.funcao} onChange={e => handleChange("funcao", e.target.value)} required />
+            <input type="text" value={formData.funcao} onChange={(e) => handleChange("funcao", e.target.value)} required />
           </div>
 
           {/* Mensagens */}
