@@ -1,13 +1,8 @@
-import React, { useEffect, useState } from "react";
-import { supabase } from "../supabaseClient";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
 import "./LoginFull.css";
+import { supabase } from "../supabaseClient";
 
-export default function LoginFull() {
-  const navigate = useNavigate();
-
-  const [session, setSession] = useState(null);
-  const [loading, setLoading] = useState(true);
+export default function LoginFull({ onClose, session }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -16,206 +11,194 @@ export default function LoginFull() {
     nome: "",
     empresa: "",
     funcao: "",
+    container: "",
     avatar_url: "",
   });
 
-  // 🔹 1️⃣ Pega sessão ativa do Supabase
+  // Buscar dados do perfil ao abrir o modal
   useEffect(() => {
-    const initSession = async () => {
+    const fetchProfile = async () => {
+      if (!session?.user) return;
+
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
-        if (!session) {
-          setError("Sessão inválida ou expirou. Faça login novamente.");
-          setLoading(false);
-          return;
-        }
-
-        setSession(session);
-
-        // Busca perfil existente
-        const { data: profile, error: profileError } = await supabase
+        const { data, error } = await supabase
           .from("profiles")
-          .select("nome, empresa, funcao, avatar_url")
+          .select("nome, empresa, funcao, container, avatar_url")
           .eq("id", session.user.id)
           .single();
 
-        if (profileError && profileError.code !== "PGRST116") {
-          console.error("Erro ao buscar perfil:", profileError);
-        }
+        if (error && error.code !== "PGRST116") throw error;
 
-        if (profile) setFormData(profile);
+        if (data) {
+          setFormData({
+            nome: data.nome || "",
+            empresa: data.empresa || "",
+            funcao: data.funcao || "",
+            container: data.container || "",
+            avatar_url: data.avatar_url || "",
+          });
+        }
       } catch (err) {
-        console.error("Erro ao pegar sessão:", err);
-        setError("Erro ao carregar sua sessão. Faça login novamente.");
-      } finally {
-        setLoading(false);
+        console.error("Erro ao buscar perfil:", err.message);
+        setError("Erro ao carregar informações do perfil.");
       }
     };
 
-    initSession();
+    fetchProfile();
+  }, [session]);
 
-    // Atualiza sessão ao logar via link
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) setSession(session);
-    });
-
-    return () => listener?.subscription?.unsubscribe();
-  }, []);
-
-  // 🔹 2️⃣ Upload de avatar
   const handleUpload = async (event) => {
     try {
       setUploading(true);
       const file = event.target.files[0];
-      if (!file) return;
-
-      if (!session?.user) throw new Error("Usuário não autenticado.");
+      if (!file || !session?.user) return;
 
       const fileExt = file.name.split(".").pop();
       const fileName = `${session.user.id}.${fileExt}`;
       const filePath = `avatars/${fileName}`;
 
-      // Remove imagem anterior
       await supabase.storage.from("avatars").remove([filePath]);
 
-      // Upload da nova imagem
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(filePath, file);
+        .upload(filePath, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
-      // URL pública
-      const { data: publicUrlData } = supabase.storage
+      const { data: publicData, error: urlError } = supabase.storage
         .from("avatars")
         .getPublicUrl(filePath);
 
+      if (urlError) throw urlError;
+
       setFormData((prev) => ({
         ...prev,
-        avatar_url: publicUrlData.publicUrl,
+        avatar_url: publicData.publicUrl,
       }));
     } catch (err) {
       console.error("Erro ao enviar avatar:", err);
-      setError("Erro ao enviar imagem. Tente novamente.");
+      setError("Erro ao enviar imagem.");
     } finally {
       setUploading(false);
     }
   };
 
-  // 🔹 3️⃣ Atualiza campos do formulário
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  // 🔹 4️⃣ Salva perfil
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!session?.user) return setError("Sessão inválida. Faça login novamente.");
+    if (!session?.user) return setError("Usuário não autenticado.");
 
     try {
       setError("");
 
       const updates = {
         id: session.user.id,
-        email: session.user.email,
         nome: formData.nome.trim(),
         empresa: formData.empresa.trim(),
         funcao: formData.funcao.trim(),
+        container: formData.container.trim(),
         avatar_url: formData.avatar_url || null,
+        updated_at: new Date(),
       };
 
-      const { error: updateError } = await supabase.from("profiles").upsert([updates]);
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .upsert([updates]);
 
-      if (updateError) {
-        console.error("Erro ao salvar perfil:", updateError);
-        throw new Error(updateError.message);
-      }
+      if (updateError) throw updateError;
 
       setSuccess(true);
-
-      // Redireciona após salvar
-      setTimeout(() => navigate("/containers"), 2000);
+      setTimeout(() => setSuccess(false), 2500);
     } catch (err) {
       console.error("Erro ao salvar perfil:", err);
-      setError(
-        "Erro ao salvar informações do perfil. Verifique se a tabela 'profiles' existe e se você tem permissão de inserção."
-      );
+      setError("Erro ao salvar informações.");
     }
   };
 
-  // 🔹 5️⃣ Render loading
-  if (loading) {
-    return (
-      <div className="loginfull-container">
-        <div className="loginfull-card">
-          <h2>Carregando...</h2>
-          <p>Validando sua conta, aguarde.</p>
-        </div>
-      </div>
-    );
-  }
-
-  // 🔹 6️⃣ Render erro
-  if (error && !session) {
-    return (
-      <div className="loginfull-container">
-        <div className="loginfull-card">
-          <h2>⚠️ Erro</h2>
-          <p>{error}</p>
-          <button onClick={() => navigate("/login")}>Voltar</button>
-        </div>
-      </div>
-    );
-  }
-
-  // 🔹 7️⃣ Render formulário
   return (
-    <div className="loginfull-container">
-      <div className="loginfull-card">
-        <h2>🎉 Bem-vindo ao OnBox!</h2>
-        <p>Finalize seu cadastro para continuar.</p>
+    <div className="modal-overlay">
+      <div className="loginfull-container">
+        <div className="loginfull-card">
+          {onClose && (
+            <button className="close-modal" onClick={onClose}>
+              X
+            </button>
+          )}
 
-        <form onSubmit={handleSubmit}>
-          {/* Upload de avatar */}
-          <div className="avatar-upload">
-            {formData.avatar_url ? (
-              <img src={formData.avatar_url} alt="Avatar" className="avatar-preview" />
-            ) : (
-              <div className="avatar-placeholder">+</div>
-            )}
-            <label className="upload-btn">
-              {uploading ? "Enviando..." : "Alterar foto"}
-              <input type="file" accept="image/*" onChange={handleUpload} disabled={uploading} hidden />
-            </label>
-          </div>
+          <h2>Perfil do Usuário</h2>
 
-          {/* Campos */}
-          <div className="form-group">
-            <label>Nome completo</label>
-            <input type="text" value={formData.nome} onChange={(e) => handleChange("nome", e.target.value)} required />
-          </div>
+          <form onSubmit={handleSubmit}>
+            <div className="avatar-upload">
+              {formData.avatar_url ? (
+                <img
+                  src={formData.avatar_url}
+                  alt="Avatar"
+                  className="avatar-preview"
+                />
+              ) : (
+                <div className="avatar-placeholder">+</div>
+              )}
+              <label className="upload-btn">
+                {uploading ? "Enviando..." : "Alterar foto"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleUpload}
+                  hidden
+                />
+              </label>
+            </div>
 
-          <div className="form-group">
-            <label>Empresa</label>
-            <input type="text" value={formData.empresa} onChange={(e) => handleChange("empresa", e.target.value)} required />
-          </div>
+            <div className="form-group">
+              <label>Nome completo</label>
+              <input
+                type="text"
+                value={formData.nome}
+                onChange={(e) => handleChange("nome", e.target.value)}
+                required
+              />
+            </div>
 
-          <div className="form-group">
-            <label>Função</label>
-            <input type="text" value={formData.funcao} onChange={(e) => handleChange("funcao", e.target.value)} required />
-          </div>
+            <div className="form-group">
+              <label>Empresa</label>
+              <input
+                type="text"
+                value={formData.empresa}
+                onChange={(e) => handleChange("empresa", e.target.value)}
+              />
+            </div>
 
-          {/* Mensagens */}
-          {error && <div className="error-msg">{error}</div>}
-          {success && <div className="success-msg">✅ Perfil salvo com sucesso! Redirecionando...</div>}
+            <div className="form-group">
+              <label>Função</label>
+              <input
+                type="text"
+                value={formData.funcao}
+                onChange={(e) => handleChange("funcao", e.target.value)}
+              />
+            </div>
 
-          <button type="submit" className="save-btn" disabled={uploading}>
-            Salvar informações
-          </button>
-        </form>
+            <div className="form-group">
+              <label>Nomeie seu container</label>
+              <input
+                type="text"
+                value={formData.container}
+                onChange={(e) => handleChange("container", e.target.value)}
+                placeholder="Ex: Projeto OnBox Principal"
+                required
+              />
+            </div>
+
+            {error && <div className="error-msg">{error}</div>}
+            {success && <div className="success-msg">Perfil atualizado com sucesso!</div>}
+
+            <button type="submit" className="save-btn" disabled={uploading}>
+              Salvar informações
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );

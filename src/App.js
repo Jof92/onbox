@@ -1,138 +1,140 @@
-import React, { useEffect, useState } from "react";
-import { BrowserRouter as Router, Routes, Route, useNavigate } from "react-router-dom";
-import { supabase } from "./supabaseClient";
+import React, { useState, useEffect } from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Header from "./components/Header";
+import Footer from "./components/Footer";
+import LoginPanel from "./components/Login";
+import LoginFull from "./components/LoginFull";
 import Containers from "./components/Containers";
 import Cards from "./components/Cards";
-import LoginFull from "./components/LoginFull";
-import Footer from "./components/Footer";
-import LoadingScreen from "./components/LoadingScreen";
+import { supabase } from "./supabaseClient";
+import img1 from "./assets/1.png";
+import img2 from "./assets/2.png";
 import "./App.css";
 
 export default function App() {
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
   const [projects, setProjects] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [hasFullProfile, setHasFullProfile] = useState(false);
+  const [showLoginPanel, setShowLoginPanel] = useState(false);
+  const [showLoginFull, setShowLoginFull] = useState(false);
 
+  const images = [img1, img2];
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  // Carrossel de imagens
   useEffect(() => {
-    async function fetchSession() {
-      const { data, error } = await supabase.auth.getSession();
-      if (error) console.error("Erro ao obter sessão:", error);
-      setSession(data?.session || null);
-      setLoading(false);
-    }
+    const interval = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % images.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
 
+  // Monitorar sessão
+  useEffect(() => {
+    const fetchSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      setSession(data?.session || null);
+    };
     fetchSession();
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      if (session) {
+        setShowLoginPanel(false);
+        setShowLoginFull(false);
+      }
     });
-
-    return () => subscription?.subscription.unsubscribe();
+    return () => subscription.subscription.unsubscribe();
   }, []);
 
-  // Busca o perfil do usuário
+  // Buscar perfil do usuário
   useEffect(() => {
-    async function fetchProfile() {
+    const fetchProfile = async () => {
       if (!session?.user) {
         setProfile(null);
-        setHasFullProfile(false);
         return;
       }
-
       try {
         const { data, error } = await supabase
           .from("profiles")
-          .select("id, nome, empresa, funcao, avatar_url")
+          .select("id, nome, empresa, funcao, container, avatar_url")
           .eq("id", session.user.id)
           .single();
-
-        if (error && error.code !== "PGRST116") throw error; // ignora erro "no rows found"
-
+        if (error && error.code !== "PGRST116") throw error;
         setProfile(data || null);
-
-        const completo = !!(data?.nome && data?.empresa && data?.funcao);
-        setHasFullProfile(completo);
       } catch (err) {
         console.error("Erro ao buscar perfil:", err.message);
-        setHasFullProfile(false);
       }
-    }
-
+    };
     fetchProfile();
   }, [session]);
 
-  if (loading) return <LoadingScreen />;
+  const handleLoginClick = () => setShowLoginPanel((prev) => !prev);
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
+    setProfile(null);
+  };
+  const handleOpenLoginFull = () => setShowLoginFull(true);
+  const handleCloseLoginFull = () => setShowLoginFull(false);
 
   return (
     <Router>
-      <MainContent
-        session={session}
-        profile={profile}
-        hasFullProfile={hasFullProfile}
-        projects={projects}
-        setProjects={setProjects}
-      />
+      <div className="App">
+        <Header
+          session={session}
+          profile={profile}
+          onLoginClick={handleLoginClick}
+          onLogout={handleLogout}
+          onEditProfile={handleOpenLoginFull} // opcional: botão de editar perfil
+        />
+
+        {/* Painel de login flutuante */}
+        {showLoginPanel && !session && (
+          <div className="login-panel-container show">
+            <LoginPanel onLogin={() => setShowLoginPanel(false)} />
+          </div>
+        )}
+
+        {/* Modal LoginFull */}
+        {showLoginFull && session && profile && (
+          <LoginFull profile={profile} session={session} onClose={handleCloseLoginFull} />
+        )}
+
+        <main className="app-main">
+          {/* Carrossel para usuários não logados */}
+          {!session && (
+            <div className="carousel-container">
+              <img
+                src={images[currentIndex]}
+                alt={`Slide ${currentIndex + 1}`}
+                className="carousel-image"
+              />
+            </div>
+          )}
+
+          {/* Rotas */}
+          <Routes>
+            <Route
+              path="/"
+              element={
+                !session ? (
+                  <p>Faça login para acessar seus projetos.</p>
+                ) : (
+                  <Containers projects={projects} setProjects={setProjects} />
+                )
+              }
+            />
+            <Route
+              path="/containers"
+              element={<Containers projects={projects} setProjects={setProjects} />}
+            />
+            <Route path="/cards/:projectName" element={<Cards projects={projects} />} />
+          </Routes>
+        </main>
+
+        <Footer />
+      </div>
     </Router>
-  );
-}
-
-function MainContent({ session, profile, hasFullProfile, projects, setProjects }) {
-  const navigate = useNavigate();
-
-  // Redirecionamento automático baseado no estado do perfil
-  useEffect(() => {
-    if (!session) return; // usuário deslogado
-    if (hasFullProfile) {
-      navigate("/containers");
-    } else {
-      navigate("/loginfull");
-    }
-  }, [session, hasFullProfile, navigate]);
-
-  return (
-    <div className="App">
-      <Header session={session} profile={profile} />
-
-      <main>
-        <Routes>
-          {/* Página inicial */}
-          <Route
-            path="/"
-            element={
-              !session ? (
-                <p className="login-msg">Faça login para acessar seus projetos.</p>
-              ) : hasFullProfile ? (
-                <Containers projects={projects} setProjects={setProjects} />
-              ) : (
-                <LoginFull />
-              )
-            }
-          />
-
-          {/* Containers só se perfil completo */}
-          <Route
-            path="/containers"
-            element={
-              hasFullProfile ? (
-                <Containers projects={projects} setProjects={setProjects} />
-              ) : (
-                <LoginFull />
-              )
-            }
-          />
-
-          {/* Página de cards */}
-          <Route path="/cards/:projectName" element={<Cards projects={projects} />} />
-
-          {/* Página para completar cadastro */}
-          <Route path="/loginfull" element={<LoginFull />} />
-        </Routes>
-      </main>
-
-      <Footer />
-    </div>
   );
 }
