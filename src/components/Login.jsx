@@ -5,10 +5,12 @@ import "./Login.css";
 
 export default function LoginPanel({ onLogin }) {
   const navigate = useNavigate();
+
   const [isSignup, setIsSignup] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+
   const [formData, setFormData] = useState({
     email: "",
     senha: "",
@@ -20,7 +22,7 @@ export default function LoginPanel({ onLogin }) {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  // Envio do formulário (login ou cadastro)
+  // Envia formulário
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -29,37 +31,37 @@ export default function LoginPanel({ onLogin }) {
 
     try {
       if (isSignup) {
-        // Validações básicas
-        if (!formData.email.includes("@")) throw new Error("Email inválido!");
+        // 🔹 Validações
+        if (!formData.email.includes("@")) throw new Error("Email inválido.");
         if (formData.senha.length < 6)
-          throw new Error("Senha deve ter no mínimo 6 caracteres!");
+          throw new Error("A senha deve ter pelo menos 6 caracteres.");
         if (formData.senha !== formData.confirmarSenha)
-          throw new Error("As senhas não conferem!");
+          throw new Error("As senhas não coincidem.");
 
-        // Cria usuário no Supabase e envia e-mail com redirecionamento
-        const { data, error: signUpError } = await supabase.auth.signUp({
+        // 🔹 Cadastro com redirecionamento após confirmação
+        const { error: signUpError } = await supabase.auth.signUp({
           email: formData.email,
           password: formData.senha,
           options: {
-            emailRedirectTo: `${window.location.origin}/loginfull`, // 🔹 Redireciona após confirmar e-mail
+            // 🔸 Redireciona direto para a página de cadastro completo
+            emailRedirectTo: "https://onbox-two.vercel.app/loginfull",
           },
         });
 
         if (signUpError) throw signUpError;
 
-        setFormData({ email: "", senha: "", confirmarSenha: "" });
         setSuccessMessage(
-          "✅ Cadastro iniciado! Verifique seu e-mail para continuar o cadastro completo."
+          "✅ Cadastro iniciado! Verifique seu e-mail e clique no link para continuar o cadastro no OnBox."
         );
 
-        // Volta para login após alguns segundos
+        // Limpa formulário e volta para modo de login
+        setFormData({ email: "", senha: "", confirmarSenha: "" });
         setTimeout(() => {
           setSuccessMessage("");
           setIsSignup(false);
-        }, 4000);
-
+        }, 5000);
       } else {
-        // Login normal
+        // 🔹 Login normal
         const { data, error: loginError } = await supabase.auth.signInWithPassword({
           email: formData.email,
           password: formData.senha,
@@ -67,8 +69,21 @@ export default function LoginPanel({ onLogin }) {
 
         if (loginError) throw loginError;
 
-        if (onLogin) onLogin();
-        navigate("/containers");
+        // Verifica se o usuário tem perfil completo
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("id", data.user.id)
+          .maybeSingle();
+
+        if (profile) {
+          // ✅ Perfil completo → containers
+          if (onLogin) onLogin();
+          navigate("/containers");
+        } else {
+          // 🚧 Perfil incompleto → loginfull
+          navigate("/loginfull");
+        }
       }
     } catch (err) {
       console.error("Erro no login/cadastro:", err);
@@ -78,15 +93,15 @@ export default function LoginPanel({ onLogin }) {
     }
   };
 
-  // Função auxiliar para renderizar inputs
-  const renderInput = (label, field, type = "text", required = true) => (
+  // Campo reutilizável
+  const renderInput = (label, field, type = "text") => (
     <div className="form-group">
       <label>{label}</label>
       <input
         type={type}
         value={formData[field]}
         onChange={(e) => handleChange(field, e.target.value)}
-        required={required}
+        required
       />
     </div>
   );
@@ -99,6 +114,7 @@ export default function LoginPanel({ onLogin }) {
         ) : (
           <>
             <h2>{isSignup ? "Criar Conta" : "Entrar"}</h2>
+
             <form onSubmit={handleSubmit}>
               {renderInput("Email", "email", "email")}
               {renderInput("Senha", "senha", "password")}
@@ -121,14 +137,22 @@ export default function LoginPanel({ onLogin }) {
               {isSignup ? (
                 <>
                   Já tem conta?{" "}
-                  <button type="button" onClick={() => setIsSignup(false)} className="link-btn">
+                  <button
+                    type="button"
+                    className="link-btn"
+                    onClick={() => setIsSignup(false)}
+                  >
                     Entrar
                   </button>
                 </>
               ) : (
                 <>
                   Não tem conta?{" "}
-                  <button type="button" onClick={() => setIsSignup(true)} className="link-btn">
+                  <button
+                    type="button"
+                    className="link-btn"
+                    onClick={() => setIsSignup(true)}
+                  >
                     Cadastre-se
                   </button>
                 </>
