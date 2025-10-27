@@ -5,6 +5,7 @@ import "./LoginFull.css";
 
 export default function LoginFull() {
   const navigate = useNavigate();
+
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -18,7 +19,7 @@ export default function LoginFull() {
     avatar_url: "",
   });
 
-  // 1️⃣ Pega sessão ativa do Supabase
+  // 🔹 1️⃣ Pega sessão ativa do Supabase
   useEffect(() => {
     const initSession = async () => {
       try {
@@ -34,7 +35,7 @@ export default function LoginFull() {
 
         setSession(session);
 
-        // Verifica se já existe perfil criado
+        // Busca perfil existente
         const { data: profile, error: profileError } = await supabase
           .from("profiles")
           .select("nome, empresa, funcao, avatar_url")
@@ -42,7 +43,6 @@ export default function LoginFull() {
           .single();
 
         if (profileError && profileError.code !== "PGRST116") {
-          // PGRST116 = registro não encontrado
           console.error("Erro ao buscar perfil:", profileError);
         }
 
@@ -57,7 +57,7 @@ export default function LoginFull() {
 
     initSession();
 
-    // Atualiza sessão caso usuário seja logado pelo link
+    // Atualiza sessão ao logar via link
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) setSession(session);
     });
@@ -65,7 +65,7 @@ export default function LoginFull() {
     return () => listener?.subscription?.unsubscribe();
   }, []);
 
-  // 2️⃣ Upload de avatar
+  // 🔹 2️⃣ Upload de avatar
   const handleUpload = async (event) => {
     try {
       setUploading(true);
@@ -78,17 +78,17 @@ export default function LoginFull() {
       const fileName = `${session.user.id}.${fileExt}`;
       const filePath = `avatars/${fileName}`;
 
-      // Remove imagem anterior (se existir)
+      // Remove imagem anterior
       await supabase.storage.from("avatars").remove([filePath]);
 
-      // Envia nova imagem
+      // Upload da nova imagem
       const { error: uploadError } = await supabase.storage
         .from("avatars")
         .upload(filePath, file);
 
       if (uploadError) throw uploadError;
 
-      // Gera URL pública
+      // URL pública
       const { data: publicUrlData } = supabase.storage
         .from("avatars")
         .getPublicUrl(filePath);
@@ -105,12 +105,12 @@ export default function LoginFull() {
     }
   };
 
-  // 3️⃣ Atualiza campos do formulário
+  // 🔹 3️⃣ Atualiza campos do formulário
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  // 4️⃣ Salva perfil no Supabase
+  // 🔹 4️⃣ Salva perfil
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!session?.user) return setError("Sessão inválida. Faça login novamente.");
@@ -118,14 +118,14 @@ export default function LoginFull() {
     try {
       setError("");
 
-     const updates = {
+      const updates = {
         id: session.user.id,
-        email: session.user.email, // ✅ Adicionado
+        email: session.user.email,
         nome: formData.nome.trim(),
         empresa: formData.empresa.trim(),
         funcao: formData.funcao.trim(),
         avatar_url: formData.avatar_url || null,
-     };
+      };
 
       const { error: updateError } = await supabase.from("profiles").upsert([updates]);
 
@@ -135,14 +135,18 @@ export default function LoginFull() {
       }
 
       setSuccess(true);
+
+      // Redireciona após salvar
       setTimeout(() => navigate("/containers"), 2000);
     } catch (err) {
       console.error("Erro ao salvar perfil:", err);
-      setError("Erro ao salvar informações do perfil. Verifique se a tabela 'profiles' existe e se você tem permissão de inserção.");
+      setError(
+        "Erro ao salvar informações do perfil. Verifique se a tabela 'profiles' existe e se você tem permissão de inserção."
+      );
     }
   };
 
-  // 5️⃣ Render loading
+  // 🔹 5️⃣ Render loading
   if (loading) {
     return (
       <div className="loginfull-container">
@@ -154,7 +158,7 @@ export default function LoginFull() {
     );
   }
 
-  // 6️⃣ Render erro
+  // 🔹 6️⃣ Render erro
   if (error && !session) {
     return (
       <div className="loginfull-container">
@@ -167,7 +171,7 @@ export default function LoginFull() {
     );
   }
 
-  // 7️⃣ Render formulário
+  // 🔹 7️⃣ Render formulário
   return (
     <div className="loginfull-container">
       <div className="loginfull-card">
