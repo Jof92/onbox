@@ -6,6 +6,7 @@ import { supabase } from "../supabaseClient";
 export default function Collab({ onClose, user }) {
   const [emailConvite, setEmailConvite] = useState("");
   const [notificacoes, setNotificacoes] = useState([]);
+  const [enviando, setEnviando] = useState(false); // ✈️ novo estado de animação
 
   useEffect(() => {
     if (user?.email) {
@@ -13,7 +14,6 @@ export default function Collab({ onClose, user }) {
     }
   }, [user?.email]);
 
-  // 🔹 Buscar convites pendentes para o usuário logado
   const fetchNotificacoes = async () => {
     try {
       const { data: convites, error } = await supabase
@@ -24,7 +24,6 @@ export default function Collab({ onClose, user }) {
 
       if (error) throw error;
 
-      // Buscar profile do remetente para cada convite
       const convitesComPerfil = await Promise.all(
         convites.map(async (c) => {
           const { data: remetente } = await supabase
@@ -43,71 +42,65 @@ export default function Collab({ onClose, user }) {
     }
   };
 
-  // 🔹 Enviar convite
   const enviarConvite = async () => {
     if (!emailConvite.trim()) return alert("Digite um e-mail válido.");
 
-    try {
-      // Buscar profile do usuário convidado
-      const { data: profile, error } = await supabase
-        .from("profiles")
-        .select("id,nome,email")
-        .ilike("email", emailConvite)
-        .maybeSingle();
+    setEnviando(true); // inicia animação do avião
 
-      if (error) throw error;
+    setTimeout(async () => {
+      try {
+        const { data: profile, error } = await supabase
+          .from("profiles")
+          .select("id,nome,email")
+          .ilike("email", emailConvite)
+          .maybeSingle();
 
-      if (!profile) {
-        console.log("Usuário não encontrado para o email:", emailConvite);
-        return alert("Usuário não encontrado no OnBox.");
-      }
+        if (error) throw error;
 
-      console.log("Usuário encontrado:", profile);
+        if (!profile) {
+          alert("Usuário não encontrado no OnBox.");
+          setEnviando(false);
+          return;
+        }
 
-      // Verificar se já existe convite pendente
-      const { data: existingInvite } = await supabase
-        .from("convites")
-        .select("*")
-        .eq("email", profile.email)
-        .eq("status", "pendente")
-        .maybeSingle();
+        const { data: existingInvite } = await supabase
+          .from("convites")
+          .select("*")
+          .eq("email", profile.email)
+          .eq("status", "pendente")
+          .maybeSingle();
 
-      if (existingInvite) return alert("Convite já enviado.");
+        if (existingInvite) {
+          alert("Convite já enviado.");
+          setEnviando(false);
+          return;
+        }
 
-      // Inserir convite
-      const { data: novoConvite, error: insertError } = await supabase
-        .from("convites")
-        .insert([
+        const { error: insertError } = await supabase.from("convites").insert([
           {
             email: profile.email,
             remetente_id: user.id,
             status: "pendente",
           },
-        ])
-        .select();
+        ]);
 
-      if (insertError) throw insertError;
+        if (insertError) throw insertError;
 
-      alert(`Convite enviado para ${profile.nome}`);
-      setEmailConvite("");
-      fetchNotificacoes();
-
-      console.log("Convite criado:", novoConvite);
-    } catch (err) {
-      console.error("Erro ao enviar convite:", err);
-      alert("Erro ao enviar convite.");
-    }
+        alert(`Convite enviado para ${profile.nome}`);
+        setEmailConvite("");
+        fetchNotificacoes();
+      } catch (err) {
+        console.error("Erro ao enviar convite:", err);
+        alert("Erro ao enviar convite.");
+      } finally {
+        setEnviando(false); // retorna o avião
+      }
+    }, 800); // tempo da animação
   };
 
-  // 🔹 Aceitar convite
   const aceitarConvite = async (convite) => {
     try {
-      // Atualizar status do convite
-      await supabase
-        .from("convites")
-        .update({ status: "aceito" })
-        .eq("id", convite.id);
-
+      await supabase.from("convites").update({ status: "aceito" }).eq("id", convite.id);
       alert("Convite aceito!");
       fetchNotificacoes();
     } catch (err) {
@@ -134,7 +127,13 @@ export default function Collab({ onClose, user }) {
               value={emailConvite}
               onChange={(e) => setEmailConvite(e.target.value)}
             />
-            <button onClick={enviarConvite}><FaPaperPlane /> Enviar</button>
+            <button
+              className={`btn-enviar ${enviando ? "plane-fly" : ""}`}
+              onClick={!enviando ? enviarConvite : undefined}
+            >
+              <FaPaperPlane className="plane-icon" />
+              {!enviando && " Enviar"}
+            </button>
           </div>
         </div>
 
@@ -159,7 +158,6 @@ export default function Collab({ onClose, user }) {
 
         <hr />
 
-        {/* Espaço reservado para futuros colaboradores */}
         <div className="collab-section">
           <h3>Integrantes</h3>
           <p className="empty">Espaço reservado para integrantes.</p>

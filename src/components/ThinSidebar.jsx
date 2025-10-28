@@ -1,60 +1,127 @@
-import React, { useState } from "react";
-import { FaUserCircle, FaCog, FaUpload, FaUserFriends } from "react-icons/fa";
+import React, { useState, useEffect } from "react";
+import { FaCog, FaUpload, FaUserFriends, FaHome } from "react-icons/fa";
 import "./ThinSidebar.css";
 import Collab from "./Collab";
-import LoginFull from "./LoginFull"; // 🔹 Importa o LoginFull para usar como modal
+import { supabase } from "../supabaseClient";
 
-export default function ThinSidebar({ containerAtual, user }) {
+export default function ThinSidebar({ containerAtual, setContainerAtual, user }) {
   const [showCollab, setShowCollab] = useState(false);
-  const [showLoginFull, setShowLoginFull] = useState(false); // 🔹 Controla o modal de LoginFull
+  const [notificacoesPendentes, setNotificacoesPendentes] = useState(0);
+  const [colaboradores, setColaboradores] = useState([]);
+
+  useEffect(() => {
+    if (user?.email) {
+      fetchNotificacoes();
+      fetchColaboradores();
+    }
+  }, [user?.email]);
+
+  const fetchNotificacoes = async () => {
+    try {
+      const { data: convites, error } = await supabase
+        .from("convites")
+        .select("*")
+        .eq("email", user.email)
+        .eq("status", "pendente");
+      if (error) throw error;
+      setNotificacoesPendentes(convites.length);
+    } catch {
+      setNotificacoesPendentes(0);
+    }
+  };
+
+  const fetchColaboradores = async () => {
+    try {
+      const { data: convitesAceitos, error } = await supabase
+        .from("convites")
+        .select("*")
+        .eq("email", user.email)
+        .eq("status", "aceito");
+      if (error) throw error;
+
+      const colaboradoresComPerfil = await Promise.all(
+        convitesAceitos.map(async (c) => {
+          const { data: remetente } = await supabase
+            .from("profiles")
+            .select("id,nome,email,avatar_url,container")
+            .eq("id", c.remetente_id)
+            .maybeSingle();
+          return { ...c, remetente };
+        })
+      );
+
+      setColaboradores(colaboradoresComPerfil);
+    } catch {
+      setColaboradores([]);
+    }
+  };
+
+  const handleOpenCollab = () => {
+    setShowCollab(true);
+    setNotificacoesPendentes(0);
+  };
+
+  const handleTrocarContainer = (colaborador) => {
+    if (!colaborador?.remetente?.id) return;
+    setContainerAtual(colaborador.remetente.id);
+  };
+
+  const handleVoltarHome = () => {
+    if (user?.id) setContainerAtual(user.id);
+  };
 
   return (
     <>
       <aside className="thin-sidebar">
-        {/* 🔹 Novo botão de Usuário */}
-        <button
-          className="thin-btn"
-          title="Perfil / Login"
-          onClick={() => setShowLoginFull(true)}
-        >
-          <FaUserCircle />
+        {/* Botão Home */}
+        <button className="thin-btn" title="Voltar ao meu container" onClick={handleVoltarHome}>
+          <FaHome />
         </button>
 
         <button className="thin-btn" title="Configurações">
           <FaCog />
         </button>
-
         <button className="thin-btn" title="Enviar / Carregar XML">
           <FaUpload />
         </button>
-
         <button
-          className="thin-btn"
+          className="thin-btn thin-btn-collab"
           title="Colaboração"
-          onClick={() => setShowCollab(true)}
+          onClick={handleOpenCollab}
         >
           <FaUserFriends />
+          {notificacoesPendentes > 0 && <span className="badge"></span>}
         </button>
+
+        {colaboradores.map((c) => (
+          <button
+            key={c.id}
+            className="thin-btn thin-btn-avatar"
+            title={c.remetente.nome}
+            onClick={() => handleTrocarContainer(c)}
+          >
+            {c.remetente.avatar_url ? (
+              <img
+                src={c.remetente.avatar_url}
+                alt={c.remetente.nome}
+                className="avatar-btn"
+              />
+            ) : (
+              c.remetente.nome?.charAt(0) || "?"
+            )}
+          </button>
+        ))}
       </aside>
 
-      {/* 🔹 Modal do LoginFull */}
-      {showLoginFull && (
-        <div className="modal-overlay" onClick={() => setShowLoginFull(false)}>
-          <div
-            className="modal-content"
-            onClick={(e) => e.stopPropagation()} // impede fechar ao clicar dentro
-          >
-            <LoginFull />
-          </div>
-        </div>
-      )}
-
-      {/* 🔹 Modal do Collab */}
       {showCollab && (
         <Collab
-          onClose={() => setShowCollab(false)}
+          onClose={() => {
+            setShowCollab(false);
+            fetchColaboradores();
+          }}
           containerAtual={containerAtual}
           user={user}
+          onAtualizarNotificacoes={fetchNotificacoes}
         />
       )}
     </>

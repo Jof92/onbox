@@ -167,3 +167,26 @@
   font-style: italic;
   margin-left: 4px;
 }
+
+/* ✈️ Animação do avião voando */
+.btn-enviar {
+  position: relative;
+  transition: transform 0.3s ease;
+  overflow: hidden;
+}
+
+.plane-icon {
+  transition: transform 0.8s ease, opacity 0.8s ease;
+}
+
+.plane-fly .plane-icon {
+  transform: translate(200px, -100px) rotate(20deg);
+  opacity: 0;
+}
+
+/* Opcional: desabilita o botão durante o voo */
+.plane-fly {
+  pointer-events: none;
+  opacity: 0.8;
+}
+  

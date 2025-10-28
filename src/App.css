@@ -178,3 +178,10 @@ a:hover {
     transform: translateY(-20px);
   }
 }
+.carousel-image {
+  width: 80em;         /* ocupa toda a largura do contêiner do carrossel */
+  height: 40em;       /* altura fixa para todas as imagens */
+  object-fit: cover;   /* mantém a proporção e corta o excesso se necessário */
+  border-radius: 8px;  /* opcional, para arredondar cantos */
+  margin-top: 20px;
+}

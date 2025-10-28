@@ -1,169 +1,217 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Header.css";
-import ob2 from "../assets/ob2.png";
 import { supabase } from "../supabaseClient";
-import { FaSignOutAlt, FaCamera, FaUserCircle } from "react-icons/fa";
+import ob2 from "../assets/ob2.png";
+import { FaSignOutAlt, FaCamera, FaUserCircle, FaUserEdit } from "react-icons/fa";
 
-export default function Header({ onLoginClick, onLogout, session }) {
+export default function Header({ onLoginClick, onLogout, session, profile }) {
   const navigate = useNavigate();
-  const [profile, setProfile] = useState(null);
   const [showMenu, setShowMenu] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [msg, setMsg] = useState({ error: "", success: false });
+  const [formData, setFormData] = useState({
+    nome: "", empresa: "", funcao: "", container: "", avatar_url: "",
+  });
   const fileInputRef = useRef(null);
   const menuRef = useRef(null);
 
-  // === Buscar perfil do usuário ===
   useEffect(() => {
-    async function fetchProfile() {
-      if (!session?.user) return;
+    if (profile)
+      setFormData({
+        nome: profile.nome || "",
+        empresa: profile.empresa || "",
+        funcao: profile.funcao || "",
+        container: profile.container || "",
+        avatar_url: profile.avatar_url || "",
+      });
+  }, [profile]);
 
-      try {
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("id, nome, avatar_url")
-          .eq("id", session.user.id)
-          .single();
+  // === Verifica se perfil está incompleto ===
+  const perfilIncompleto =
+    !profile?.nome || !profile?.empresa || !profile?.funcao || !profile?.container;
 
-        if (error) throw error;
-        setProfile(data);
-      } catch (error) {
-        console.error("Erro ao buscar perfil:", error.message);
-      }
-    }
+  // === Upload de avatar ===
+  const uploadAvatar = async (file) => {
+    if (!file || !session?.user) return;
+    const fileName = `${session.user.id}.${file.name.split(".").pop()}`;
+    const filePath = `avatars/${fileName}`;
+    await supabase.storage.from("avatars").remove([filePath]);
+    const { error: uploadError } = await supabase.storage
+      .from("avatars")
+      .upload(filePath, file, { upsert: true });
+    if (uploadError) throw uploadError;
+    const { data } = supabase.storage.from("avatars").getPublicUrl(filePath);
+    return data.publicUrl;
+  };
 
-    fetchProfile();
-  }, [session]);
-
-  // === Upload e atualização do avatar ===
-  async function handleFileChange(e) {
+  const handleFileChange = async (e, isModal = false) => {
     try {
+      setUploading(true);
       const file = e.target.files[0];
-      if (!file || !session?.user) return;
-
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${session.user.id}.${fileExt}`;
-      const filePath = fileName; // simples e direto
-
-      // Upload no bucket "avatars"
-      const { error: uploadError } = await supabase.storage
-        .from("avatars")
-        .upload(filePath, file, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      // Obter URL pública do arquivo
-      const { data: publicData, error: urlError } = supabase.storage
-        .from("avatars")
-        .getPublicUrl(filePath);
-
-      if (urlError) throw urlError;
-
-      const publicUrl = publicData.publicUrl;
-
-      // Atualizar a tabela profiles
-      const { error: updateError } = await supabase
-        .from("profiles")
-        .update({ avatar_url: publicUrl })
-        .eq("id", session.user.id)
-        .select();
-
-      if (updateError) throw updateError;
-
-      // Atualizar o estado local
-      setProfile((prev) => ({ ...prev, avatar_url: publicUrl }));
-      setShowMenu(false);
-    } catch (error) {
-      console.error("Erro ao atualizar avatar:", error.message);
-    }
-  }
-
-  // === Fechar menu ao clicar fora ===
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
-        setShowMenu(false);
+      const url = await uploadAvatar(file);
+      if (isModal) setFormData((f) => ({ ...f, avatar_url: url }));
+      else {
+        await supabase.from("profiles").update({ avatar_url: url }).eq("id", session.user.id);
+        window.location.reload();
       }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    } catch {
+      setMsg({ error: "Erro ao enviar imagem.", success: false });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // === Salvar perfil ===
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!session?.user) return setMsg({ error: "Usuário não autenticado.", success: false });
+    try {
+      const updates = {
+        id: session.user.id,
+        email: session.user.email,
+        nome: formData.nome.trim(),
+        empresa: formData.empresa.trim(),
+        funcao: formData.funcao.trim(),
+        container: formData.container.trim(),
+        avatar_url: formData.avatar_url || null,
+      };
+      const { error } = await supabase.from("profiles").upsert([updates]);
+      if (error) throw error;
+      setMsg({ error: "", success: true });
+      setTimeout(() => window.location.reload(), 2000);
+    } catch {
+      setMsg({ error: "Erro ao salvar informações.", success: false });
+    }
+  };
+
+  useEffect(() => {
+    const clickOutside = (e) => !menuRef.current?.contains(e.target) && setShowMenu(false);
+    document.addEventListener("mousedown", clickOutside);
+    return () => document.removeEventListener("mousedown", clickOutside);
   }, []);
 
-  // === Logout ===
-  async function handleLogout() {
+  const handleLogout = async () => {
     await supabase.auth.signOut();
-    setProfile(null);
-    setShowMenu(false);
-    if (onLogout) onLogout();
+    onLogout?.();
     navigate("/");
-  }
+  };
 
   return (
-    <header className="header">
-      {/* Logo */}
-      <div className="header-left" onClick={() => navigate("/")}>
-        <img src={ob2} alt="Logo" />
-      </div>
+    <>
+      <header className="header">
+        <div className="header-left" onClick={() => navigate("/")}>
+          <img src={ob2} alt="Logo" />
+        </div>
 
-      {/* Área do usuário */}
-      <div className="header-right">
-        {session ? (
-          <div className="header-user-info" ref={menuRef}>
-            {/* Avatar */}
-            <div
-              className="header-avatar-wrapper"
-              onClick={() => setShowMenu((prev) => !prev)}
-            >
-              {profile?.avatar_url ? (
-                <img
-                  src={profile.avatar_url}
-                  alt="Avatar"
-                  className="header-avatar"
-                />
-              ) : (
-                <FaUserCircle className="header-avatar-placeholder" />
+        <div className="header-right">
+          {session ? (
+            <div className="header-user-info" ref={menuRef}>
+              <div className="header-avatar-wrapper" onClick={() => setShowMenu(!showMenu)}>
+                {profile?.avatar_url ? (
+                  <img src={profile.avatar_url} alt="Avatar" className="header-avatar" />
+                ) : (
+                  <FaUserCircle className="header-avatar-placeholder" />
+                )}
+              </div>
+
+              {/* 🟡 Balão de aviso se o perfil estiver incompleto */}
+              {perfilIncompleto && (
+                <div className="perfil-warning-bubble">
+                  ⚠️ Antes de iniciar, conclua seu perfil.
+                </div>
               )}
-            </div>
 
-            {/* Nome e saudação */}
-            <div className="header-user-text">
               <p className="header-welcome">
                 Bem-vindo, <strong>{profile?.nome || "Usuário"}</strong>
               </p>
+
+              {showMenu && (
+                <div className="header-menu animate-dropdown">
+                  <button onClick={() => fileInputRef.current.click()} className="header-menu-item">
+                    <FaCamera /> Alterar foto
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowEditModal(true);
+                      setShowMenu(false);
+                    }}
+                    className="header-menu-item"
+                  >
+                    <FaUserEdit /> Editar perfil
+                  </button>
+                  <button onClick={handleLogout} className="header-menu-item">
+                    <FaSignOutAlt /> Sair
+                  </button>
+                </div>
+              )}
+
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/*"
+                hidden
+                onChange={(e) => handleFileChange(e)}
+              />
             </div>
+          ) : (
+            <button className="header-btn-login" onClick={onLoginClick}>
+              Entrar
+            </button>
+          )}
+        </div>
+      </header>
 
-            {/* Menu suspenso */}
-            {showMenu && (
-              <div
-                className={`header-menu ${showMenu ? "animate-dropdown" : ""}`}
-              >
-                <button
-                  className="header-menu-item"
-                  onClick={() => fileInputRef.current.click()}
-                >
-                  <FaCamera /> Editar foto
+      {/* Modal de edição */}
+      {showEditModal && (
+        <div className="modal-overlay">
+          <div className="loginfull-container">
+            <button className="close-modal" onClick={() => setShowEditModal(false)}>X</button>
+            <div className="loginfull-card">
+              <h2>Perfil do Usuário</h2>
+              <form onSubmit={handleSubmit}>
+                <div className="avatar-upload">
+                  {formData.avatar_url ? (
+                    <img src={formData.avatar_url} alt="Avatar" className="avatar-preview" />
+                  ) : (
+                    <div className="avatar-placeholder">+</div>
+                  )}
+                  <label className="upload-btn">
+                    {uploading ? "Enviando..." : "Alterar foto"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      onChange={(e) => handleFileChange(e, true)}
+                    />
+                  </label>
+                </div>
+
+                {["nome", "empresa", "funcao", "container"].map((f) => (
+                  <div className="form-group" key={f}>
+                    <label>{f === "container" ? "Nomeie seu container" : f[0].toUpperCase() + f.slice(1)}</label>
+                    <input
+                      type="text"
+                      value={formData[f]}
+                      onChange={(e) => setFormData({ ...formData, [f]: e.target.value })}
+                      required={f === "nome" || f === "container"}
+                      placeholder={f === "container" ? "Ex: Projeto OnBox Principal" : ""}
+                    />
+                  </div>
+                ))}
+
+                {msg.error && <div className="error-msg">{msg.error}</div>}
+                {msg.success && <div className="success-msg">Perfil atualizado com sucesso!</div>}
+
+                <button type="submit" className="save-btn" disabled={uploading}>
+                  Salvar informações
                 </button>
-
-                <button className="header-menu-item" onClick={handleLogout}>
-                  <FaSignOutAlt /> Sair
-                </button>
-              </div>
-            )}
-
-            {/* Input de upload invisível */}
-            <input
-              type="file"
-              ref={fileInputRef}
-              accept="image/*"
-              style={{ display: "none" }}
-              onChange={handleFileChange}
-            />
+              </form>
+            </div>
           </div>
-        ) : (
-          <button className="header-btn-login" onClick={onLoginClick}>
-            Entrar
-          </button>
-        )}
-      </div>
-    </header>
+        </div>
+      )}
+    </>
   );
 }
