@@ -73,17 +73,23 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
   return (
     <>
       <aside className="thin-sidebar">
-        {/* Botão Home */}
-        <button className="thin-btn" title="Voltar ao meu container" onClick={handleVoltarHome}>
+        {/* Botões principais */}
+        <button
+          className="thin-btn"
+          title="Voltar ao meu container"
+          onClick={handleVoltarHome}
+        >
           <FaHome />
         </button>
 
         <button className="thin-btn" title="Configurações">
           <FaCog />
         </button>
+
         <button className="thin-btn" title="Enviar / Carregar XML">
           <FaUpload />
         </button>
+
         <button
           className="thin-btn thin-btn-collab"
           title="Colaboração"
@@ -93,24 +99,29 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
           {notificacoesPendentes > 0 && <span className="badge"></span>}
         </button>
 
-        {colaboradores.map((c) => (
-          <button
-            key={c.id}
-            className="thin-btn thin-btn-avatar"
-            title={c.remetente.nome}
-            onClick={() => handleTrocarContainer(c)}
-          >
-            {c.remetente.avatar_url ? (
-              <img
-                src={c.remetente.avatar_url}
-                alt={c.remetente.nome}
-                className="avatar-btn"
-              />
-            ) : (
-              c.remetente.nome?.charAt(0) || "?"
-            )}
-          </button>
-        ))}
+        {/* 🔹 Grupo de colaboradores */}
+        <div className="thin-collab-group">
+          {colaboradores.map((c) => (
+            <button
+              key={c.id}
+              className="thin-btn thin-btn-avatar"
+              title={c.remetente?.nome || "Colaborador"}
+              onClick={() => handleTrocarContainer(c)}
+            >
+              {c.remetente?.avatar_url ? (
+                <img
+                  src={c.remetente.avatar_url}
+                  alt={c.remetente.nome}
+                  className="avatar-btn"
+                />
+              ) : (
+                <span className="avatar-placeholder">
+                  {c.remetente?.nome?.charAt(0) || "?"}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
       </aside>
 
       {showCollab && (
