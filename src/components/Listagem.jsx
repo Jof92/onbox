@@ -1,60 +1,82 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
 import "./Listagem.css";
-import { FaPlus, FaTimes } from "react-icons/fa";
-
+import { FaPlus, FaTimes, FaPaperPlane } from "react-icons/fa";
 
 export default function Listagem({ projetoAtual, pilhaAtual, notaAtual, usuarioAtual }) {
   const [rows, setRows] = useState([]);
   const [ultimaAlteracao, setUltimaAlteracao] = useState("");
   const [locacoes, setLocacoes] = useState([]);
   const [eaps, setEaps] = useState([]);
+  const [direcionarPara, setDirecionarPara] = useState("");
 
-  // Inicializa as linhas e última alteração
-  useEffect(() => {
-    const initialRows = Array.from({ length: 10 }, () => ({
-      codigo: "",
-      descricao: "",
-      unidade: "",
-      quantidade: "",
-      locacao: "",
-      eap: "",
-      fornecedor: "",
-    }));
-    setRows(initialRows);
-
-    const now = new Date();
-    setUltimaAlteracao(`${usuarioAtual} alterou em ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`);
-  }, [usuarioAtual]);
-
-  // Carrega locações e EAPs do projeto
+  // Inicializa locações, EAPs e linhas
   useEffect(() => {
     if (!projetoAtual?.id) return;
 
-    const fetchLists = async () => {
+    const fetchListsAndRows = async () => {
+      // Buscar locações
       const { data: pavimentosData } = await supabase
         .from("pavimentos")
         .select("*")
         .eq("project_id", projetoAtual.id);
 
+      setLocacoes(pavimentosData?.map((p) => p.name) || []);
+
+      // Buscar EAPs
       const { data: eapsData } = await supabase
         .from("eap")
         .select("*")
         .eq("project_id", projetoAtual.id);
 
-      setLocacoes(pavimentosData?.map((p) => p.name) || []);
       setEaps(eapsData?.map((e) => e.name) || []);
+
+      // Buscar itens já salvos para projeto/pilha/nota
+      const { data: itensSalvos } = await supabase
+        .from("planilha_itens")
+        .select("*")
+        .eq("projeto_id", projetoAtual.id)
+        .eq("pilha", pilhaAtual)
+        .eq("nota", notaAtual);
+
+      if (itensSalvos && itensSalvos.length > 0) {
+        setRows(itensSalvos.map(item => ({
+          codigo: item.codigo || "",
+          descricao: item.descricao || "",
+          unidade: item.unidade || "",
+          quantidade: item.quantidade || "",
+          locacao: item.locacao || "",
+          eap: item.eap || "",
+          fornecedor: item.fornecedor || ""
+        })));
+      } else {
+        // Se não houver itens, inicializa 10 linhas vazias
+        setRows(Array.from({ length: 10 }, () => ({
+          codigo: "",
+          descricao: "",
+          unidade: "",
+          quantidade: "",
+          locacao: "",
+          eap: "",
+          fornecedor: ""
+        })));
+      }
     };
 
-    fetchLists();
-  }, [projetoAtual]);
+    fetchListsAndRows();
+  }, [projetoAtual, pilhaAtual, notaAtual]);
+
+  // Atualiza última alteração
+  useEffect(() => {
+    const now = new Date();
+    setUltimaAlteracao(`${usuarioAtual} alterou em ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`);
+  }, [usuarioAtual]);
 
   const updateAlteracao = () => {
     const now = new Date();
     setUltimaAlteracao(`${usuarioAtual} alterou em ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`);
   };
 
-  // Busca diretamente o item pelo código no Supabase
   const fetchItemDirect = async (index, codigo) => {
     if (!codigo.trim()) return;
 
@@ -99,10 +121,7 @@ export default function Listagem({ projetoAtual, pilhaAtual, notaAtual, usuarioA
   };
 
   const addRow = () => {
-    setRows([
-      ...rows,
-      { codigo: "", descricao: "", unidade: "", quantidade: "", locacao: "", eap: "", fornecedor: "" },
-    ]);
+    setRows([...rows, { codigo: "", descricao: "", unidade: "", quantidade: "", locacao: "", eap: "", fornecedor: "" }]);
     updateAlteracao();
   };
 
@@ -113,26 +132,39 @@ export default function Listagem({ projetoAtual, pilhaAtual, notaAtual, usuarioA
 
   const handleSave = async () => {
     try {
-      const itensToSave = rows.map((row) => ({
+      let itensToSave = rows.map((row) => ({
         codigo: row.codigo,
         descricao: row.descricao,
         unidade: row.unidade,
-        quantidade: row.quantidade,
+        quantidade: row.quantidade ? Number(row.quantidade) : null,
         locacao: row.locacao,
         eap: row.eap,
         fornecedor: row.fornecedor,
         projeto_id: projetoAtual?.id || null,
         pilha: pilhaAtual || null,
         nota: notaAtual || null,
+        direcionar_para: direcionarPara || null,
       }));
 
-      const { error } = await supabase.from("itens").upsert(itensToSave, { onConflict: ["codigo", "projeto_id"] });
+      // Remove duplicados (mesmo codigo + projeto_id)
+      itensToSave = Object.values(
+        itensToSave.reduce((acc, item) => {
+          const key = `${item.codigo}_${item.projeto_id}`;
+          acc[key] = item; // último prevalece
+          return acc;
+        }, {})
+      );
+
+      const { error } = await supabase
+        .from("planilha_itens")
+        .upsert(itensToSave, { onConflict: ["codigo", "projeto_id"] });
+
       if (error) throw error;
 
-      alert("Lista salva com sucesso!");
+      alert("Lista enviada com sucesso!");
     } catch (err) {
       console.error(err);
-      alert("Erro ao salvar lista: " + err.message);
+      alert("Erro ao enviar lista: " + err.message);
     }
   };
 
@@ -150,8 +182,20 @@ export default function Listagem({ projetoAtual, pilhaAtual, notaAtual, usuarioA
       </div>
 
       <div className="action-buttons">
-        <button className="add-row-btn" onClick={addRow}>Adicionar linha</button>
-        <button className="save-btn1" onClick={handleSave}>Salvar</button>
+        <button className="add-row-btn" onClick={addRow}><FaPlus /> Adicionar linha</button>
+
+        <input
+          type="text"
+          className="direcionar-para-input"
+          placeholder="Direcionar para"
+          value={direcionarPara}
+          onChange={(e) => setDirecionarPara(e.target.value)}
+        />
+
+        <button className="send-btn" onClick={handleSave}>
+          <FaPaperPlane style={{ marginRight: "6px" }} />
+          Enviar
+        </button>
       </div>
 
       <div className="listagem-table-wrapper">
@@ -195,13 +239,17 @@ export default function Listagem({ projetoAtual, pilhaAtual, notaAtual, usuarioA
                 <td>
                   <select value={row.locacao} onChange={(e) => handleInputChange(idx, "locacao", e.target.value)}>
                     <option value="">(selecionar)</option>
-                    {locacoes.map((loc) => <option key={loc} value={loc}>{loc}</option>)}
+                    {locacoes.map((loc, i) => (
+                      <option key={`${loc}_${i}`} value={loc}>{loc}</option>
+                    ))}
                   </select>
                 </td>
                 <td>
                   <select value={row.eap} onChange={(e) => handleInputChange(idx, "eap", e.target.value)}>
                     <option value="">(selecionar)</option>
-                    {eaps.map((eap) => <option key={eap} value={eap}>{eap}</option>)}
+                    {eaps.map((eap, i) => (
+                      <option key={`${eap}_${i}`} value={eap}>{eap}</option>
+                    ))}
                   </select>
                 </td>
                 <td>{row.fornecedor}</td>
@@ -209,7 +257,6 @@ export default function Listagem({ projetoAtual, pilhaAtual, notaAtual, usuarioA
                   <div className="button-group">
                     <button className="add-supabase-btn" onClick={() => alert("Adicionar insumo no Supabase")}><FaPlus /></button>
                     <button className="remove-btn" onClick={() => removeRow(idx)}><FaTimes /></button>
-                    
                   </div>
                 </td>
               </tr>

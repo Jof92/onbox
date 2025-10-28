@@ -225,3 +225,60 @@ select {
     padding: 6px;
   }
 }
+.direcionar-para-input {
+  padding: 6px 10px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  height: 36px;
+  min-width: 150px;
+  max-width: 250px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.direcionar-para-input:focus {
+  border-color: #00c48c;
+  box-shadow: 0 0 3px rgba(0, 196, 140, 0.5);
+}
+.action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.add-row-btn, .send-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 14px;
+  border: none;
+  border-radius: 6px;
+  background-color: #00c48c;
+  color: #fff;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.add-row-btn:hover, .send-btn:hover {
+  background-color: #00a36a;
+}
+
+.direcionar-para-input {
+  padding: 6px 10px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  height: 36px;
+  min-width: 150px;
+  max-width: 250px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.direcionar-para-input:focus {
+  border-color: #00c48c;
+  box-shadow: 0 0 3px rgba(0, 196, 140, 0.5);
+}
