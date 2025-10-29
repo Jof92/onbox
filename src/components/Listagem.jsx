@@ -1,138 +1,148 @@
+// Listagem.jsx
 import React, { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
 import "./Listagem.css";
 import { FaPlus, FaTimes, FaPaperPlane } from "react-icons/fa";
 
-export default function Listagem({ projetoAtual, pilhaAtual, notaAtual, usuarioAtual }) {
+export default function Listagem({ projetoAtual, notaAtual, usuarioAtual }) {
   const [rows, setRows] = useState([]);
   const [ultimaAlteracao, setUltimaAlteracao] = useState("");
   const [locacoes, setLocacoes] = useState([]);
   const [eaps, setEaps] = useState([]);
   const [direcionarPara, setDirecionarPara] = useState("");
 
-  // Inicializa locações, EAPs e linhas
+  // Atualiza registro visual da última alteração
+  const registrarAlteracao = (autor = usuarioAtual) => {
+    const agora = new Date();
+    const timestamp = `${autor || "Usuário"} alterou em ${agora.toLocaleDateString()} ${agora.toLocaleTimeString()}`;
+    setUltimaAlteracao(timestamp);
+  };
+
+  // Carregar listas e itens salvos
   useEffect(() => {
-    if (!projetoAtual?.id) return;
+    // Agora notaAtual é um objeto com .id (UUID)
+    if (!projetoAtual?.id || !notaAtual?.id) return;
 
-    const fetchListsAndRows = async () => {
-      // Buscar locações
-      const { data: pavimentosData } = await supabase
-        .from("pavimentos")
-        .select("*")
-        .eq("project_id", projetoAtual.id);
+    const carregarDados = async () => {
+      try {
+        // Carregar locações (pavimentos)
+        const { data: pavimentosData } = await supabase
+          .from("pavimentos")
+          .select("name")
+          .eq("project_id", projetoAtual.id);
+        setLocacoes(pavimentosData?.map(p => p.name) || []);
 
-      setLocacoes(pavimentosData?.map((p) => p.name) || []);
+        // Carregar EAPs
+        const { data: eapsData } = await supabase
+          .from("eap")
+          .select("name")
+          .eq("project_id", projetoAtual.id);
+        setEaps(eapsData?.map(e => e.name) || []);
 
-      // Buscar EAPs
-      const { data: eapsData } = await supabase
-        .from("eap")
-        .select("*")
-        .eq("project_id", projetoAtual.id);
+        // 🔥 Carregar itens pela nota_id (UUID) — sem depender de pilha!
+        const { data: itensSalvos } = await supabase
+          .from("planilha_itens")
+          .select("*")
+          .eq("nota_id", notaAtual.id);
 
-      setEaps(eapsData?.map((e) => e.name) || []);
+        if (itensSalvos?.length) {
+          setRows(
+            itensSalvos.map(item => ({
+              id: item.id,
+              codigo: item.codigo || "",
+              descricao: item.descricao || "",
+              unidade: item.unidade || "",
+              quantidade: item.quantidade || "",
+              locacao: item.locacao || "",
+              eap: item.eap || "",
+              fornecedor: item.fornecedor || ""
+            }))
+          );
+        } else {
+          // Inicializar com 10 linhas vazias
+          setRows(
+            Array.from({ length: 10 }, () => ({
+              codigo: "",
+              descricao: "",
+              unidade: "",
+              quantidade: "",
+              locacao: "",
+              eap: "",
+              fornecedor: ""
+            }))
+          );
+        }
 
-      // Buscar itens já salvos para projeto/pilha/nota
-      const { data: itensSalvos } = await supabase
-        .from("planilha_itens")
-        .select("*")
-        .eq("projeto_id", projetoAtual.id)
-        .eq("pilha", pilhaAtual)
-        .eq("nota", notaAtual);
-
-      if (itensSalvos && itensSalvos.length > 0) {
-        setRows(itensSalvos.map(item => ({
-          codigo: item.codigo || "",
-          descricao: item.descricao || "",
-          unidade: item.unidade || "",
-          quantidade: item.quantidade || "",
-          locacao: item.locacao || "",
-          eap: item.eap || "",
-          fornecedor: item.fornecedor || ""
-        })));
-      } else {
-        // Se não houver itens, inicializa 10 linhas vazias
-        setRows(Array.from({ length: 10 }, () => ({
-          codigo: "",
-          descricao: "",
-          unidade: "",
-          quantidade: "",
-          locacao: "",
-          eap: "",
-          fornecedor: ""
-        })));
+        registrarAlteracao();
+      } catch (err) {
+        console.error("Erro ao carregar dados:", err);
+        alert("Erro ao carregar os dados da lista.");
       }
     };
 
-    fetchListsAndRows();
-  }, [projetoAtual, pilhaAtual, notaAtual]);
+    carregarDados();
+  }, [projetoAtual, notaAtual]); // notaAtual agora é um objeto com .id
 
-  // Atualiza última alteração
-  useEffect(() => {
-    const now = new Date();
-    setUltimaAlteracao(`${usuarioAtual} alterou em ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`);
-  }, [usuarioAtual]);
-
-  const updateAlteracao = () => {
-    const now = new Date();
-    setUltimaAlteracao(`${usuarioAtual} alterou em ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`);
-  };
-
-  const fetchItemDirect = async (index, codigo) => {
-    if (!codigo.trim()) return;
-
+  // Buscar descrição e unidade pelo código
+  const buscarItemPorCodigo = async (index, codigo) => {
+    if (!codigo?.trim()) return;
     try {
-      const { data: itemData, error } = await supabase
+      const { data } = await supabase
         .from("itens")
         .select("descricao, unidade")
         .eq("codigo", codigo)
-        .single();
+        .maybeSingle();
 
-      const newRows = [...rows];
-      if (!error && itemData) {
-        newRows[index] = {
-          ...newRows[index],
-          descricao: itemData.descricao || "",
-          unidade: itemData.unidade || "",
-        };
-      } else {
-        newRows[index] = {
-          ...newRows[index],
-          descricao: "",
-          unidade: "",
-        };
-      }
+      const novasLinhas = [...rows];
+      novasLinhas[index] = {
+        ...novasLinhas[index],
+        descricao: data?.descricao || "",
+        unidade: data?.unidade || ""
+      };
 
-      setRows(newRows);
-      updateAlteracao();
+      setRows(novasLinhas);
+      registrarAlteracao();
     } catch (err) {
-      console.error("Erro ao buscar item direto do Supabase:", err);
+      console.error("Erro ao buscar item por código:", err);
     }
   };
 
-  const handleInputChange = (index, field, value) => {
-    const newRows = [...rows];
-    newRows[index][field] = value;
-    setRows(newRows);
-    updateAlteracao();
+  // Atualizar valores
+  const handleInputChange = (index, campo, valor) => {
+    const novasLinhas = [...rows];
+    novasLinhas[index][campo] = valor;
+    setRows(novasLinhas);
+    registrarAlteracao();
   };
 
-  const handleCodigoKeyPress = (e, index, codigo) => {
-    if (e.key === "Enter") fetchItemDirect(index, codigo);
+  const handleCodigoEnter = (e, index, codigo) => {
+    if (e.key === "Enter") buscarItemPorCodigo(index, codigo);
   };
 
   const addRow = () => {
-    setRows([...rows, { codigo: "", descricao: "", unidade: "", quantidade: "", locacao: "", eap: "", fornecedor: "" }]);
-    updateAlteracao();
+    setRows([
+      ...rows,
+      { codigo: "", descricao: "", unidade: "", quantidade: "", locacao: "", eap: "", fornecedor: "" }
+    ]);
+    registrarAlteracao();
   };
 
   const removeRow = (index) => {
     setRows(rows.filter((_, i) => i !== index));
-    updateAlteracao();
+    registrarAlteracao();
   };
 
+  // Salvar
   const handleSave = async () => {
     try {
-      let itensToSave = rows.map((row) => ({
+      // Filtrar linhas com conteúdo relevante (opcional, mas evita lixo)
+      const linhasValidas = rows.filter(row => 
+        row.codigo || row.descricao || row.quantidade
+      );
+
+      const itensParaSalvar = linhasValidas.map(row => ({
+        projeto_id: projetoAtual.id,
+        nota_id: notaAtual.id, // ✅ UUID da nota
         codigo: row.codigo,
         descricao: row.descricao,
         unidade: row.unidade,
@@ -140,49 +150,54 @@ export default function Listagem({ projetoAtual, pilhaAtual, notaAtual, usuarioA
         locacao: row.locacao,
         eap: row.eap,
         fornecedor: row.fornecedor,
-        projeto_id: projetoAtual?.id || null,
-        pilha: pilhaAtual || null,
-        nota: notaAtual || null,
         direcionar_para: direcionarPara || null,
       }));
 
-      // Remove duplicados (mesmo codigo + projeto_id)
-      itensToSave = Object.values(
-        itensToSave.reduce((acc, item) => {
-          const key = `${item.codigo}_${item.projeto_id}`;
-          acc[key] = item; // último prevalece
+      // Remover duplicatas por código (dentro da mesma nota)
+      const itensUnicos = Object.values(
+        itensParaSalvar.reduce((acc, item) => {
+          const key = item.codigo || `sem_codigo_${Date.now()}_${Math.random()}`;
+          acc[key] = item;
           return acc;
         }, {})
       );
 
+      // Upsert com novo conflito baseado em nota_id
       const { error } = await supabase
         .from("planilha_itens")
-        .upsert(itensToSave, { onConflict: ["codigo", "projeto_id"] });
+        .upsert(itensUnicos, {
+          onConflict: "projeto_id,nota_id,codigo",
+          defaultToNull: true
+        });
 
       if (error) throw error;
 
-      alert("Lista enviada com sucesso!");
+      alert("Lista salva com sucesso!");
+      registrarAlteracao();
     } catch (err) {
-      console.error(err);
-      alert("Erro ao enviar lista: " + err.message);
+      console.error("Erro ao salvar lista:", err);
+      alert("Erro ao salvar lista: " + (err.message || "Erro desconhecido"));
     }
   };
 
   return (
     <div className="listagem-card">
+      {/* Cabeçalho */}
       <div className="listagem-header-container">
         <div className="listagem-header-titles">
           <span className="project-name">{projetoAtual?.name || "Sem projeto"}</span>
           <div className="sub-info">
-            <span className="pilha-name">{pilhaAtual || "Sem pilha"}</span> &nbsp;- &nbsp;
-            <span className="nota-name">{notaAtual || "Sem nota"}</span>
+            <span className="nota-name">{notaAtual?.nome || "Sem nota"}</span>
           </div>
         </div>
         <div className="alteracao-info">{ultimaAlteracao}</div>
       </div>
 
+      {/* Botões de ação */}
       <div className="action-buttons">
-        <button className="add-row-btn" onClick={addRow}><FaPlus /> Adicionar linha</button>
+        <button className="add-row-btn" onClick={addRow}>
+          <FaPlus /> Adicionar linha
+        </button>
 
         <input
           type="text"
@@ -193,20 +208,20 @@ export default function Listagem({ projetoAtual, pilhaAtual, notaAtual, usuarioA
         />
 
         <button className="send-btn" onClick={handleSave}>
-          <FaPaperPlane style={{ marginRight: "6px" }} />
-          Enviar
+          <FaPaperPlane style={{ marginRight: 6 }} /> Enviar
         </button>
       </div>
 
+      {/* Tabela */}
       <div className="listagem-table-wrapper">
         <table className="listagem-table">
           <thead>
             <tr>
-              <th>Item</th>
+              <th>#</th>
               <th>Código</th>
               <th>Descrição</th>
               <th>Unidade</th>
-              <th>Quantidade</th>
+              <th>Qtd.</th>
               <th>Locação</th>
               <th>EAP</th>
               <th>Fornecedor</th>
@@ -217,46 +232,61 @@ export default function Listagem({ projetoAtual, pilhaAtual, notaAtual, usuarioA
             {rows.map((row, idx) => (
               <tr key={idx}>
                 <td>{idx + 1}</td>
+
                 <td>
                   <input
                     type="text"
                     value={row.codigo}
                     onChange={(e) => handleInputChange(idx, "codigo", e.target.value)}
-                    onBlur={() => fetchItemDirect(idx, row.codigo)}
-                    onKeyPress={(e) => handleCodigoKeyPress(e, idx, row.codigo)}
-                    placeholder="Digite o código"
+                    onBlur={() => buscarItemPorCodigo(idx, row.codigo)}
+                    onKeyPress={(e) => handleCodigoEnter(e, idx, row.codigo)}
+                    placeholder="Código"
                   />
                 </td>
+
                 <td>{row.descricao}</td>
                 <td>{row.unidade}</td>
+
                 <td>
                   <input
                     type="number"
                     value={row.quantidade}
                     onChange={(e) => handleInputChange(idx, "quantidade", e.target.value)}
+                    min="0"
                   />
                 </td>
+
                 <td>
                   <select value={row.locacao} onChange={(e) => handleInputChange(idx, "locacao", e.target.value)}>
                     <option value="">(selecionar)</option>
                     {locacoes.map((loc, i) => (
-                      <option key={`${loc}_${i}`} value={loc}>{loc}</option>
+                      <option key={i} value={loc}>{loc}</option>
                     ))}
                   </select>
                 </td>
+
                 <td>
                   <select value={row.eap} onChange={(e) => handleInputChange(idx, "eap", e.target.value)}>
                     <option value="">(selecionar)</option>
                     {eaps.map((eap, i) => (
-                      <option key={`${eap}_${i}`} value={eap}>{eap}</option>
+                      <option key={i} value={eap}>{eap}</option>
                     ))}
                   </select>
                 </td>
+
                 <td>{row.fornecedor}</td>
+
                 <td>
                   <div className="button-group">
-                    <button className="add-supabase-btn" onClick={() => alert("Adicionar insumo no Supabase")}><FaPlus /></button>
-                    <button className="remove-btn" onClick={() => removeRow(idx)}><FaTimes /></button>
+                    <button
+                      className="add-supabase-btn"
+                      onClick={() => alert("Funcionalidade de adicionar insumo ainda em desenvolvimento")}
+                    >
+                      <FaPlus />
+                    </button>
+                    <button className="remove-btn" onClick={() => removeRow(idx)}>
+                      <FaTimes />
+                    </button>
                   </div>
                 </td>
               </tr>

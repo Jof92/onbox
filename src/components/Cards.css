@@ -495,3 +495,86 @@
     transform: translateY(0);
   }
 }
+
+.nota-modal-container {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 300px;
+  max-width: 420px;
+  background: #fff;
+  border-radius: 10px;
+}
+
+/* Título */
+.nota-modal-container h2 {
+  margin: 0 0 10px 0;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #333;
+}
+
+/* Labels */
+.nota-modal-container label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #444;
+}
+
+/* Inputs e Select */
+.nota-modal-container input,
+.nota-modal-container select {
+  width: 100%;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #cfcfcf;
+  background: #fdfdfd;
+  font-size: 0.95rem;
+  transition: 0.2s;
+}
+
+.nota-modal-container input:focus,
+.nota-modal-container select:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 1px #007bff3a;
+  outline: none;
+}
+
+/* Botões */
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.btn-salvar,
+.btn-cancelar {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.btn-salvar {
+  background: #007bff;
+  color: white;
+  border: none;
+}
+
+.btn-salvar:hover {
+  background: #005fcc;
+}
+
+.btn-cancelar {
+  background: #e4e4e4;
+  color: #555;
+  border: none;
+}
+
+.btn-cancelar:hover {
+  background: #cacaca;
+}
+
