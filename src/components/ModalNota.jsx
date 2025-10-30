@@ -3,6 +3,7 @@ import React from "react";
 import { FaTimes } from "react-icons/fa";
 import Listagem from "./Listagem";
 import AtaCard from "./AtaCard";
+import Task from "./Task"; // ✅ IMPORTADO
 import "./Cards.css";
 
 export default function ModalNota({
@@ -19,7 +20,6 @@ export default function ModalNota({
   setNotaEditData,
   saveEditedNota,
   notaSelecionada,
-  // ✅ REMOVIDO: pilhaSelecionada
   project,
   usuarioAtual,
   notaProgresso,
@@ -33,14 +33,6 @@ export default function ModalNota({
     } else {
       setNotaEditData(prev => ({ ...prev, [field]: value }));
     }
-  };
-
-  // ✅ Helper para obter o título da pilha atual (só para exibição no AtaCard, se necessário)
-  const getPilhaTitle = () => {
-    if (!notaSelecionada || !project) return null;
-    // Se você ainda precisar do nome da pilha para o AtaCard, busque pelas colunas
-    // Mas idealmente, AtaCard também deveria usar nota.id ou pilha_id
-    return null; // vamos remover a dependência por enquanto
   };
 
   return (
@@ -66,7 +58,7 @@ export default function ModalNota({
                   value={formData.tipo}
                   onChange={(e) => setFormData(prev => ({ ...prev, tipo: e.target.value }))}
                 >
-                  {["Lista", "Diário de Obra", "Atas", "Medição"].map((t) => (
+                  {["Lista", "Diário de Obra", "Atas", "Medição", "Tarefas"].map((t) => (
                     <option key={t} value={t}>
                       {t}
                     </option>
@@ -101,34 +93,35 @@ export default function ModalNota({
               <FaTimes />
             </button>
 
-            <div className="nota-header">
-              <h2>{notaSelecionada.nome}</h2>
-              {notaSelecionada.tipo === "Atas" && (
-                <span className="nota-info">
-                  {notaSelecionada.tipo} - {notaProgresso[notaSelecionada.id] || 0}%
-                </span>
-              )}
-            </div>
+            {/* ✅ Renderização condicional por tipo */}
+            {(() => {
+              const commonProps = {
+                projetoAtual: project,
+                notaAtual: notaSelecionada,
+                usuarioAtual: usuarioAtual,
+                onClose: onCloseVisualizarNota,
+              };
 
-            {notaSelecionada.tipo === "Atas" ? (
-              <AtaCard
-                projetoAtual={project}
-                // ⚠️ Se AtaCard ainda usar pilhaAtual, você pode passar o ID ou buscar o título
-                // Mas ideal: AtaCard também deve depender só da nota
-                notaAtual={notaSelecionada}
-                usuarioAtual={usuarioAtual}
-                onProgressoChange={(p) =>
-                  setNotaProgresso(prev => ({ ...prev, [notaSelecionada.id]: p }))
-                }
-              />
-            ) : (
-              <Listagem
-                projetoAtual={project}
-                notaAtual={notaSelecionada} // ✅ objeto completo com .id
-                usuarioAtual={usuarioAtual}
-                // ❌ REMOVIDO: pilhaAtual, locacoes, eaps (não são mais necessários)
-              />
-            )}
+              if (notaSelecionada.tipo === "Atas") {
+                return (
+                  <AtaCard
+                    {...commonProps}
+                    onProgressoChange={(p) =>
+                      setNotaProgresso(prev => ({ ...prev, [notaSelecionada.id]: p }))
+                    }
+                  />
+                );
+              } else if (notaSelecionada.tipo === "Tarefas") {
+                // Passa pilhaAtual com base no pilha_id da nota
+                const pilhaAtual = notaSelecionada.pilha_id
+                  ? { id: notaSelecionada.pilha_id }
+                  : null;
+
+                return <Task {...commonProps} pilhaAtual={pilhaAtual} />;
+              } else {
+                return <Listagem {...commonProps} />;
+              }
+            })()}
           </>
         )}
       </div>

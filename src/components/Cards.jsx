@@ -8,12 +8,6 @@ import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
 import ModalNota from "./ModalNota";
 
-// Badge de progresso
-const NotaProgressoBadge = ({ notaId, notaProgresso }) =>
-  notaProgresso[notaId] !== undefined ? (
-    <span className="nota-progresso-badge">{notaProgresso[notaId]}%</span>
-  ) : null;
-
 export default function Cards() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -29,12 +23,11 @@ export default function Cards() {
   const [formData, setFormData] = useState({ nome: "", responsavel: "", tipo: "Lista" });
   const [notaEditData, setNotaEditData] = useState({ id: null, nome: "", responsavel: "", pilhaId: null });
   const [notaSelecionada, setNotaSelecionada] = useState(null);
-  // ✅ REMOVIDO: pilhaSelecionada — não é mais necessário
   const [usuarioAtual, setUsuarioAtual] = useState("Usuário Atual");
   const [notaProgresso, setNotaProgresso] = useState({});
   const [menuOpenNota, setMenuOpenNota] = useState(null);
 
-  // --- Load project + pilhas ---
+  // --- Carregar projeto + pilhas + notas com progresso ---
   useEffect(() => {
     const projectId = location.state?.projectId;
     if (!projectId) return navigate("/containers", { replace: true });
@@ -42,6 +35,7 @@ export default function Cards() {
     (async () => {
       setLoading(true);
       try {
+        // Carregar projeto
         const { data: projectData } = await supabase
           .from("projects")
           .select("*")
@@ -49,6 +43,7 @@ export default function Cards() {
           .single();
         if (!projectData) return navigate("/containers", { replace: true });
 
+        // Foto do projeto
         const [{ photo_url } = {}] =
           (await supabase
             .from("projects_photos")
@@ -58,6 +53,7 @@ export default function Cards() {
             .limit(1)
           ).data || [];
 
+        // Pavimentos e EAP (não usados aqui, mas mantidos)
         const pavimentos = (await supabase
           .from("pavimentos")
           .select("*")
@@ -72,18 +68,38 @@ export default function Cards() {
           .order("created_at")
         ).data || [];
 
+        // Usuário atual
         const { data: userData } = await supabase.from("profiles").select("nome").limit(1).single();
         if (userData?.nome) setUsuarioAtual(userData.nome);
 
+        // Carregar pilhas com notas (incluindo campo `progresso`)
         const pilhasData =
           (await supabase
             .from("pilhas")
-            .select("*, notas(*)")
+            .select("*, notas(id, nome, tipo, responsavel, progresso)")
             .eq("project_id", projectId)
             .order("created_at")
           ).data || [];
 
-        setColumns(pilhasData.map((p) => ({ id: String(p.id), title: p.title, notas: p.notas || [] })));
+        // Inicializar notaProgresso com os valores do banco
+        const progressoInicial = {};
+        pilhasData.forEach((pilha) => {
+          pilha.notas.forEach((nota) => {
+            if (nota.progresso != null) {
+              progressoInicial[nota.id] = nota.progresso;
+            }
+          });
+        });
+        setNotaProgresso(progressoInicial);
+
+        setColumns(
+          pilhasData.map((p) => ({
+            id: String(p.id),
+            title: p.title,
+            notas: p.notas || [],
+          }))
+        );
+
         setProject({ ...projectData, photo_url, pavimentos, eap });
       } catch (err) {
         console.error("Erro ao carregar projeto/pilhas:", err);
@@ -128,9 +144,8 @@ export default function Cards() {
         prev.map((c) => (c.id === activeColumnId ? { ...c, notas: [newNota, ...c.notas] } : c))
       );
 
-      // ✅ Ao criar, já abre a nota (se for do tipo certo)
       if (["Atas", "Tarefas", "Lista"].includes(newNota.tipo)) {
-        setNotaSelecionada(newNota); // ✅ objeto completo
+        setNotaSelecionada(newNota);
       }
     } catch (err) {
       console.error("Erro criar nota:", err);
@@ -154,7 +169,6 @@ export default function Cards() {
         delete cp[notaId];
         return cp;
       });
-      // Fechar modal se a nota excluída estiver aberta
       if (notaSelecionada?.id === notaId) {
         setNotaSelecionada(null);
       }
@@ -177,9 +191,8 @@ export default function Cards() {
             : c
         )
       );
-      // Atualizar notaSelecionada se estiver aberta
       if (notaSelecionada?.id === id) {
-        setNotaSelecionada(prev => ({ ...prev, nome, responsavel }));
+        setNotaSelecionada((prev) => ({ ...prev, nome, responsavel }));
       }
       setNotaEditData({ id: null, nome: "", responsavel: "", pilhaId: null });
     }
@@ -191,17 +204,16 @@ export default function Cards() {
       if (!destination) return;
       if (source.droppableId === destination.droppableId && source.index === destination.index) return;
 
-      const nextColumns = columns.map(c => ({ ...c, notas: [...c.notas] }));
+      const nextColumns = columns.map((c) => ({ ...c, notas: [...c.notas] }));
 
-      const sourceCol = nextColumns.find(c => c.id === source.droppableId);
+      const sourceCol = nextColumns.find((c) => c.id === source.droppableId);
       const [movedNote] = sourceCol.notas.splice(source.index, 1);
 
-      const destCol = nextColumns.find(c => c.id === destination.droppableId);
+      const destCol = nextColumns.find((c) => c.id === destination.droppableId);
       destCol.notas.splice(destination.index, 0, movedNote);
 
       setColumns(nextColumns);
 
-      // Atualizar no banco
       if (source.droppableId !== destination.droppableId) {
         try {
           const { error } = await supabase
@@ -209,15 +221,12 @@ export default function Cards() {
             .update({ pilha_id: destination.droppableId })
             .eq("id", movedNote.id);
           if (error) throw error;
-
-          // ✅ Se a nota movida estiver aberta, atualize seu pilha_id
           if (notaSelecionada?.id === movedNote.id) {
-            setNotaSelecionada(prev => ({ ...prev, pilha_id: destination.droppableId }));
+            setNotaSelecionada((prev) => ({ ...prev, pilha_id: destination.droppableId }));
           }
         } catch (err) {
           console.error("Erro ao atualizar pilha_id:", err);
           alert("Erro ao mover nota no servidor. Revertendo.");
-          // Reverter UI (opcional, mas recomendado em produção)
         }
       }
     },
@@ -288,15 +297,19 @@ export default function Cards() {
                             <div
                               className="card-info"
                               onClick={() => {
-                                // ✅ Passa o objeto completo da nota — SEM pilhaSelecionada
                                 setNotaSelecionada(nota);
                               }}
                             >
                               <div className="card-title-wrapper">
                                 <strong>{nota.nome}</strong>
-                                <NotaProgressoBadge notaId={nota.id} notaProgresso={notaProgresso} />
+                                
                               </div>
-                              <p>{nota.tipo}</p>
+                              <p>
+                                {nota.tipo}
+                                {nota.tipo === "Atas" && notaProgresso[nota.id] !== undefined && (
+                                  <> - {notaProgresso[nota.id]}%</>
+                                )}
+                              </p>
                             </div>
 
                             <div className="card-menu-wrapper" onClick={(e) => e.stopPropagation()}>
@@ -330,7 +343,7 @@ export default function Cards() {
         </div>
       </DragDropContext>
 
-      {/* ✅ ModalNota: removido pilhaSelecionada */}
+      {/* ModalNota */}
       <ModalNota
         showNovaNota={!!activeColumnId}
         showEditarNota={!!notaEditData.id && !notaSelecionada}
@@ -345,7 +358,6 @@ export default function Cards() {
         setNotaEditData={setNotaEditData}
         saveEditedNota={saveEditedNota}
         notaSelecionada={notaSelecionada}
-        // ❌ REMOVIDO: pilhaSelecionada
         project={project}
         usuarioAtual={usuarioAtual}
         notaProgresso={notaProgresso}

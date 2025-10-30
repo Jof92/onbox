@@ -20,8 +20,20 @@ export default function Listagem({ projetoAtual, notaAtual, usuarioAtual }) {
 
   // Carregar listas e itens salvos
   useEffect(() => {
-    // Agora notaAtual é um objeto com .id (UUID)
-    if (!projetoAtual?.id || !notaAtual?.id) return;
+    if (!projetoAtual?.id || !notaAtual?.id) {
+      setRows(
+        Array.from({ length: 10 }, () => ({
+          codigo: "",
+          descricao: "",
+          unidade: "",
+          quantidade: "",
+          locacao: "",
+          eap: "",
+          fornecedor: ""
+        }))
+      );
+      return;
+    }
 
     const carregarDados = async () => {
       try {
@@ -39,7 +51,7 @@ export default function Listagem({ projetoAtual, notaAtual, usuarioAtual }) {
           .eq("project_id", projetoAtual.id);
         setEaps(eapsData?.map(e => e.name) || []);
 
-        // 🔥 Carregar itens pela nota_id (UUID) — sem depender de pilha!
+        // Carregar itens pela nota_id (UUID)
         const { data: itensSalvos } = await supabase
           .from("planilha_itens")
           .select("*")
@@ -59,7 +71,6 @@ export default function Listagem({ projetoAtual, notaAtual, usuarioAtual }) {
             }))
           );
         } else {
-          // Inicializar com 10 linhas vazias
           setRows(
             Array.from({ length: 10 }, () => ({
               codigo: "",
@@ -81,7 +92,7 @@ export default function Listagem({ projetoAtual, notaAtual, usuarioAtual }) {
     };
 
     carregarDados();
-  }, [projetoAtual, notaAtual]); // notaAtual agora é um objeto com .id
+  }, [projetoAtual, notaAtual, usuarioAtual]);
 
   // Buscar descrição e unidade pelo código
   const buscarItemPorCodigo = async (index, codigo) => {
@@ -134,39 +145,43 @@ export default function Listagem({ projetoAtual, notaAtual, usuarioAtual }) {
 
   // Salvar
   const handleSave = async () => {
+    if (!notaAtual?.id) {
+      alert("Nota não selecionada. Não é possível salvar.");
+      return;
+    }
+
     try {
-      // Filtrar linhas com conteúdo relevante (opcional, mas evita lixo)
-      const linhasValidas = rows.filter(row => 
-        row.codigo || row.descricao || row.quantidade
+      // Filtrar linhas com conteúdo relevante
+      const linhasValidas = rows.filter(row =>
+        row.codigo?.trim() || row.descricao?.trim() || row.quantidade
       );
 
       const itensParaSalvar = linhasValidas.map(row => ({
         projeto_id: projetoAtual.id,
-        nota_id: notaAtual.id, // ✅ UUID da nota
-        codigo: row.codigo,
-        descricao: row.descricao,
-        unidade: row.unidade,
+        nota_id: notaAtual.id, // UUID da nota
+        codigo: row.codigo?.trim() || null,
+        descricao: row.descricao || null,
+        unidade: row.unidade || null,
         quantidade: row.quantidade ? Number(row.quantidade) : null,
-        locacao: row.locacao,
-        eap: row.eap,
-        fornecedor: row.fornecedor,
-        direcionar_para: direcionarPara || null,
+        locacao: row.locacao || null,
+        eap: row.eap || null,
+        fornecedor: row.fornecedor || null,
+        direcionar_para: direcionarPara?.trim() || null,
       }));
 
-      // Remover duplicatas por código (dentro da mesma nota)
-      const itensUnicos = Object.values(
-        itensParaSalvar.reduce((acc, item) => {
-          const key = item.codigo || `sem_codigo_${Date.now()}_${Math.random()}`;
-          acc[key] = item;
-          return acc;
-        }, {})
-      );
+      // Remover duplicatas por código dentro da mesma nota (último vence)
+      const mapa = new Map();
+      itensParaSalvar.forEach(item => {
+        const key = item.codigo || `__sem_codigo_${Math.random()}`;
+        mapa.set(key, item); // sobrescreve duplicatas
+      });
+      const itensUnicos = Array.from(mapa.values());
 
-      // Upsert com novo conflito baseado em nota_id
+      // ✅ UPSERT com conflito baseado em (codigo, nota_id)
       const { error } = await supabase
         .from("planilha_itens")
         .upsert(itensUnicos, {
-          onConflict: "projeto_id,nota_id,codigo",
+          onConflict: "codigo,nota_id", // ← CORRETO! Deve corresponder ao índice único
           defaultToNull: true
         });
 
@@ -253,6 +268,7 @@ export default function Listagem({ projetoAtual, notaAtual, usuarioAtual }) {
                     value={row.quantidade}
                     onChange={(e) => handleInputChange(idx, "quantidade", e.target.value)}
                     min="0"
+                    step="any"
                   />
                 </td>
 

@@ -1,5 +1,5 @@
 // AtaCard.jsx
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
 import "./AtaCard.css";
@@ -26,25 +26,16 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
   const [editing, setEditing] = useState({ pauta: false, local: false });
   const [loading, setLoading] = useState(true);
 
-  const pautaRef = useRef();
-  const localRef = useRef();
-
-  const fetchProjeto = async () => {
+  // Carregar projeto
+  const fetchProjeto = useCallback(async () => {
     if (!projetoAtual?.id) return;
-    try {
-      const { data } = await supabase
-        .from("projects")
-        .select("name")
-        .eq("id", projetoAtual.id)
-        .single();
-      setProjetoNome(data?.name || "Projeto sem nome");
-    } catch {
-      setProjetoNome("Projeto não encontrado");
-    }
-  };
+    const { data } = await supabase.from("projects").select("name").eq("id", projetoAtual.id).single();
+    setProjetoNome(data?.name || "Projeto sem nome");
+  }, [projetoAtual?.id]);
 
-  const obterLocalizacao = async () => {
-    const fmt = cidade =>
+  // Obter data + cidade
+  const obterLocalizacao = useCallback(async () => {
+    const fmt = (cidade) =>
       `${cidade || ""}, ${new Date().toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" })}`;
     try {
       const res = await fetch("https://ipapi.co/json/");
@@ -57,45 +48,72 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
         setDataLocal(fmt());
       }
     }
-  };
+  }, []);
 
-  // ✅ CORRIGIDO: sintaxe válida de desestruturação
-  const fetchAutor = async () => {
-    try {
-      const {
-        data: { user }
-      } = await supabase.auth.getUser();
-      if (!user) return setAutorNome("Usuário desconhecido");
-      setUsuarioId(user.id);
+  // Obter autor
+  const fetchAutor = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return setAutorNome("Usuário desconhecido");
+    setUsuarioId(user.id);
 
-      let { data: perfil } = await supabase.from("profiles").select("nome").eq("id", user.id).single();
-      if (!perfil) {
-        const resp = await supabase.from("profiles").select("nome").eq("user_id", user.id).single();
-        perfil = resp.data;
+    let perfil = null;
+    const { data: p1 } = await supabase.from("profiles").select("nome").eq("id", user.id).single();
+    if (p1) {
+      perfil = p1;
+    } else {
+      const { data: p2 } = await supabase.from("profiles").select("nome").eq("user_id", user.id).single();
+      perfil = p2;
+    }
+
+    setAutorNome(
+      perfil?.nome ||
+      user.user_metadata?.nome ||
+      user.user_metadata?.name ||
+      user.email ||
+      "Usuário desconhecido"
+    );
+  }, []);
+
+  // Extrair objetivos
+  const extrairObjetivos = useCallback((txt) => {
+    if (!criarObjetivos) return [];
+    const objetivos = [];
+    const regex = new RegExp(`\\b(${VERBOS.join("|")})\\b`, "gi");
+
+    txt.split(/\n/).forEach((linha) => {
+      const matches = [];
+      let match;
+      while ((match = regex.exec(linha)) !== null) {
+        matches.push({ index: match.index });
       }
-      setAutorNome(perfil?.nome || user.user_metadata?.nome || user.user_metadata?.name || user.email || "Usuário desconhecido");
-    } catch {
-      setAutorNome("Usuário desconhecido");
-    }
-  };
+      matches.forEach((m, i) => {
+        const start = m.index;
+        const end = i + 1 < matches.length ? matches[i + 1].index : linha.length;
+        const trecho = linha.slice(start, end).split(",")[0].trim();
+        if (trecho && !objetivos.some((o) => o.texto === trecho)) {
+          objetivos.push({ texto: trecho, responsavelId: null, responsavelNome: "", dataEntrega: "" });
+        }
+      });
+    });
+    return objetivos;
+  }, [criarObjetivos]);
 
-  const fetchAta = async () => {
-    if (!notaAtual?.id) {
-      setLoading(false);
-      return;
-    }
+  // Carregar ata
+  const fetchAta = useCallback(async () => {
+    if (!notaAtual?.id) return setLoading(false);
 
     try {
-      const { data: ata } = await supabase
-        .from("atas")
-        .select("*")
-        .eq("nota_id", notaAtual.id)
-        .single();
+      const { data: ata } = await supabase.from("atas").select("*").eq("nota_id", notaAtual.id).single();
 
       if (!ata) {
         setAtaId(null);
-        setPauta(""); setLocal(""); setTexto(""); setProxima("");
-        setObjetivosList([]); setObjetivosConcluidos([]); setParticipantes([]);
+        setPauta("");
+        setLocal("");
+        setTexto("");
+        setProxima("");
+        setObjetivosList([]);
+        setObjetivosConcluidos([]);
+        setParticipantes([]);
         setCriarObjetivos(false);
         setLoading(false);
         return;
@@ -107,24 +125,31 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
       setTexto(ata.texto || "");
       setProxima(ata.proxima_reuniao || "");
 
-      const { data: partData } = await supabase.from("ata_participantes")
+      const { data: partData } = await supabase
+        .from("ata_participantes")
         .select("profiles(id,nome,funcao)")
         .eq("ata_id", ata.id);
-      setParticipantes(partData?.map(p => p.profiles) || []);
+      setParticipantes(partData?.map((p) => p.profiles) || []);
 
-      const { data: objData } = await supabase.from("ata_objetivos")
+      const { data: objData } = await supabase
+        .from("ata_objetivos")
         .select("*, profiles(id,nome)")
         .eq("ata_id", ata.id);
 
       if (objData?.length > 0) {
-        setObjetivosList(objData.map(o => ({
+        const objetivos = objData.map((o) => ({
           texto: o.texto,
           responsavelId: o.responsavel_id,
           responsavelNome: o.profiles?.nome || "",
-          dataEntrega: o.data_entrega
-        })));
-        setObjetivosConcluidos(objData.filter(o => o.concluido).map((_, i) => i));
+          dataEntrega: o.data_entrega,
+        }));
+        setObjetivosList(objetivos);
+        setObjetivosConcluidos(objData.filter((o) => o.concluido).map((_, i) => i));
         setCriarObjetivos(true);
+      } else {
+        setCriarObjetivos(false);
+        setObjetivosList([]);
+        setObjetivosConcluidos([]);
       }
 
       setLoading(false);
@@ -132,102 +157,24 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
       console.error("Erro ao carregar ata:", err);
       setLoading(false);
     }
-  };
+  }, [notaAtual?.id]);
 
   useEffect(() => {
     fetchProjeto();
     obterLocalizacao();
     fetchAutor();
-    fetchAta();
-  }, [projetoAtual, notaAtual]);
+  }, [fetchProjeto, obterLocalizacao, fetchAutor]);
 
-  // --- Resto do código permanece igual ---
-  // (objetivos, participantes, salvar, renderização, etc.)
+  useEffect(() => {
+    if (projetoAtual?.id && notaAtual?.id) fetchAta();
+  }, [projetoAtual?.id, notaAtual?.id, fetchAta]);
 
-  const extrairObjetivos = (txt) => {
-    if (!criarObjetivos) return [];
-    const objetivos = [];
-    const regexVerbos = new RegExp(`\\b(${VERBOS.join("|")})\\b`, "gi");
-
-    txt.split(/\n/).forEach(linha => {
-      let match;
-      const indices = [];
-      while ((match = regexVerbos.exec(linha)) !== null) indices.push(match.index);
-      indices.forEach((start, i) => {
-        const end = i + 1 < indices.length ? indices[i + 1] : linha.length;
-        const trecho = linha.slice(start, end).split(",")[0].trim();
-        if (trecho && !objetivos.some(o => o.texto === trecho))
-          objetivos.push({ texto: trecho, responsavelId: null, responsavelNome: "", dataEntrega: "" });
-      });
-    });
-    return objetivos;
-  };
-
-  const atualizarObjetivos = (txt) => {
+  useEffect(() => {
     if (criarObjetivos) {
-      setObjetivosList(extrairObjetivos(txt));
+      setObjetivosList(extrairObjetivos(texto));
       setObjetivosConcluidos([]);
     }
-  };
-
-  const toggleObjetivo = (i) => setObjetivosConcluidos(prev =>
-    prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i]
-  );
-
-  const buscarSugestoes = async (query, campo) => {
-    if (!query.startsWith("@") || query.length < 2) {
-      return campo === "participante"
-        ? setSugestoesParticipantes([])
-        : setSugestoesResponsavel(prev => ({ ...prev, [campo]: [] }));
-    }
-    try {
-      const { data } = await supabase
-        .from("profiles")
-        .select("id,nome,funcao")
-        .ilike("nome", `%${query.slice(1)}%`)
-        .limit(10);
-      campo === "participante"
-        ? setSugestoesParticipantes(data || [])
-        : setSugestoesResponsavel(prev => ({ ...prev, [campo]: data || [] }));
-    } catch {
-      campo === "participante"
-        ? setSugestoesParticipantes([])
-        : setSugestoesResponsavel(prev => ({ ...prev, [campo]: [] }));
-    }
-  };
-
-  const handleParticipanteChange = (e) => {
-    setParticipanteInput(e.target.value);
-    buscarSugestoes(e.target.value, "participante");
-  };
-
-  const selecionarSugestao = (item) => {
-    if (!participantes.some(p => p.id === item.id)) {
-      setParticipantes([...participantes, item]);
-    }
-    setParticipanteInput("");
-    setSugestoesParticipantes([]);
-  };
-
-  const removerParticipante = (id) => {
-    setParticipantes(participantes.filter(p => p.id !== id));
-  };
-
-  const handleResponsavelChange = (e, i) => {
-    const n = [...objetivosList];
-    n[i].responsavelId = null;
-    n[i].responsavelNome = e.target.value;
-    setObjetivosList(n);
-    buscarSugestoes(e.target.value, i);
-  };
-
-  const selecionarResponsavel = (item, i) => {
-    const n = [...objetivosList];
-    n[i].responsavelId = item.id;
-    n[i].responsavelNome = item.nome;
-    setObjetivosList(n);
-    setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
-  };
+  }, [texto, criarObjetivos, extrairObjetivos]);
 
   const progressoPercent = objetivosList.length
     ? Math.round((objetivosConcluidos.length / objetivosList.length) * 100)
@@ -239,12 +186,12 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     }
   }, [progressoPercent, onProgressoChange]);
 
-  const salvarAta = async () => {
-    try {
-      if (!usuarioId || !notaAtual?.id || !projetoAtual?.id) {
-        throw new Error("Dados insuficientes para salvar a ata");
-      }
+  const salvarAta = useCallback(async () => {
+    if (!usuarioId || !notaAtual?.id || !projetoAtual?.id) {
+      return alert("Dados insuficientes para salvar.");
+    }
 
+    try {
       let savedAta;
 
       if (ataId) {
@@ -267,13 +214,13 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
             texto,
             proxima_reuniao: proxima || null,
             redigido_por: usuarioId,
-            criado_em: new Date().toISOString()
+            criado_em: new Date().toISOString(),
           }])
           .select()
           .single();
         if (error) throw error;
         savedAta = data;
-        setAtaId(data.id);
+        setAtaId(savedAta.id);
       }
 
       await supabase.from("ata_participantes").delete().eq("ata_id", savedAta.id);
@@ -290,23 +237,76 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
           texto: o.texto,
           responsavel_id: o.responsavelId || null,
           data_entrega: o.dataEntrega || null,
-          concluido: objetivosConcluidos.includes(i)
+          concluido: objetivosConcluidos.includes(i),
         }]);
       }
 
       await supabase.from("notas").update({ progresso: progressoPercent }).eq("id", notaAtual.id);
-
       alert("✅ Ata salva com sucesso!");
     } catch (e) {
       console.error(e);
       alert(`❌ Erro ao salvar ata: ${e.message}`);
     }
+  }, [
+    ataId, usuarioId, notaAtual?.id, projetoAtual?.id, pauta, local, texto, proxima,
+    participantes, objetivosList, objetivosConcluidos, progressoPercent
+  ]);
+
+  // --- Handlers ---
+  const toggleObjetivo = (i) => {
+    setObjetivosConcluidos(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i]);
   };
 
+  const handleParticipanteChange = (e) => {
+    const v = e.target.value;
+    setParticipanteInput(v);
+    if (v.startsWith("@") && v.length > 1) {
+      supabase.from("profiles").select("id,nome,funcao").ilike("nome", `%${v.slice(1)}%`).limit(10)
+        .then(({ data }) => setSugestoesParticipantes(data || []));
+    } else {
+      setSugestoesParticipantes([]);
+    }
+  };
+
+  const selecionarSugestao = (item) => {
+    if (!participantes.some(p => p.id === item.id)) {
+      setParticipantes([...participantes, item]);
+    }
+    setParticipanteInput("");
+    setSugestoesParticipantes([]);
+  };
+
+  const removerParticipante = (id) => setParticipantes(participantes.filter(p => p.id !== id));
+
+  const handleResponsavelChange = (e, i) => {
+    const v = e.target.value;
+    const novos = [...objetivosList];
+    novos[i].responsavelNome = v;
+    novos[i].responsavelId = null;
+    setObjetivosList(novos);
+
+    if (v.startsWith("@") && v.length > 1) {
+      supabase.from("profiles").select("id,nome,funcao").ilike("nome", `%${v.slice(1)}%`).limit(10)
+        .then(({ data }) => setSugestoesResponsavel(prev => ({ ...prev, [i]: data || [] })));
+    } else {
+      setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
+    }
+  };
+
+  const selecionarResponsavel = (item, i) => {
+    const novos = [...objetivosList];
+    novos[i].responsavelId = item.id;
+    novos[i].responsavelNome = item.nome;
+    setObjetivosList(novos);
+    setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
+  };
+
+  // --- Render ---
   if (loading) return <div className="ata-card-loading"><Loading size={200} /></div>;
 
   return (
     <div className="ata-card">
+      {/* Header sem nome da pilha */}
       <div className="listagem-card">
         <div className="listagem-header-container">
           <div className="listagem-header-titles">
@@ -324,7 +324,6 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
           <div key={campo} className="ata-section">
             {editing[campo] ? (
               <input
-                ref={campo === "pauta" ? pautaRef : localRef}
                 className={`${campo}-input`}
                 value={campo === "pauta" ? pauta : local}
                 onChange={e => (campo === "pauta" ? setPauta(e.target.value) : setLocal(e.target.value))}
@@ -337,9 +336,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
                 className={`${campo}-text`}
                 onDoubleClick={() => setEditing({ ...editing, [campo]: true })}
               >
-                {campo === "pauta"
-                  ? pauta || "Digite a pauta da reunião"
-                  : local || "Digite o local"}
+                {campo === "pauta" ? pauta || "Digite a pauta da reunião" : local || "Digite o local"}
               </span>
             )}
           </div>
@@ -358,10 +355,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
                 if (sugestoesParticipantes.length > 0) {
                   selecionarSugestao(sugestoesParticipantes[0]);
                 } else if (participanteInput.trim()) {
-                  setParticipantes(prev => [
-                    ...prev,
-                    { id: `ext-${Date.now()}`, nome: participanteInput.trim(), funcao: "Externo" }
-                  ]);
+                  setParticipantes(prev => [...prev, { id: `ext-${Date.now()}`, nome: participanteInput.trim(), funcao: "Externo" }]);
                   setParticipanteInput("");
                 }
               }
@@ -370,11 +364,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
           {sugestoesParticipantes.length > 0 && (
             <div className="sugestoes-list">
               {sugestoesParticipantes.map(item => (
-                <div
-                  key={item.id}
-                  className="sugestao-item"
-                  onClick={() => selecionarSugestao(item)}
-                >
+                <div key={item.id} className="sugestao-item" onClick={() => selecionarSugestao(item)}>
                   <span>@{item.nome}</span>
                   <span className="sugestao-funcao">{item.funcao}</span>
                 </div>
@@ -385,9 +375,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
             {participantes.map(p => (
               <div key={p.id} className="participante-item">
                 <span>{p.nome} ({p.funcao})</span>
-                <span className="remover-participante" onClick={() => removerParticipante(p.id)}>
-                  ×
-                </span>
+                <span className="remover-participante" onClick={() => removerParticipante(p.id)}>×</span>
               </div>
             ))}
           </div>
@@ -396,10 +384,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
         <div className="ata-section">
           <textarea
             value={texto}
-            onChange={e => {
-              setTexto(e.target.value);
-              atualizarObjetivos(e.target.value);
-            }}
+            onChange={e => setTexto(e.target.value)}
             rows={6}
             placeholder="Digite o texto da ata..."
           />
@@ -407,10 +392,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
             <input
               type="checkbox"
               checked={criarObjetivos}
-              onChange={() => {
-                setCriarObjetivos(!criarObjetivos);
-                if (!criarObjetivos) atualizarObjetivos(texto);
-              }}
+              onChange={() => setCriarObjetivos(!criarObjetivos)}
             />
             Criar objetivos a partir da ata?
           </label>
@@ -437,11 +419,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
                     {sugestoesResponsavel[i]?.length > 0 && (
                       <div className="sugestoes-list" style={{ position: "absolute", zIndex: 10 }}>
                         {sugestoesResponsavel[i].map(item => (
-                          <div
-                            key={item.id}
-                            className="sugestao-item"
-                            onClick={() => selecionarResponsavel(item, i)}
-                          >
+                          <div key={item.id} className="sugestao-item" onClick={() => selecionarResponsavel(item, i)}>
                             <span>@{item.nome}</span>
                             <span className="sugestao-funcao">{item.funcao}</span>
                           </div>
@@ -453,9 +431,9 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
                     type="date"
                     value={o.dataEntrega || ""}
                     onChange={e => {
-                      const n = [...objetivosList];
-                      n[i].dataEntrega = e.target.value;
-                      setObjetivosList(n);
+                      const novos = [...objetivosList];
+                      novos[i].dataEntrega = e.target.value;
+                      setObjetivosList(novos);
                     }}
                   />
                 </div>
@@ -478,13 +456,9 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
               className="proxima-data-input"
             />
           </div>
-          <button className="btn-salvar-ata" onClick={salvarAta}>
-            Salvar
-          </button>
+          <button className="btn-salvar-ata" onClick={salvarAta}>Salvar</button>
           <div className="ata-autor">
-            <p>
-              Ata redigida por <strong>{autorNome || "Usuário desconhecido"}</strong>
-            </p>
+            <p>Ata redigida por <strong>{autorNome || "Usuário desconhecido"}</strong></p>
           </div>
         </div>
       </div>

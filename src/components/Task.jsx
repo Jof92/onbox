@@ -1,79 +1,64 @@
+// Task.jsx
 import React, { useState } from "react";
 import "./Task.css";
 import { FiUploadCloud } from "react-icons/fi";
 
-export default function Task({ onClose, projetoAtual, pilhaAtual, notaAtual }) {
+export default function Task({ onClose, projetoAtual, notaAtual }) {
   const [descricao, setDescricao] = useState(
     "O OnBox funciona melhor com a colaboração da equipe! Digite @ para mencionar colegas."
   );
   const [comentario, setComentario] = useState("");
   const [comentarios, setComentarios] = useState([]);
   const [anexos, setAnexos] = useState([]);
-  const [editandoDescricao, setEditandoDescricao] = useState(false);
 
   const handleAddComentario = () => {
-    if (comentario.trim() === "") return;
+    if (!comentario.trim()) return;
     const hora = new Date().toLocaleTimeString("pt-BR", {
       hour: "2-digit",
       minute: "2-digit",
     });
-    const novoComentario = `José Frota comentou às ${hora}: ${comentario}`;
-    setComentarios([...comentarios, novoComentario]);
+    const novoComentario = `Você comentou às ${hora}: ${comentario}`;
+    setComentarios((prev) => [...prev, novoComentario]);
     setComentario("");
   };
 
   const handleAddAnexos = (e) => {
-    const files = Array.from(e.target.files);
+    const files = Array.from(e.target.files || []);
     setAnexos((prev) => [...prev, ...files]);
   };
 
   const handleRemoverAnexo = (index) => {
-    setAnexos(anexos.filter((_, i) => i !== index));
+    setAnexos((prev) => prev.filter((_, i) => i !== index));
   };
+
+  const getNomeProjeto = () => projetoAtual?.nome || projetoAtual?.name || "Sem projeto";
+  const getNomeNota = () => notaAtual?.nome || notaAtual?.name || "Sem nota";
 
   return (
     <div className="task-modal">
-      {/* HEADER */}
+      {/* HEADER — SEM PILHA */}
       <div className="task-header">
         <div className="task-header-titles">
-          <span className="project-name">
-            {projetoAtual?.nome || projetoAtual?.name || "Sem projeto"}
-          </span>
+          <span className="project-name">{getNomeProjeto()}</span>
           <div className="sub-info">
-            <span className="pilha-name">
-              {pilhaAtual?.nome || pilhaAtual?.name || pilhaAtual || "Sem pilha"}
-            </span>
-            &nbsp;-&nbsp;
-            <span className="nota-name">
-              {notaAtual?.nome || notaAtual?.name || "Sem nota"}
-            </span>
+            <span className="nota-name">{getNomeNota()}</span>
           </div>
         </div>
       </div>
 
-      {/* TÍTULO */}
-      <h2
-        contentEditable
-        suppressContentEditableWarning
-        className="task-title"
-      >
-        {notaAtual?.nome || notaAtual?.name || "Título do cartão"}
-      </h2>
+      <h2 className="task-title">{getNomeNota()}</h2>
 
-      {/* DESCRIÇÃO */}
+      {/* DESCRIÇÃO COM TEXTAREA */}
       <div className="descricao-section">
-    <h3>Descrição</h3>
-      <div
-        className="descricao-editor"
-        contentEditable
-        suppressContentEditableWarning
-        onInput={(e) => setDescricao(e.currentTarget.innerText)}
-        onDoubleClick={() => setEditandoDescricao(true)}
-        onBlur={() => setEditandoDescricao(false)}
-      >
-        {descricao || "Clique aqui para adicionar uma descrição..."}
+        <h3>Descrição</h3>
+        <textarea
+          className="descricao-editor-textarea"
+          value={descricao}
+          onChange={(e) => setDescricao(e.target.value)}
+          placeholder="Clique aqui para adicionar uma descrição..."
+          rows={6}
+        />
       </div>
-    </div>
 
       {/* ANEXOS */}
       <div className="anexos-section">
@@ -96,7 +81,12 @@ export default function Task({ onClose, projetoAtual, pilhaAtual, notaAtual }) {
           {anexos.map((file, i) => (
             <div key={i} className="anexo-item">
               <span>{file.name}</span>
-              <button title="Remover" onClick={() => handleRemoverAnexo(i)}>
+              <button
+                type="button"
+                title="Remover"
+                onClick={() => handleRemoverAnexo(i)}
+                aria-label="Remover anexo"
+              >
                 ×
               </button>
             </div>
@@ -111,8 +101,11 @@ export default function Task({ onClose, projetoAtual, pilhaAtual, notaAtual }) {
           placeholder="Escrever um comentário..."
           value={comentario}
           onChange={(e) => setComentario(e.target.value)}
+          rows={3}
         />
-        <button onClick={handleAddComentario}>Comentar</button>
+        <button type="button" onClick={handleAddComentario}>
+          Comentar
+        </button>
 
         <div className="comentarios-lista">
           {comentarios.map((c, i) => (
