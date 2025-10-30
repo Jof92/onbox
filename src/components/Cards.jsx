@@ -1,4 +1,4 @@
-// Cards.jsx
+// src/components/Cards.jsx
 import React, { useState, useEffect, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "./Cards.css";
@@ -12,9 +12,10 @@ export default function Cards() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const [project, setProject] = useState(null);
+  const [entity, setEntity] = useState(null); // pode ser projeto ou setor
   const [columns, setColumns] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [entityType, setEntityType] = useState("project"); // ou "setor"
 
   const [activeColumnId, setActiveColumnId] = useState(null);
   const [editingColumnId, setEditingColumnId] = useState(null);
@@ -27,61 +28,58 @@ export default function Cards() {
   const [notaProgresso, setNotaProgresso] = useState({});
   const [menuOpenNota, setMenuOpenNota] = useState(null);
 
-  // --- Carregar projeto + pilhas + notas com progresso ---
+  // --- Carregar entidade (projeto ou setor) + pilhas + notas ---
   useEffect(() => {
-    const projectId = location.state?.projectId;
-    if (!projectId) return navigate("/containers", { replace: true });
+    const { projectId, setorId, projectName, setorName, projectPhoto, setorPhoto, entityType: typeFromState } = location.state || {};
+    const entityId = projectId || setorId;
+    const entityName = projectName || setorName || "Entidade";
+    const entityPhoto = projectPhoto || setorPhoto;
+    const type = typeFromState || (projectId ? "project" : "setor");
+
+    if (!entityId) return navigate("/containers", { replace: true });
+
+    setEntityType(type);
 
     (async () => {
       setLoading(true);
       try {
-        // Carregar projeto
-        const { data: projectData } = await supabase
-          .from("projects")
-          .select("*")
-          .eq("id", projectId)
-          .single();
-        if (!projectData) return navigate("/containers", { replace: true });
+        // Carregar entidade
+        let entityData = null;
+        if (type === "project") {
+          const { data } = await supabase.from("projects").select("*").eq("id", entityId).single();
+          entityData = data;
+        } else {
+          const { data } = await supabase.from("setores").select("*").eq("id", entityId).single();
+          entityData = data;
+        }
 
-        // Foto do projeto
-        const [{ photo_url } = {}] =
-          (await supabase
-            .from("projects_photos")
-            .select("photo_url")
-            .eq("project_id", projectId)
-            .order("created_at")
-            .limit(1)
-          ).data || [];
-
-        // Pavimentos e EAP (não usados aqui, mas mantidos)
-        const pavimentos = (await supabase
-          .from("pavimentos")
-          .select("*")
-          .eq("project_id", projectId)
-          .order("created_at")
-        ).data || [];
-
-        const eap = (await supabase
-          .from("eap")
-          .select("*")
-          .eq("project_id", projectId)
-          .order("created_at")
-        ).data || [];
+        if (!entityData) return navigate("/containers", { replace: true });
 
         // Usuário atual
         const { data: userData } = await supabase.from("profiles").select("nome").limit(1).single();
         if (userData?.nome) setUsuarioAtual(userData.nome);
 
-        // Carregar pilhas com notas (incluindo campo `progresso`)
-        const pilhasData =
-          (await supabase
-            .from("pilhas")
-            .select("*, notas(id, nome, tipo, responsavel, progresso)")
-            .eq("project_id", projectId)
-            .order("created_at")
+        // Carregar pilhas com notas
+        let pilhasData = [];
+        if (type === "project") {
+          pilhasData = (
+            await supabase
+              .from("pilhas")
+              .select("*, notas(id, nome, tipo, responsavel, progresso)")
+              .eq("project_id", entityId)
+              .order("created_at")
           ).data || [];
+        } else {
+          pilhasData = (
+            await supabase
+              .from("pilhas")
+              .select("*, notas(id, nome, tipo, responsavel, progresso)")
+              .eq("setor_id", entityId)
+              .order("created_at")
+          ).data || [];
+        }
 
-        // Inicializar notaProgresso com os valores do banco
+        // Inicializar progresso
         const progressoInicial = {};
         pilhasData.forEach((pilha) => {
           pilha.notas.forEach((nota) => {
@@ -100,32 +98,48 @@ export default function Cards() {
           }))
         );
 
-        setProject({ ...projectData, photo_url, pavimentos, eap });
+        setEntity({ id: entityId, name: entityName, photo_url: entityPhoto, type });
       } catch (err) {
-        console.error("Erro ao carregar projeto/pilhas:", err);
+        console.error("Erro ao carregar entidade/pilhas:", err);
+        navigate("/containers", { replace: true });
       } finally {
         setLoading(false);
       }
     })();
   }, [location.state, navigate]);
 
-  // --- CRUD Pilha ---
+  // --- Adicionar coluna (pilha) ---
   const handleAddColumn = async () => {
-    if (!project) return;
+    if (!entity) return;
+
+    const newPilhaData = { title: "Nova Pilha" };
+    if (entityType === "project") {
+      newPilhaData.project_id = entity.id;
+    } else {
+      newPilhaData.setor_id = entity.id;
+    }
+
     const { data: newPilha, error } = await supabase
       .from("pilhas")
-      .insert([{ project_id: project.id, title: "Nova Pilha" }])
+      .insert([newPilhaData])
       .select()
       .single();
-    if (error) return console.error(error);
+
+    if (error) {
+      console.error("Erro ao criar pilha:", error);
+      return;
+    }
+
     setColumns((prev) => [...prev, { id: String(newPilha.id), title: newPilha.title, notas: [] }]);
   };
 
+  // --- Editar título da coluna ---
   const saveColumnTitle = async (id) => {
     if (!columnTitleDraft.trim()) return setEditingColumnId(null);
     const { error } = await supabase.from("pilhas").update({ title: columnTitleDraft }).eq("id", id);
-    if (!error)
+    if (!error) {
       setColumns((prev) => prev.map((c) => (c.id === id ? { ...c, title: columnTitleDraft } : c)));
+    }
     setEditingColumnId(null);
   };
 
@@ -205,13 +219,10 @@ export default function Cards() {
       if (source.droppableId === destination.droppableId && source.index === destination.index) return;
 
       const nextColumns = columns.map((c) => ({ ...c, notas: [...c.notas] }));
-
       const sourceCol = nextColumns.find((c) => c.id === source.droppableId);
       const [movedNote] = sourceCol.notas.splice(source.index, 1);
-
       const destCol = nextColumns.find((c) => c.id === destination.droppableId);
       destCol.notas.splice(destination.index, 0, movedNote);
-
       setColumns(nextColumns);
 
       if (source.droppableId !== destination.droppableId) {
@@ -241,9 +252,9 @@ export default function Cards() {
         <button className="btn-voltar" onClick={() => navigate("/containers")} title="Voltar">
           <FaArrowLeft />
         </button>
-        {project?.photo_url && <img src={project.photo_url} alt={project.name} className="project-photo-header" />}
+        {entity?.photo_url && <img src={entity.photo_url} alt={entity.name} className="project-photo-header" />}
         <h1>
-          Pilhas - <span className="project-name">{project?.name || "Projeto Desconhecido"}</span>
+          Pilhas - <span className="project-name">{entity?.name || "Entidade Desconhecida"}</span>
         </h1>
         <button className="btn-add-pilha" onClick={handleAddColumn}>
           <FaPlus />
@@ -293,16 +304,11 @@ export default function Cards() {
                             {...prov.draggableProps}
                             {...prov.dragHandleProps}
                             style={{ ...prov.draggableProps.style, userSelect: "none" }}
+                            onClick={() => setNotaSelecionada(nota)}
                           >
-                            <div
-                              className="card-info"
-                              onClick={() => {
-                                setNotaSelecionada(nota);
-                              }}
-                            >
+                            <div className="card-info">
                               <div className="card-title-wrapper">
                                 <strong>{nota.nome}</strong>
-                                
                               </div>
                               <p>
                                 {nota.tipo}
@@ -343,7 +349,6 @@ export default function Cards() {
         </div>
       </DragDropContext>
 
-      {/* ModalNota */}
       <ModalNota
         showNovaNota={!!activeColumnId}
         showEditarNota={!!notaEditData.id && !notaSelecionada}
@@ -358,7 +363,7 @@ export default function Cards() {
         setNotaEditData={setNotaEditData}
         saveEditedNota={saveEditedNota}
         notaSelecionada={notaSelecionada}
-        project={project}
+        project={entity}
         usuarioAtual={usuarioAtual}
         notaProgresso={notaProgresso}
         setNotaProgresso={setNotaProgresso}
