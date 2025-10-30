@@ -311,22 +311,30 @@ export default function Containers() {
               <h2>{selectedProject.name || "Projeto"}</h2>
               <p>Tipo: {selectedProject.type === "vertical" ? "Edificação Vertical" : "Edificação Horizontal"}</p>
 
-              {(selectedProject.pavimentos?.length > 0 || selectedProject.eap?.length > 0) && (
+             {(selectedProject.pavimentos?.length > 0 || selectedProject.eap?.length > 0) && (
                 <div className="project-sections">
                   {selectedProject.pavimentos?.length > 0 && (
                     <div className="project-section">
                       <h3>Pavimentos</h3>
-                      <ul>
-                        {selectedProject.pavimentos.map((p) => <li key={p.id}>{p.name || ""}</li>)}
-                      </ul>
+                      <div className="project-list-container">
+                        <ul>
+                          {selectedProject.pavimentos.map((p) => (
+                            <li key={p.id}>{p.name || ""}</li>
+                          ))}
+                        </ul>
+                      </div>
                     </div>
                   )}
                   {selectedProject.eap?.length > 0 && (
                     <div className="project-section">
                       <h3>EAP</h3>
-                      <ul>
-                        {selectedProject.eap.map((e) => <li key={e.id}>{e.name || ""}</li>)}
-                      </ul>
+                      <div className="project-list-container">
+                        <ul>
+                          {selectedProject.eap.map((e) => (
+                            <li key={e.id}>{e.name || ""}</li>
+                          ))}
+                        </ul>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -368,38 +376,42 @@ export default function Containers() {
             </select>
 
             {newProject.type === "vertical" && (
-              <>
+              <div>
                 <div className="list-header">
                   Pavimentos <FaPlus className="add-icon" onClick={() => addListItem("pavimentos")} />
                 </div>
-                {newProject.pavimentos.map((p, i) => (
-                  <div key={i} className="list-item">
-                    <input
-                      type="text"
-                      placeholder={`Pavimento ${i + 1}`}
-                      value={p}
-                      onChange={(e) => handleListChange("pavimentos", i, e.target.value)}
-                    />
-                    <FaTrash className="delete-icon" onClick={() => removeListItem("pavimentos", i)} />
-                  </div>
-                ))}
-              </>
+                <div className="list-container">
+                  {newProject.pavimentos.map((p, i) => (
+                    <div key={i} className="list-item">
+                      <input
+                        type="text"
+                        placeholder={`Pavimento ${i + 1}`}
+                        value={p}
+                        onChange={(e) => handleListChange("pavimentos", i, e.target.value)}
+                      />
+                      <FaTrash className="delete-icon" onClick={() => removeListItem("pavimentos", i)} />
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
 
-            <div className="list-header">
+           <div className="list-header">
               EAP <FaPlus className="add-icon" onClick={() => addListItem("eap")} />
             </div>
-            {newProject.eap.map((e, i) => (
-              <div key={i} className="list-item">
-                <input
-                  type="text"
-                  placeholder={`EAP ${i + 1}`}
-                  value={e}
-                  onChange={(ev) => handleListChange("eap", i, ev.target.value)}
-                />
-                <FaTrash className="delete-icon" onClick={() => removeListItem("eap", i)} />
-              </div>
-            ))}
+            <div className="list-container">
+              {newProject.eap.map((e, i) => (
+                <div key={i} className="list-item">
+                  <input
+                    type="text"
+                    placeholder={`EAP ${i + 1}`}
+                    value={e}
+                    onChange={(ev) => handleListChange("eap", i, ev.target.value)}
+                  />
+                  <FaTrash className="delete-icon" onClick={() => removeListItem("eap", i)} />
+                </div>
+              ))}
+            </div>
 
             <div className="modal-actions">
               <button className="save-btn" onClick={saveProject}>Salvar</button>
