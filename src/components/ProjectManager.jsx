@@ -1,3 +1,4 @@
+// src/components/ProjectManager.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaPlus, FaTrash, FaCamera } from "react-icons/fa";
@@ -18,6 +19,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
   const [loading, setLoading] = useState(true);
   const [newProject, setNewProject] = useState(initialProjectState());
   const [showSetoresModal, setShowSetoresModal] = useState(false);
+  const [menuSetorAberto, setMenuSetorAberto] = useState(null); // ✅ controle do menu
 
   function initialProjectState() {
     return {
@@ -30,6 +32,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
     };
   }
 
+  // --- Fetch Projects ---
   const fetchProjects = async (userId) => {
     const { data: projectsData, error } = await supabase
       .from("projects")
@@ -60,6 +63,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
     setSelectedProject(null);
   };
 
+  // --- Fetch Setores ---
   const fetchSetores = async (userId) => {
     const { data: setoresData, error } = await supabase
       .from("setores")
@@ -70,9 +74,23 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
     if (error) {
       console.error("Erro ao buscar setores:", error);
       setSetores([]);
-    } else {
-      setSetores(setoresData || []);
+      return;
     }
+
+    const setoresComFoto = await Promise.all(
+      (setoresData || []).map(async (setor) => {
+        const { data: photoData } = await supabase
+          .from("setores_photos")
+          .select("photo_url")
+          .eq("setor_id", setor.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single();
+        return { ...setor, photo_url: photoData?.photo_url || null };
+      })
+    );
+
+    setSetores(setoresComFoto);
   };
 
   useEffect(() => {
@@ -89,6 +107,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
     return colors[Math.floor(Math.random() * colors.length)];
   };
 
+  // --- Handlers de projeto ---
   const handlePhotoUpload = (e) => {
     const file = e.target.files?.[0];
     if (file)
@@ -205,6 +224,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
     });
   };
 
+  // --- Navegação ---
   const openCardsPage = (proj) => {
     navigate(`/cards/${encodeURIComponent(proj.name || "Projeto")}`, {
       state: { projectId: proj.id, projectName: proj.name, projectPhoto: proj.photo_url },
@@ -230,6 +250,75 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
     setShowSetoresModal(true);
   };
 
+  // --- Ações de Setor ---
+  const handleUpdateSetorPhoto = async (setor) => {
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = "image/*";
+    fileInput.onchange = async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      setLoading(true);
+      try {
+        const fileName = `setores/${setor.id}_${Date.now()}_${file.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from("setores_photos")
+          .upload(fileName, file, { upsert: true });
+
+        if (uploadError) throw uploadError;
+
+        const { data: urlData } = supabase.storage.from("setores_photos").getPublicUrl(fileName);
+        const newPhotoUrl = urlData.publicUrl;
+
+        await supabase
+          .from("setores_photos")
+          .update({ photo_url: newPhotoUrl })
+          .eq("setor_id", setor.id);
+
+        setSetores((prev) =>
+          prev.map((s) => (s.id === setor.id ? { ...s, photo_url: newPhotoUrl } : s))
+        );
+
+        alert("Foto atualizada com sucesso!");
+      } catch (err) {
+        console.error("Erro ao atualizar foto:", err);
+        alert("Erro ao atualizar a foto do setor.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fileInput.click();
+  };
+
+  const handleDeleteSetor = async (setorId) => {
+    if (!window.confirm("Deseja realmente excluir este setor?")) return;
+
+    setLoading(true);
+    try {
+      const { data: photoRecords } = await supabase
+        .from("setores_photos")
+        .select("photo_url")
+        .eq("setor_id", setorId);
+
+      if (photoRecords?.length) {
+        const fileNames = photoRecords.map((p) => p.photo_url.split("/").pop());
+        await supabase.storage.from("setores_photos").remove(fileNames);
+        await supabase.from("setores_photos").delete().eq("setor_id", setorId);
+      }
+
+      await supabase.from("setores").delete().eq("id", setorId);
+      setSetores((prev) => prev.filter((s) => s.id !== setorId));
+      setMenuSetorAberto(null);
+      alert("Setor excluído com sucesso!");
+    } catch (err) {
+      console.error("Erro ao excluir setor:", err);
+      alert("Erro ao excluir o setor.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (loading && !projects.length && !setores.length) return <Loading />;
 
   return (
@@ -252,7 +341,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
       <main className="containers-main">
         {!selectedProject ? (
           <>
-            {/* Seção de Projetos */}
+            {/* Projetos */}
             {projects.length > 0 ? (
               <div className="projects-grid">
                 {projects.map((proj) => (
@@ -285,7 +374,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
               <p className="no-projects">Tudo calmo por aqui ainda...</p>
             )}
 
-            {/* Linha divisória e Setores (só se houver setores) */}
+            {/* Setores com menu de ações */}
             {setores.length > 0 && (
               <>
                 <hr className="setores-divider" />
@@ -295,7 +384,43 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
                       key={setor.id}
                       className="project-box"
                       onClick={() => openSetorCardsPage(setor)}
+                      style={{ position: "relative", cursor: "pointer" }}
                     >
+                      {/* Menu de ações */}
+                      <div
+                        className="setor-actions-trigger"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMenuSetorAberto(menuSetorAberto === setor.id ? null : setor.id);
+                        }}
+                      >
+                        <span className="setor-actions-dots">⋯</span>
+                      </div>
+
+                      {menuSetorAberto === setor.id && (
+                        <div className="setor-actions-menu">
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              await handleUpdateSetorPhoto(setor);
+                              setMenuSetorAberto(null);
+                            }}
+                          >
+                            📷 Mudar foto
+                          </button>
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              await handleDeleteSetor(setor.id);
+                              setMenuSetorAberto(null);
+                            }}
+                          >
+                            🗑️ Excluir
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Conteúdo do box */}
                       <div
                         className="project-photo"
                         style={{
@@ -318,7 +443,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
             )}
           </>
         ) : (
-          /* Detalhes do projeto selecionado */
+          /* Detalhes do projeto */
           <div className="project-details">
             <button className="back-btn" onClick={() => setSelectedProject(null)}>
               <FaArrowLeft />
@@ -349,25 +474,21 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
                 {selectedProject.pavimentos?.length > 0 && (
                   <div className="project-section">
                     <h3>Pavimentos</h3>
-                    <div className="project-list-container">
-                      <ul>
-                        {selectedProject.pavimentos.map((p) => (
-                          <li key={p.id}>{p.name || ""}</li>
-                        ))}
-                      </ul>
-                    </div>
+                    <ul>
+                      {selectedProject.pavimentos.map((p) => (
+                        <li key={p.id}>{p.name || ""}</li>
+                      ))}
+                    </ul>
                   </div>
                 )}
                 {selectedProject.eap?.length > 0 && (
                   <div className="project-section">
                     <h3>EAP</h3>
-                    <div className="project-list-container">
-                      <ul>
-                        {selectedProject.eap.map((e) => (
-                          <li key={e.id}>{e.name || ""}</li>
-                        ))}
-                      </ul>
-                    </div>
+                    <ul>
+                      {selectedProject.eap.map((e) => (
+                        <li key={e.id}>{e.name || ""}</li>
+                      ))}
+                    </ul>
                   </div>
                 )}
               </div>
@@ -423,10 +544,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
               <div>
                 <div className="list-header">
                   Pavimentos{" "}
-                  <FaPlus
-                    className="add-icon"
-                    onClick={() => addListItem("pavimentos")}
-                  />
+                  <FaPlus className="add-icon" onClick={() => addListItem("pavimentos")} />
                 </div>
                 <div className="list-container">
                   {newProject.pavimentos.map((p, i) => (

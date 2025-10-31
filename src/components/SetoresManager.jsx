@@ -30,6 +30,7 @@ export default function SetoresManager({ userId, onClose }) {
 
     setLoading(true);
     try {
+      // 1. Criar o setor
       const { data: setorData, error: setorError } = await supabase
         .from("setores")
         .insert({ name: name.trim(), user_id: userId })
@@ -38,15 +39,17 @@ export default function SetoresManager({ userId, onClose }) {
 
       if (setorError) throw setorError;
 
+      // 2. Se houver foto, fazer upload no bucket CORRETO: "setores_photos"
       if (photoFile) {
         const fileName = `setores/${setorData.id}_${Date.now()}_${photoFile.name}`;
         const { error: uploadError } = await supabase.storage
-          .from("projects_photos")
+          .from("setores_photos") // ✅ Bucket correto
           .upload(fileName, photoFile, { upsert: true });
 
         if (uploadError) throw uploadError;
 
-        const { data: urlData } = supabase.storage.from("projects_photos").getPublicUrl(fileName);
+        const { data: urlData } = supabase.storage.from("setores_photos").getPublicUrl(fileName);
+        // 3. Salvar URL na tabela setores_photos
         await supabase.from("setores_photos").insert({
           setor_id: setorData.id,
           photo_url: urlData.publicUrl,
