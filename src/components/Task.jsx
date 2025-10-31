@@ -10,6 +10,19 @@ export default function Task({ onClose, projetoAtual, notaAtual }) {
   const [comentarios, setComentarios] = useState([]);
   const [anexosSalvos, setAnexosSalvos] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [menuAberto, setMenuAberto] = useState(null);
+  const [userId, setUserId] = useState(null); // 👈 ID do usuário logado
+
+  // Obter ID do usuário logado
+  useEffect(() => {
+    const fetchUserId = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserId(user.id);
+      }
+    };
+    fetchUserId();
+  }, []);
 
   // Função para formatar data de forma amigável
   const formatarDataComentario = (dateString) => {
@@ -40,6 +53,16 @@ export default function Task({ onClose, projetoAtual, notaAtual }) {
     }
   };
 
+  // Verifica se o comentário pode ser editado (menos de 1h E é do usuário atual)
+  const podeEditarComentario = (createdAt, autorId) => {
+    if (autorId !== userId) return false;
+    const agora = new Date();
+    const criadoEm = new Date(createdAt);
+    const diffMs = agora - criadoEm;
+    const diffMin = diffMs / (1000 * 60);
+    return diffMin < 60;
+  };
+
   // Carregar dados da nota ao montar
   useEffect(() => {
     if (!notaAtual?.id) {
@@ -66,26 +89,36 @@ export default function Task({ onClose, projetoAtual, notaAtual }) {
           setDescricao(nota?.descricao || "");
         }
 
-        // Carregar comentários com perfil do usuário
+        // Carregar comentários
         const { data: comentariosData, error: comentariosError } = await supabase
           .from("comentarios")
-          .select(`
-            id,
-            conteudo,
-            created_at,
-            user_id,
-            profiles!left(nome, avatar_url)
-          `)
+          .select("id, conteudo, created_at, user_id")
           .eq("nota_id", notaAtual.id)
           .order("created_at", { ascending: true });
 
-        if (isMounted && !comentariosError && comentariosData) {
+        if (isMounted && !comentariosError && comentariosData && comentariosData.length > 0) {
+          const userIds = [...new Set(comentariosData.map(c => c.user_id))];
+          const { data: profiles, error: profilesError } = await supabase
+            .from("profiles")
+            .select("id, nome, avatar_url")
+            .in("id", userIds);
+
+          const profileMap = {};
+          if (!profilesError && profiles) {
+            profiles.forEach(p => {
+              profileMap[p.id] = p;
+            });
+          }
+
           const comentariosComUsuario = comentariosData.map((c) => ({
             ...c,
-            profiles: c.profiles || { nome: "Usuário", avatar_url: null },
+            profiles: profileMap[c.user_id] || { nome: "Usuário", avatar_url: null },
             formattedDate: formatarDataComentario(c.created_at),
           }));
-          setComentarios(comentariosComUsuario);
+
+          if (isMounted) setComentarios(comentariosComUsuario);
+        } else if (isMounted) {
+          setComentarios([]);
         }
 
         // Carregar anexos
@@ -110,7 +143,7 @@ export default function Task({ onClose, projetoAtual, notaAtual }) {
     return () => {
       isMounted = false;
     };
-  }, [notaAtual?.id]);
+  }, [notaAtual?.id, userId]); // 👈 Adicionado userId como dependência
 
   // Salvar descrição
   const handleSaveDescricao = async () => {
@@ -130,15 +163,9 @@ export default function Task({ onClose, projetoAtual, notaAtual }) {
     }
   };
 
-  // Adicionar comentário — CORRIGIDO
+  // Adicionar comentário
   const handleAddComentario = async () => {
-    if (!comentario.trim() || !notaAtual?.id) return;
-
-    const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData?.user) {
-      alert("Usuário não autenticado.");
-      return;
-    }
+    if (!comentario.trim() || !notaAtual?.id || !userId) return;
 
     setLoading(true);
     try {
@@ -146,23 +173,23 @@ export default function Task({ onClose, projetoAtual, notaAtual }) {
         .from("comentarios")
         .insert({
           nota_id: notaAtual.id,
-          user_id: authData.user.id,
+          user_id: userId,
           conteudo: comentario.trim(),
         })
-        .select(`
-          id,
-          conteudo,
-          created_at,
-          user_id,
-          profiles!left(nome, avatar_url)
-        `)
+        .select("id, conteudo, created_at, user_id")
         .single();
 
       if (error) throw error;
 
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("nome, avatar_url")
+        .eq("id", userId)
+        .single();
+
       const comentarioFormatado = {
         ...novoComentarioDB,
-        profiles: novoComentarioDB.profiles || { nome: "Você", avatar_url: null },
+        profiles: profileData || { nome: "Você", avatar_url: null },
         formattedDate: formatarDataComentario(novoComentarioDB.created_at),
       };
 
@@ -176,16 +203,62 @@ export default function Task({ onClose, projetoAtual, notaAtual }) {
     }
   };
 
+  // Editar comentário
+  const handleEditarComentario = async (comentarioId, novoConteudo) => {
+    if (!novoConteudo.trim()) return;
+
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from("comentarios")
+        .update({ conteudo: novoConteudo.trim() })
+        .eq("id", comentarioId)
+        .eq("user_id", userId); // 👈 Garante que só o autor edite
+
+      if (error) throw error;
+
+      setComentarios((prev) =>
+        prev.map((c) =>
+          c.id === comentarioId ? { ...c, conteudo: novoConteudo.trim() } : c
+        )
+      );
+      setMenuAberto(null);
+    } catch (err) {
+      console.error("Erro ao editar comentário:", err);
+      alert("Erro ao editar comentário.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Excluir comentário
+  const handleExcluirComentario = async (comentarioId) => {
+    if (!window.confirm("Tem certeza que deseja excluir este comentário?")) return;
+
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from("comentarios")
+        .delete()
+        .eq("id", comentarioId)
+        .eq("user_id", userId); // 👈 Só deleta se for do autor
+
+      if (error) throw error;
+
+      setComentarios((prev) => prev.filter((c) => c.id !== comentarioId));
+      setMenuAberto(null);
+    } catch (err) {
+      console.error("Erro ao excluir comentário:", err);
+      alert("Erro ao excluir comentário.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Adicionar anexos
   const handleAddAnexos = async (e) => {
     const files = Array.from(e.target.files || []);
-    if (files.length === 0 || !notaAtual?.id) return;
-
-    const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData?.user) {
-      alert("Usuário não autenticado.");
-      return;
-    }
+    if (files.length === 0 || !notaAtual?.id || !userId) return;
 
     setLoading(true);
     try {
@@ -197,7 +270,6 @@ export default function Task({ onClose, projetoAtual, notaAtual }) {
 
         if (uploadError) throw uploadError;
 
-        // ✅ getPublicUrl é SÍNCRONO — não use await!
         const { data } = supabase.storage.from("anexos").getPublicUrl(fileName);
         const fileUrl = data.publicUrl;
 
@@ -205,7 +277,7 @@ export default function Task({ onClose, projetoAtual, notaAtual }) {
           .from("anexos")
           .insert({
             nota_id: notaAtual.id,
-            user_id: authData.user.id,
+            user_id: userId,
             file_name: file.name,
             file_url: fileUrl,
           })
@@ -229,13 +301,12 @@ export default function Task({ onClose, projetoAtual, notaAtual }) {
     if (!window.confirm("Deseja realmente excluir este anexo?")) return;
     setLoading(true);
     try {
-      // Extrair nome do arquivo de forma segura
       const url = new URL(fileUrl);
       const path = url.pathname;
       const fileName = path.split('/').pop();
 
       await supabase.storage.from("anexos").remove([fileName]);
-      await supabase.from("anexos").delete().eq("id", anexoId);
+      await supabase.from("anexos").delete().eq("id", anexoId).eq("user_id", userId);
       setAnexosSalvos((prev) => prev.filter((a) => a.id !== anexoId));
     } catch (err) {
       console.error("Erro ao excluir anexo:", err);
@@ -326,7 +397,7 @@ export default function Task({ onClose, projetoAtual, notaAtual }) {
         <button
           type="button"
           onClick={handleAddComentario}
-          disabled={loading || !comentario.trim()}
+          disabled={loading || !comentario.trim() || !userId}
         >
           Comentar
         </button>
@@ -334,6 +405,9 @@ export default function Task({ onClose, projetoAtual, notaAtual }) {
         <div className="comentarios-lista">
           {comentarios.map((c) => {
             const profile = c.profiles || { nome: "Usuário", avatar_url: null };
+            // ✅ Só mostra o menu se for autor E dentro de 1h
+            const editavel = podeEditarComentario(c.created_at, c.user_id);
+
             return (
               <div key={c.id} className="comentario-item">
                 <div className="comentario-avatar">
@@ -354,8 +428,44 @@ export default function Task({ onClose, projetoAtual, notaAtual }) {
                   <div className="comentario-header">
                     <strong>{profile.nome}</strong>
                     <span>{c.formattedDate}</span>
+                    {editavel && (
+                      <button
+                        type="button"
+                        className="comentario-menu-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMenuAberto(menuAberto === c.id ? null : c.id);
+                        }}
+                        aria-label="Opções"
+                      >
+                        ⋮
+                      </button>
+                    )}
                   </div>
                   <p>{c.conteudo}</p>
+
+                  {menuAberto === c.id && editavel && (
+                    <div className="comentario-menu">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const novoTexto = prompt("Editar comentário:", c.conteudo);
+                          if (novoTexto !== null) {
+                            handleEditarComentario(c.id, novoTexto);
+                          }
+                          setMenuAberto(null);
+                        }}
+                      >
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleExcluirComentario(c.id)}
+                      >
+                        Excluir
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             );
