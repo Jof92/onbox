@@ -19,7 +19,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
   const [loading, setLoading] = useState(true);
   const [newProject, setNewProject] = useState(initialProjectState());
   const [showSetoresModal, setShowSetoresModal] = useState(false);
-  const [menuSetorAberto, setMenuSetorAberto] = useState(null); // ✅ controle do menu
+  const [menuSetorAberto, setMenuSetorAberto] = useState(null);
 
   function initialProjectState() {
     return {
@@ -36,18 +36,30 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
   const fetchProjects = async (userId) => {
     const { data: projectsData, error } = await supabase
       .from("projects")
-      .select("*, pavimentos(*), eap(*)")
+      .select(`
+        *,
+        pavimentos(*),
+        eap(*)
+      `)
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error(error);
+      console.error("Erro ao buscar projetos:", error);
       setProjects([]);
       return;
     }
 
     const projectsWithPhotos = await Promise.all(
       (projectsData || []).map(async (proj) => {
+        // Ordenar pavimentos e EAP pela coluna 'ordem'
+        const sortedPavimentos = [...(proj.pavimentos || [])].sort(
+          (a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)
+        );
+        const sortedEap = [...(proj.eap || [])].sort(
+          (a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)
+        );
+
         const { data: photoData } = await supabase
           .from("projects_photos")
           .select("photo_url")
@@ -55,7 +67,13 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
           .order("created_at", { ascending: false })
           .limit(1)
           .single();
-        return { ...proj, photo_url: photoData?.photo_url || null };
+
+        return {
+          ...proj,
+          pavimentos: sortedPavimentos,
+          eap: sortedEap,
+          photo_url: photoData?.photo_url || null,
+        };
       })
     );
 
@@ -128,86 +146,109 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
     let currentProjectId = selectedProject?.id;
     let projectResult;
 
-    if (isEditing && selectedProject) {
-      const { data, error } = await supabase
-        .from("projects")
-        .update({ name: newProject.name, type: newProject.type })
-        .eq("id", selectedProject.id)
-        .select()
-        .single();
-      if (error) {
-        setLoading(false);
-        return alert("Erro ao atualizar projeto");
+    try {
+      if (isEditing && selectedProject) {
+        const { data, error } = await supabase
+          .from("projects")
+          .update({ name: newProject.name, type: newProject.type })
+          .eq("id", selectedProject.id)
+          .select()
+          .single();
+        if (error) throw error;
+        projectResult = data;
+      } else {
+        const { data, error } = await supabase
+          .from("projects")
+          .insert([{ name: newProject.name, type: newProject.type, user_id: containerAtual }])
+          .select()
+          .single();
+        if (error) throw error;
+        projectResult = data;
+        currentProjectId = data.id;
       }
-      projectResult = data;
-    } else {
-      const { data, error } = await supabase
-        .from("projects")
-        .insert([{ name: newProject.name, type: newProject.type, user_id: containerAtual }])
-        .select()
-        .single();
-      if (error) {
-        setLoading(false);
-        return alert("Erro ao criar projeto");
+
+      // Upload de foto (se houver)
+      if (newProject.photoFile) {
+        const fileName = `${Date.now()}_${newProject.photoFile.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from("projects_photos")
+          .upload(fileName, newProject.photoFile, { upsert: true });
+
+        if (uploadError) throw uploadError;
+
+        const { data: urlData } = supabase.storage.from("projects_photos").getPublicUrl(fileName);
+        await supabase.from("projects_photos").insert([
+          { project_id: currentProjectId, photo_url: urlData.publicUrl },
+        ]);
       }
-      projectResult = data;
-      currentProjectId = data.id;
+
+      // Salvar pavimentos com ordem
+      await supabase.from("pavimentos").delete().eq("project_id", currentProjectId);
+      const pavimentosToInsert = newProject.pavimentos
+        .filter(Boolean)
+        .map((name, index) => ({
+          name,
+          project_id: currentProjectId,
+          ordem: index,
+        }));
+      if (pavimentosToInsert.length > 0) {
+        await supabase.from("pavimentos").insert(pavimentosToInsert);
+      }
+
+      // Salvar EAP com ordem
+      await supabase.from("eap").delete().eq("project_id", currentProjectId);
+      const eapToInsert = newProject.eap
+        .filter(Boolean)
+        .map((name, index) => ({
+          name,
+          project_id: currentProjectId,
+          ordem: index,
+        }));
+      if (eapToInsert.length > 0) {
+        await supabase.from("eap").insert(eapToInsert);
+      }
+
+      // Reset e atualização
+      setNewProject(initialProjectState());
+      setShowForm(false);
+      setIsEditing(false);
+      await fetchProjects(containerAtual);
+    } catch (err) {
+      console.error("Erro ao salvar projeto:", err);
+      alert("Erro ao salvar projeto.");
+    } finally {
+      setLoading(false);
     }
-
-    if (newProject.photoFile) {
-      const fileName = `${Date.now()}_${newProject.photoFile.name}`;
-      const { error: uploadError } = await supabase.storage
-        .from("projects_photos")
-        .upload(fileName, newProject.photoFile, { upsert: true });
-
-      if (uploadError) {
-        setLoading(false);
-        return alert("Erro ao enviar foto");
-      }
-
-      const { data: urlData } = supabase.storage.from("projects_photos").getPublicUrl(fileName);
-      await supabase.from("projects_photos").insert([
-        { project_id: currentProjectId, photo_url: urlData.publicUrl },
-      ]);
-    }
-
-    await supabase.from("pavimentos").delete().eq("project_id", currentProjectId);
-    await supabase.from("eap").delete().eq("project_id", currentProjectId);
-
-    for (const pav of newProject.pavimentos.filter(Boolean))
-      await supabase.from("pavimentos").insert({ name: pav, project_id: currentProjectId });
-    for (const eap of newProject.eap.filter(Boolean))
-      await supabase.from("eap").insert({ name: eap, project_id: currentProjectId });
-
-    setNewProject(initialProjectState());
-    setShowForm(false);
-    setIsEditing(false);
-    await fetchProjects(containerAtual);
-    setLoading(false);
   };
 
   const handleDeleteProject = async (projectId) => {
     if (!window.confirm("Deseja realmente apagar este projeto?")) return;
     setLoading(true);
 
-    const { data: photoRecords } = await supabase
-      .from("projects_photos")
-      .select("photo_url")
-      .eq("project_id", projectId);
-    if (photoRecords?.length) {
-      const fileNames = photoRecords.map((p) => p.photo_url.split("/").pop());
-      await supabase.storage.from("projects_photos").remove(fileNames);
-      await supabase.from("projects_photos").delete().eq("project_id", projectId);
+    try {
+      const { data: photoRecords } = await supabase
+        .from("projects_photos")
+        .select("photo_url")
+        .eq("project_id", projectId);
+      if (photoRecords?.length) {
+        const fileNames = photoRecords.map((p) => p.photo_url.split("/").pop());
+        await supabase.storage.from("projects_photos").remove(fileNames);
+        await supabase.from("projects_photos").delete().eq("project_id", projectId);
+      }
+
+      await supabase.from("pavimentos").delete().eq("project_id", projectId);
+      await supabase.from("eap").delete().eq("project_id", projectId);
+      await supabase.from("projects").delete().eq("id", projectId);
+
+      if (selectedProject?.id === projectId) setSelectedProject(null);
+      onProjectDeleted?.();
+      await fetchProjects(containerAtual);
+    } catch (err) {
+      console.error("Erro ao excluir projeto:", err);
+      alert("Erro ao excluir projeto.");
+    } finally {
+      setLoading(false);
     }
-
-    await supabase.from("pavimentos").delete().eq("project_id", projectId);
-    await supabase.from("eap").delete().eq("project_id", projectId);
-    await supabase.from("projects").delete().eq("id", projectId);
-
-    if (selectedProject?.id === projectId) setSelectedProject(null);
-    onProjectDeleted?.();
-    await fetchProjects(containerAtual);
-    setLoading(false);
   };
 
   const handleEditProject = (project) => {
@@ -250,7 +291,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
     setShowSetoresModal(true);
   };
 
-  // --- Ações de Setor (CORRIGIDA) ---
+  // --- Ações de Setor ---
   const handleUpdateSetorPhoto = async (setor) => {
     const fileInput = document.createElement("input");
     fileInput.type = "file";
@@ -261,22 +302,17 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
 
       setLoading(true);
       try {
-        // 1. Buscar fotos antigas
         const { data: oldPhotos } = await supabase
           .from("setores_photos")
           .select("photo_url")
           .eq("setor_id", setor.id);
 
-        // 2. Remover arquivos antigos do storage
         if (oldPhotos?.length) {
           const fileNames = oldPhotos.map((p) => p.photo_url.split("/").pop());
           await supabase.storage.from("setores_photos").remove(fileNames);
+          await supabase.from("setores_photos").delete().eq("setor_id", setor.id);
         }
 
-        // 3. Deletar registros antigos da tabela
-        await supabase.from("setores_photos").delete().eq("setor_id", setor.id);
-
-        // 4. Upload da nova foto
         const fileName = `setores/${setor.id}_${Date.now()}_${file.name}`;
         const { error: uploadError } = await supabase.storage
           .from("setores_photos")
@@ -284,16 +320,13 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
 
         if (uploadError) throw uploadError;
 
-        // 5. Obter URL pública
         const { data: urlData } = supabase.storage.from("setores_photos").getPublicUrl(fileName);
         const newPhotoUrl = urlData.publicUrl;
 
-        // 6. Inserir novo registro
         await supabase
           .from("setores_photos")
           .insert({ setor_id: setor.id, photo_url: newPhotoUrl });
 
-        // 7. Atualizar estado local
         setSetores((prev) =>
           prev.map((s) => (s.id === setor.id ? { ...s, photo_url: newPhotoUrl } : s))
         );
@@ -392,7 +425,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
               <p className="no-projects">Tudo calmo por aqui ainda...</p>
             )}
 
-            {/* Setores com menu de ações */}
+            {/* Setores */}
             {setores.length > 0 && (
               <>
                 <hr className="setores-divider" />
@@ -404,7 +437,6 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
                       onClick={() => openSetorCardsPage(setor)}
                       style={{ position: "relative", cursor: "pointer" }}
                     >
-                      {/* Menu de ações */}
                       <div
                         className="setor-actions-trigger"
                         onClick={(e) => {
@@ -438,7 +470,6 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
                         </div>
                       )}
 
-                      {/* Conteúdo do box */}
                       <div
                         className="project-photo"
                         style={{

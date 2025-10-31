@@ -11,7 +11,7 @@ export default function Task({ onClose, projetoAtual, notaAtual }) {
   const [anexosSalvos, setAnexosSalvos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [menuAberto, setMenuAberto] = useState(null);
-  const [userId, setUserId] = useState(null); // 👈 ID do usuário logado
+  const [userId, setUserId] = useState(null);
 
   // Obter ID do usuário logado
   useEffect(() => {
@@ -94,9 +94,9 @@ export default function Task({ onClose, projetoAtual, notaAtual }) {
           .from("comentarios")
           .select("id, conteudo, created_at, user_id")
           .eq("nota_id", notaAtual.id)
-          .order("created_at", { ascending: true });
+          .order("created_at", { ascending: false });
 
-        if (isMounted && !comentariosError && comentariosData && comentariosData.length > 0) {
+        if (isMounted && !comentariosError && comentariosData?.length > 0) {
           const userIds = [...new Set(comentariosData.map(c => c.user_id))];
           const { data: profiles, error: profilesError } = await supabase
             .from("profiles")
@@ -121,7 +121,7 @@ export default function Task({ onClose, projetoAtual, notaAtual }) {
           setComentarios([]);
         }
 
-        // Carregar anexos
+        // Carregar anexos — todos da nota, sem filtro por user_id
         const { data: anexos, error: anexosError } = await supabase
           .from("anexos")
           .select("id, file_name, file_url")
@@ -143,7 +143,7 @@ export default function Task({ onClose, projetoAtual, notaAtual }) {
     return () => {
       isMounted = false;
     };
-  }, [notaAtual?.id, userId]); // 👈 Adicionado userId como dependência
+  }, [notaAtual?.id, userId]);
 
   // Salvar descrição
   const handleSaveDescricao = async () => {
@@ -163,9 +163,14 @@ export default function Task({ onClose, projetoAtual, notaAtual }) {
     }
   };
 
-  // Adicionar comentário
+  // Adicionar comentário — botão sempre habilitado, mas só envia se houver conteúdo
   const handleAddComentario = async () => {
-    if (!comentario.trim() || !notaAtual?.id || !userId) return;
+    if (!notaAtual?.id || !userId) return;
+
+    // Não envia se estiver vazio, mas não desabilita o botão
+    if (!comentario.trim()) {
+      return; // silenciosamente ignora
+    }
 
     setLoading(true);
     try {
@@ -193,7 +198,7 @@ export default function Task({ onClose, projetoAtual, notaAtual }) {
         formattedDate: formatarDataComentario(novoComentarioDB.created_at),
       };
 
-      setComentarios((prev) => [...prev, comentarioFormatado]);
+      setComentarios((prev) => [comentarioFormatado, ...prev ]);
       setComentario("");
     } catch (err) {
       console.error("Erro ao salvar comentário:", err);
@@ -213,7 +218,7 @@ export default function Task({ onClose, projetoAtual, notaAtual }) {
         .from("comentarios")
         .update({ conteudo: novoConteudo.trim() })
         .eq("id", comentarioId)
-        .eq("user_id", userId); // 👈 Garante que só o autor edite
+        .eq("user_id", userId);
 
       if (error) throw error;
 
@@ -241,7 +246,7 @@ export default function Task({ onClose, projetoAtual, notaAtual }) {
         .from("comentarios")
         .delete()
         .eq("id", comentarioId)
-        .eq("user_id", userId); // 👈 Só deleta se for do autor
+        .eq("user_id", userId);
 
       if (error) throw error;
 
@@ -394,10 +399,12 @@ export default function Task({ onClose, projetoAtual, notaAtual }) {
           rows={3}
           disabled={loading}
         />
+        {/* Botão "Comentar" — sempre elegível, classe própria */}
         <button
           type="button"
+          className="coment-btn"
           onClick={handleAddComentario}
-          disabled={loading || !comentario.trim() || !userId}
+          disabled={loading || !userId} // só desabilita se carregando ou sem usuário
         >
           Comentar
         </button>
@@ -405,7 +412,6 @@ export default function Task({ onClose, projetoAtual, notaAtual }) {
         <div className="comentarios-lista">
           {comentarios.map((c) => {
             const profile = c.profiles || { nome: "Usuário", avatar_url: null };
-            // ✅ Só mostra o menu se for autor E dentro de 1h
             const editavel = podeEditarComentario(c.created_at, c.user_id);
 
             return (
