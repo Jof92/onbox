@@ -1,11 +1,14 @@
+// src/components/ThinSidebar.jsx
 import React, { useState, useEffect } from "react";
 import { FaCog, FaUpload, FaUserFriends, FaHome } from "react-icons/fa";
 import "./ThinSidebar.css";
 import Collab from "./Collab";
+import ContainerSettings from "./ContainerSettings"; // 👈 Import do novo componente
 import { supabase } from "../supabaseClient";
 
 export default function ThinSidebar({ containerAtual, setContainerAtual, user }) {
   const [showCollab, setShowCollab] = useState(false);
+  const [showSettings, setShowSettings] = useState(false); // 👈 Estado para configurações
   const [notificacoesPendentes, setNotificacoesPendentes] = useState(0);
   const [colaboradores, setColaboradores] = useState([]);
 
@@ -82,7 +85,11 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
           <FaHome />
         </button>
 
-        <button className="thin-btn" title="Configurações">
+        <button
+          className="thin-btn"
+          title="Configurações"
+          onClick={() => setShowSettings(true)} // 👈 Abre as configurações
+        >
           <FaCog />
         </button>
 
@@ -124,6 +131,7 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
         </div>
       </aside>
 
+      {/* Modal de Colaboração */}
       {showCollab && (
         <Collab
           onClose={() => {
@@ -133,6 +141,15 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
           containerAtual={containerAtual}
           user={user}
           onAtualizarNotificacoes={fetchNotificacoes}
+        />
+      )}
+
+      {/* Modal de Configurações do Container */}
+      {showSettings && (
+        <ContainerSettings
+          onClose={() => setShowSettings(false)}
+          containerId={containerAtual}
+          user={user}
         />
       )}
     </>
