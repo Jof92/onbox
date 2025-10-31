@@ -5,7 +5,7 @@
   background: #fff;
   box-shadow: 0 6px 18px rgba(20, 20, 30, 0.06);
   border-radius: 10px;
-  width: 60em;
+  width: 50em;
   margin: 40px auto;
   font-family: Inter, "Segoe UI", Helvetica, Arial, sans-serif;
   color: #222;
@@ -76,8 +76,7 @@
    📝 Descrição
    ============================== */
 .descricao-section {
-  padding: 16px 24px;
-  border-top: 1px solid #eee;
+  padding: 5px 10px;
 }
 
 .descricao-section h3 {
@@ -145,7 +144,6 @@
 .anexos-section {
   border: 1px solid #e4e6eb;
   padding: 16px;
-  margin-top: 20px;
 }
 
 .anexos-section:hover {
@@ -300,6 +298,7 @@
   border-left: 4px solid #0066cc;
   font-size: 14px;
   color: #333;
+  text-align: left;
 }
 
 /* ==============================
@@ -357,4 +356,56 @@
   outline: none;
   background: transparent;
   /* Ajuste conforme seu design */
+}
+.comentario-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.comentario-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.comentario-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f0f0f0;
+  color: #888;
+  font-size: 18px;
+}
+
+.comentario-conteudo {
+  flex: 1;
+}
+
+.comentario-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.comentario-header strong {
+  color: #222;
+}
+
+.comentario-header span {
+  color: #777;
 }

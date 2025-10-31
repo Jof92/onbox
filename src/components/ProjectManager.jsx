@@ -250,7 +250,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
     setShowSetoresModal(true);
   };
 
-  // --- Ações de Setor ---
+  // --- Ações de Setor (CORRIGIDA) ---
   const handleUpdateSetorPhoto = async (setor) => {
     const fileInput = document.createElement("input");
     fileInput.type = "file";
@@ -261,6 +261,22 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
 
       setLoading(true);
       try {
+        // 1. Buscar fotos antigas
+        const { data: oldPhotos } = await supabase
+          .from("setores_photos")
+          .select("photo_url")
+          .eq("setor_id", setor.id);
+
+        // 2. Remover arquivos antigos do storage
+        if (oldPhotos?.length) {
+          const fileNames = oldPhotos.map((p) => p.photo_url.split("/").pop());
+          await supabase.storage.from("setores_photos").remove(fileNames);
+        }
+
+        // 3. Deletar registros antigos da tabela
+        await supabase.from("setores_photos").delete().eq("setor_id", setor.id);
+
+        // 4. Upload da nova foto
         const fileName = `setores/${setor.id}_${Date.now()}_${file.name}`;
         const { error: uploadError } = await supabase.storage
           .from("setores_photos")
@@ -268,14 +284,16 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
 
         if (uploadError) throw uploadError;
 
+        // 5. Obter URL pública
         const { data: urlData } = supabase.storage.from("setores_photos").getPublicUrl(fileName);
         const newPhotoUrl = urlData.publicUrl;
 
+        // 6. Inserir novo registro
         await supabase
           .from("setores_photos")
-          .update({ photo_url: newPhotoUrl })
-          .eq("setor_id", setor.id);
+          .insert({ setor_id: setor.id, photo_url: newPhotoUrl });
 
+        // 7. Atualizar estado local
         setSetores((prev) =>
           prev.map((s) => (s.id === setor.id ? { ...s, photo_url: newPhotoUrl } : s))
         );
@@ -406,7 +424,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
                               setMenuSetorAberto(null);
                             }}
                           >
-                            📷 Mudar foto
+                            Mudar foto
                           </button>
                           <button
                             onClick={async (e) => {
@@ -415,7 +433,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
                               setMenuSetorAberto(null);
                             }}
                           >
-                            🗑️ Excluir
+                            Excluir
                           </button>
                         </div>
                       )}
