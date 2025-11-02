@@ -19,6 +19,10 @@
   box-shadow: 0 4px 10px rgba(0,0,0,0.1);
 }
 
+.tittle-cont{
+  text-align: center;
+}
+
 /* ===== Conteúdo principal (sidebars + main) ===== */
 .containers-content {
   display: flex;

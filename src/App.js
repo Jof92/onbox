@@ -1,13 +1,13 @@
+// src/App.jsx
 import React, { useState, useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import LoginPanel from "./components/Login";
 import Containers from "./components/Containers";
 import Cards from "./components/Cards";
+import Home from "./components/Home";
 import { supabase } from "./supabaseClient";
-import img1 from "./assets/1.png";
-import img2 from "./assets/2.png";
 import "./App.css";
 
 export default function App() {
@@ -16,18 +16,7 @@ export default function App() {
   const [projects, setProjects] = useState([]);
   const [showLoginPanel, setShowLoginPanel] = useState(false);
 
-  const images = [img1, img2];
-  const [currentIndex, setCurrentIndex] = useState(0);
-
-  // === Carrossel de imagens ===
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % images.length);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // === Monitorar sessão ===
+  // === Monitorar sessão do usuário ===
   useEffect(() => {
     const fetchSession = async () => {
       const { data } = await supabase.auth.getSession();
@@ -45,7 +34,7 @@ export default function App() {
     return () => subscription.subscription.unsubscribe();
   }, []);
 
-  // === Buscar perfil ===
+  // === Buscar perfil do usuário ===
   useEffect(() => {
     const fetchProfile = async () => {
       if (!session?.user) {
@@ -66,6 +55,18 @@ export default function App() {
     };
     fetchProfile();
   }, [session]);
+
+  // === Fechar painel de login com a tecla ESC ===
+  useEffect(() => {
+    const handleEsc = (event) => {
+      if (event.key === "Escape" && showLoginPanel) {
+        setShowLoginPanel(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleEsc);
+    return () => window.removeEventListener("keydown", handleEsc);
+  }, [showLoginPanel]);
 
   // === Controle de login/logout ===
   const handleLoginClick = () => setShowLoginPanel((prev) => !prev);
@@ -93,34 +94,40 @@ export default function App() {
         )}
 
         <main className="app-main">
-          {/* Carrossel para visitantes */}
-          {!session && (
-            <div className="carousel-container">
-              <img
-                src={images[currentIndex]}
-                alt={`Slide ${currentIndex + 1}`}
-                className="carousel-image"
-              />
-            </div>
-          )}
-
-          {/* Rotas */}
           <Routes>
+            {/* Home pública */}
             <Route
               path="/"
               element={
                 !session ? (
-                  <p></p>
+                  <Home onOpenLogin={handleLoginClick} />
                 ) : (
+                  <Navigate to="/containers" replace />
+                )
+              }
+            />
+
+            {/* Páginas protegidas */}
+            <Route
+              path="/containers"
+              element={
+                session ? (
                   <Containers projects={projects} setProjects={setProjects} />
+                ) : (
+                  <Navigate to="/" replace />
                 )
               }
             />
             <Route
-              path="/containers"
-              element={<Containers projects={projects} setProjects={setProjects} />}
+              path="/cards/:projectName"
+              element={
+                session ? (
+                  <Cards projects={projects} />
+                ) : (
+                  <Navigate to="/" replace />
+                )
+              }
             />
-            <Route path="/cards/:projectName" element={<Cards projects={projects} />} />
           </Routes>
         </main>
 

@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
 import { FaSave } from "react-icons/fa";
+import Loading from "./Loading";
 import "./ContainerSettings.css";
 
 export default function ContainerSettings({ onClose, containerId, user }) {
@@ -20,10 +21,10 @@ export default function ContainerSettings({ onClose, containerId, user }) {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      // 1. Dono do container
+      // 1. Dono + gerente_container_id (precisa existir no banco!)
       const { data: perfil, error: donoError } = await supabase
         .from("profiles")
-        .select("nome")
+        .select("nome, gerente_container_id")
         .eq("id", containerId)
         .single();
       if (donoError) throw donoError;
@@ -61,6 +62,21 @@ export default function ContainerSettings({ onClose, containerId, user }) {
       if (setError) console.warn("Erro setores:", setError);
       setSetores(set || []);
 
+      // 👇 PREENCHE OS ESTADOS COM OS VALORES SALVOS
+      if (perfil?.gerente_container_id) {
+        const gerente = perfis.find(p => p.id === perfil.gerente_container_id);
+        setEmailGerenteContainer(gerente?.email || "");
+      }
+
+      const initialEmails = {};
+      [...proj, ...set].forEach(item => {
+        if (item.gerente_caixa_id) {
+          const gerente = perfis.find(p => p.id === item.gerente_caixa_id);
+          initialEmails[item.id] = gerente?.email || "";
+        }
+      });
+      setEmailsGerentesCaixa(initialEmails);
+
     } catch (err) {
       console.error("Erro:", err);
     } finally {
@@ -75,8 +91,8 @@ export default function ContainerSettings({ onClose, containerId, user }) {
       .from("profiles")
       .update({ gerente_container_id: colab.id })
       .eq("id", containerId);
-    setEmailGerenteContainer("");
     alert("Gerente de container salvo!");
+    // Não limpa o estado — mantém a seleção visível
   };
 
   const adicionarGerenteCaixa = async (tabela, id, email) => {
@@ -86,22 +102,23 @@ export default function ContainerSettings({ onClose, containerId, user }) {
       .from(tabela)
       .update({ gerente_caixa_id: colab.id })
       .eq("id", id);
-    setEmailsGerentesCaixa(prev => ({ ...prev, [id]: "" }));
+    // Não limpa o estado — mantém a seleção visível
+    setEmailsGerentesCaixa(prev => ({ ...prev, [id]: email }));
     alert("Gerente salvo!");
   };
 
-  if (loading) return (
-    <div className="container-settings-overlay">
-      <div className="container-settings-modal">Carregando...</div>
-    </div>
-  );
+  if (loading) {
+    return <Loading size={120} />;
+  }
 
   return (
     <div className="container-settings-overlay">
       <div className="container-settings-modal">
+        <button className="close-btn" onClick={onClose}>
+          ×
+        </button>
         <div className="settings-header">
           <h2>Configurações</h2>
-          <button className="close-btn" onClick={onClose}>×</button>
         </div>
 
         {/* Administrador */}
@@ -116,11 +133,11 @@ export default function ContainerSettings({ onClose, containerId, user }) {
           <div className="input-group">
             <select
               value={emailGerenteContainer}
-              onChange={e => setEmailGerenteContainer(e.target.value)}
+              onChange={(e) => setEmailGerenteContainer(e.target.value)}
               className="gerente-select"
             >
               <option value="">Selecione um colaborador</option>
-              {colaboradores.map(colab => (
+              {colaboradores.map((colab) => (
                 <option key={colab.id} value={colab.email}>
                   {colab.nome}
                 </option>
@@ -139,17 +156,22 @@ export default function ContainerSettings({ onClose, containerId, user }) {
             <p>Nenhum projeto</p>
           ) : (
             <div className="caixas-grid">
-              {projetos.map(p => (
+              {projetos.map((p) => (
                 <div key={p.id} className="caixa-card">
                   <div className="caixa-nome">{p.name}</div>
                   <div className="input-group">
                     <select
                       value={emailsGerentesCaixa[p.id] || ""}
-                      onChange={e => setEmailsGerentesCaixa(prev => ({ ...prev, [p.id]: e.target.value }))}
+                      onChange={(e) =>
+                        setEmailsGerentesCaixa((prev) => ({
+                          ...prev,
+                          [p.id]: e.target.value,
+                        }))
+                      }
                       className="gerente-select"
                     >
                       <option value="">Selecione</option>
-                      {colaboradores.map(colab => (
+                      {colaboradores.map((colab) => (
                         <option key={colab.id} value={colab.email}>
                           {colab.nome}
                         </option>
@@ -157,7 +179,9 @@ export default function ContainerSettings({ onClose, containerId, user }) {
                     </select>
                     <button
                       className="save-btn"
-                      onClick={() => adicionarGerenteCaixa("projects", p.id, emailsGerentesCaixa[p.id])}
+                      onClick={() =>
+                        adicionarGerenteCaixa("projects", p.id, emailsGerentesCaixa[p.id])
+                      }
                     >
                       <FaSave />
                     </button>
@@ -175,17 +199,22 @@ export default function ContainerSettings({ onClose, containerId, user }) {
             <p>Nenhum setor</p>
           ) : (
             <div className="caixas-grid">
-              {setores.map(s => (
+              {setores.map((s) => (
                 <div key={s.id} className="caixa-card">
                   <div className="caixa-nome">{s.name}</div>
                   <div className="input-group">
                     <select
                       value={emailsGerentesCaixa[s.id] || ""}
-                      onChange={e => setEmailsGerentesCaixa(prev => ({ ...prev, [s.id]: e.target.value }))}
+                      onChange={(e) =>
+                        setEmailsGerentesCaixa((prev) => ({
+                          ...prev,
+                          [s.id]: e.target.value,
+                        }))
+                      }
                       className="gerente-select"
                     >
                       <option value="">Selecione</option>
-                      {colaboradores.map(colab => (
+                      {colaboradores.map((colab) => (
                         <option key={colab.id} value={colab.email}>
                           {colab.nome}
                         </option>
@@ -193,7 +222,9 @@ export default function ContainerSettings({ onClose, containerId, user }) {
                     </select>
                     <button
                       className="save-btn"
-                      onClick={() => adicionarGerenteCaixa("setores", s.id, emailsGerentesCaixa[s.id])}
+                      onClick={() =>
+                        adicionarGerenteCaixa("setores", s.id, emailsGerentesCaixa[s.id])
+                      }
                     >
                       <FaSave />
                     </button>

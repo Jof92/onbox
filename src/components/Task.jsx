@@ -333,9 +333,6 @@ export default function Task({ onClose, projetoAtual, notaAtual }) {
             <span className="nota-name">{getNomeNota()}</span>
           </div>
         </div>
-        <button className="close-btn" onClick={onClose} disabled={loading}>
-          ×
-        </button>
       </div>
 
       <h2 className="task-title">{getNomeNota()}</h2>

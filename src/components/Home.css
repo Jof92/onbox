@@ -1,0 +1,195 @@
+/* src/components/Home.css */
+
+/* Container principal — NÃO ALTERADO */
+.home-container {
+  display: flex;
+  height: calc(100vh - 80px); /* Ajuste conforme altura do header */
+  position: relative;
+  overflow: hidden; /* 👈 mantido para não quebrar layout, mas a nova imagem estará fora */
+}
+
+.home-left {
+  width: 35%;
+  background: #fff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+}
+
+.home-left .home-image {
+  max-width: 100%;
+  max-height: 90vh;
+  object-fit: contain;
+}
+
+.home-right {
+  width: 65%;
+  background: linear-gradient(135deg, #ffffff, #f0f0f0);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  padding: 40px;
+}
+
+.home-content {
+  max-width: 80%;
+  text-align: left;
+  padding: 30px;
+  background: #dcdaff;
+  border-radius: 10px;
+}
+
+.home-title {
+  font-size: 3rem;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 1rem;
+  line-height: 1.2;
+}
+
+.home-subtitle {
+  font-size: 1.5rem;
+  color: #555;
+  margin-bottom: 2rem;
+  line-height: 1.5;
+}
+
+.home-features {
+  list-style-type: none;
+  padding: 0;
+  margin: 0 0 2rem 0;
+}
+
+.home-features li {
+  font-size: 1.3rem;
+  color: #444;
+  margin: 0.5rem 0;
+  position: relative;
+  padding-left: 1.5rem;
+  cursor: default; /* ❗ não muda o cursor */
+  transition: background-color 0.2s ease, color 0.2s ease;
+  border-radius: 4px;
+}
+
+.home-features li::before {
+  content: "•"; /* marcador visível */
+  color: #007bff;
+  font-weight: bold;
+  position: absolute;
+  left: 0;
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.home-features li:hover {
+  background-color: #f0f8ff;
+  color: #007bff;
+}
+
+.home-button {
+  display: block;
+  width: 200px;
+  padding: 12px 24px;
+  font-size: 1rem;
+  font-weight: bold;
+  text-align: center;
+  background: #0078ff;
+  color: #fff;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin: 0 auto;
+}
+
+.home-button:hover {
+  background: #64acff;
+  color: #fff;
+}
+
+/* Botão invisível para o logo — dentro do home-right */
+.home-logo-button {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  outline: none;
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  width: fit-content;
+  height: fit-content;
+}
+
+.home-logo {
+  width: 150px;
+  height: auto;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+/* Imagem que aparece AO ROLAR PARA BAIXO — fora do container principal */
+.home-scroll-image-container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding: 40px 20px;
+  background: #fafafa;
+  min-height: 100vh; /* garante espaço para rolagem */
+  box-sizing: border-box;
+}
+
+.home-scroll-image {
+  max-width: 90%;
+  height: auto;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Responsivo */
+@media (max-width: 768px) {
+  .home-container {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .home-left,
+  .home-right {
+    width: 100%;
+    height: auto;
+    min-height: 50vh;
+    padding: 20px;
+  }
+
+  .home-content {
+    max-width: 100%;
+    padding: 20px;
+  }
+
+  .home-title {
+    font-size: 2rem;
+  }
+
+  .home-button {
+    width: 100%;
+    max-width: 300px;
+  }
+
+  .home-logo-button {
+    bottom: 10px;
+    right: 10px;
+  }
+
+  .home-logo {
+    width: 120px;
+  }
+
+  .home-scroll-image-container {
+    padding: 30px 10px;
+  }
+
+  .home-scroll-image {
+    max-width: 100%;
+  }
+}

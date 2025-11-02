@@ -5,10 +5,8 @@
   box-sizing: border-box;
 }
 
-html,
-body {
-  height: 100vh; /* ocupa toda a altura da tela */
-  overflow: hidden; /* impede rolagem desnecessária */
+html {
+  scroll-behavior: smooth;
 }
 
 body {
@@ -16,12 +14,10 @@ body {
   background-color: #e3e4e6;
   color: #333;
   min-height: 100vh;
-  overflow-x: hidden;
-  display: flex;
-  flex-direction: column;
+  overflow-x: hidden; /* evita scroll horizontal */
 }
 
-/* 🌐 LINKS E BOTÕES */
+/* 🌐 ESTILOS GLOBAIS */
 a {
   text-decoration: none;
   color: inherit;
@@ -32,63 +28,28 @@ button {
   cursor: pointer;
   border: none;
   outline: none;
+  background: none;
 }
 
-/* 📦 CONTEÚDO PRINCIPAL — agora com classe exclusiva */
+/* 📦 CONTEÚDO PRINCIPAL */
 .app-main {
-  padding-top: 5rem; /* altura do header */
-  flex-direction: column;
-  align-items: center;
-  justify-content: center; /* centraliza verticalmente */
-  min-height: 100vh; /* ocupa toda a altura da tela */
-  text-align: center;
-  overflow: hidden;
+  padding-top: 5rem; /* altura do header (ajuste se mudar) */
+  width: 100%;
 }
 
-/* 🏠 SEÇÃO DE BOAS-VINDAS */
-.welcome {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.8rem;
-  padding: 2rem;
-  background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-  height: 100%; /* garante altura ajustada ao contêiner */
-}
-
-.welcome:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.1);
-}
-
-.welcome h2 {
-  font-size: 1.8rem;
-  color: #1a1a1a;
-}
-
-.welcome p {
-  font-size: 1rem;
-  color: #555;
-}
-
-/* 💫 ANIMAÇÃO DO PAINEL DE LOGIN */
+/* 💫 MODAL DE LOGIN (painel deslizante) */
 .login-panel-container {
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   width: 100%;
-  height: 100vh; /* ocupa toda a altura da tela */
+  height: 100vh;
   background: #fff;
   z-index: 999;
   opacity: 0;
   transform: translateY(-100%);
   transition: all 0.9s ease;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-  overflow: hidden; /* impede rolagem */
 }
 
 .login-panel-container.show {
@@ -96,59 +57,14 @@ button {
   transform: translateY(0);
 }
 
+/* Responsivo: permite rolagem no modal em telas pequenas */
 @media (max-width: 768px) {
   .login-panel-container {
-    padding: 1rem;
-    overflow-y: auto; /* permite rolar apenas em telas pequenas */
+    overflow-y: auto;
   }
 }
 
-.welcome {
-  text-align: center;
-  padding: 4rem 2rem;
-}
-
-.welcome .brand {
-  color: #0078ff;
-}
-
-/* 🎯 RESPONSIVIDADE */
-@media (max-width: 600px) {
-  .app-main {
-    padding-top: 6rem;
-  }
-
-  .login-panel-wrapper {
-    width: 90%;
-  }
-
-  .welcome {
-    width: 95%;
-    padding: 1.5rem;
-  }
-
-  .welcome h2 {
-    font-size: 1.5rem;
-  }
-}
-
-/* 🧭 SUAVIZAÇÃO DE TRANSIÇÕES GERAIS */
-html {
-  scroll-behavior: smooth;
-}
-
-button,
-a {
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-button:hover,
-a:hover {
-  opacity: 0.85;
-  transform: scale(1.02);
-}
-
-/* ✅ MENSAGEM DE SUCESSO (para cadastros) */
+/* ✅ MENSAGEM DE SUCESSO (ex: cadastro) */
 .success-message {
   position: fixed;
   top: 100px;
@@ -160,7 +76,7 @@ a:hover {
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
   font-weight: 500;
   animation: fadeInOut 4s ease forwards;
-  z-index: 999;
+  z-index: 1000;
 }
 
 @keyframes fadeInOut {
@@ -178,10 +94,22 @@ a:hover {
     transform: translateY(-20px);
   }
 }
-.carousel-image {
-  width: 80em;         /* ocupa toda a largura do contêiner do carrossel */
-  height: 40em;       /* altura fixa para todas as imagens */
-  object-fit: cover;   /* mantém a proporção e corta o excesso se necessário */
-  border-radius: 8px;  /* opcional, para arredondar cantos */
-  margin-top: 20px;
+
+/* 🎯 TRANSIÇÕES SUAVES GLOBAIS */
+button,
+a {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+button:hover,
+a:hover {
+  opacity: 0.85;
+  transform: scale(1.02);
+}
+
+/* 📱 RESPONSIVIDADE */
+@media (max-width: 600px) {
+  .app-main {
+    padding-top: 6rem;
+  }
 }

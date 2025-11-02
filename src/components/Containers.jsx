@@ -39,7 +39,7 @@ export default function Containers() {
   return (
     <div className="containers-page">
       <header className="containers-header">
-        <h1>Container {profile?.container ? `- ${profile.container}` : ""}</h1>
+        <h1 className="tittle-cont">Container {profile?.container ? `- ${profile.container}` : ""}</h1>
       </header>
 
       <div className="containers-content">
