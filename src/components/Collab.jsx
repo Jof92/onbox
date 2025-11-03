@@ -1,3 +1,4 @@
+// src/components/Collab.jsx
 import React, { useState, useEffect } from "react";
 import "./Collab.css";
 import { FaPaperPlane, FaUserPlus, FaEllipsisV } from "react-icons/fa";
@@ -19,32 +20,48 @@ export default function Collab({ onClose, user }) {
   }, [user?.email]);
 
   // ==============================
-  // 🔔 BUSCAR NOTIFICAÇÕES
+  // 🔔 BUSCAR NOTIFICAÇÕES (convites + menções)
   // ==============================
   const fetchNotificacoes = async () => {
     try {
-      const { data: convites, error } = await supabase
+      // Convites pendentes
+      const {  convites } = await supabase
         .from("convites")
         .select("*")
         .eq("email", user.email)
         .eq("status", "pendente");
 
-      if (error) throw error;
-
       const convitesComPerfil = await Promise.all(
         convites.map(async (c) => {
-          const { data: remetente } = await supabase
+          const {  remetente } = await supabase
             .from("profiles")
             .select("id,nome,email,avatar_url")
             .eq("id", c.remetente_id)
             .maybeSingle();
-          return { ...c, remetente };
+          return { ...c, remetente, tipo: "convite" };
         })
       );
 
-      setNotificacoes(convitesComPerfil);
+      // Notificações de menção
+      const {  mencoes } = await supabase
+        .from("notificacoes")
+        .select(`
+          *,
+          remetente:profiles(id, nome, avatar_url),
+          nota:notas(nome),
+          projeto:projects(name)
+        `)
+        .eq("user_id", user.id)
+        .eq("lido", false);
+
+      const mencoesFormatadas = mencoes.map(m => ({
+        ...m,
+        tipo: "menção"
+      }));
+
+      setNotificacoes([...convitesComPerfil, ...mencoesFormatadas]);
     } catch (err) {
-      console.error("Erro ao buscar convites:", err);
+      console.error("Erro ao buscar notificações:", err);
       setNotificacoes([]);
     }
   };
@@ -54,17 +71,15 @@ export default function Collab({ onClose, user }) {
   // ==============================
   const fetchIntegrantes = async () => {
     try {
-      const { data: convitesAceitos, error } = await supabase
+      const {  convitesAceitos } = await supabase
         .from("convites")
         .select("*")
         .eq("remetente_id", user.id)
         .eq("status", "aceito");
 
-      if (error) throw error;
-
       const integrantesComPerfil = await Promise.all(
         (convitesAceitos || []).map(async (c) => {
-          const { data: profile } = await supabase
+          const {  profile } = await supabase
             .from("profiles")
             .select("id,nome,email,avatar_url")
             .ilike("email", c.email)
@@ -97,13 +112,11 @@ export default function Collab({ onClose, user }) {
 
     setTimeout(async () => {
       try {
-        const { data: profile, error } = await supabase
+        const {  profile } = await supabase
           .from("profiles")
           .select("id,nome,email")
           .ilike("email", emailConvite)
           .maybeSingle();
-
-        if (error) throw error;
 
         if (!profile) {
           alert("Usuário não encontrado no OnBox.");
@@ -111,7 +124,7 @@ export default function Collab({ onClose, user }) {
           return;
         }
 
-        const { data: existingInvite } = await supabase
+        const {  existingInvite } = await supabase
           .from("convites")
           .select("*")
           .eq("email", profile.email)
@@ -157,6 +170,23 @@ export default function Collab({ onClose, user }) {
     } catch (err) {
       console.error("Erro ao aceitar convite:", err);
       alert("Erro ao aceitar convite.");
+    }
+  };
+
+  // ==============================
+  // 🔗 LER NOTIFICAÇÃO DE MENÇÃO
+  // ==============================
+  const lerMensagemMencoes = async (notificacao) => {
+    try {
+      // Marca como lida
+      await supabase.from("notificacoes").update({ lido: true }).eq("id", notificacao.id);
+      
+      // Aqui você deve redirecionar para a tarefa
+      // Exemplo (ajuste conforme sua rota de navegação):
+      alert(`Abrir tarefa: ${notificacao.nota?.nome}`);
+      // window.location.href = `/task/${notificacao.nota_id}`;
+    } catch (err) {
+      console.error("Erro ao marcar notificação como lida:", err);
     }
   };
 
@@ -223,19 +253,40 @@ export default function Collab({ onClose, user }) {
           {notificacoes.length === 0 ? (
             <p className="empty">Nenhuma notificação no momento.</p>
           ) : (
-            notificacoes.map((n) => (
-              <div className="notificacao-item" key={n.id}>
-                <span>
-                  <strong>{n.remetente?.nome || "Usuário"}</strong> te convidou
-                </span>
-                <button
-                  className="btn-aceitar"
-                  onClick={() => aceitarConvite(n)}
-                >
-                  Aceitar
-                </button>
-              </div>
-            ))
+            notificacoes.map((n) => {
+              if (n.tipo === "convite") {
+                return (
+                  <div className="notificacao-item" key={n.id}>
+                    <span>
+                      <strong>{n.remetente?.nome || "Usuário"}</strong> te convidou
+                    </span>
+                    <button
+                      className="btn-aceitar"
+                      onClick={() => aceitarConvite(n)}
+                    >
+                      Aceitar
+                    </button>
+                  </div>
+                );
+              } else if (n.tipo === "menção") {
+                return (
+                  <div className="notificacao-item" key={n.id}>
+                    <span>
+                      <strong>{n.remetente?.nome || "Alguém"}</strong> marcou você em um comentário na tarefa{" "}
+                      <strong>{n.nota?.nome || "Sem nome"}</strong> do projeto{" "}
+                      <strong>{n.projeto?.name || "Sem projeto"}</strong>
+                    </span>
+                    <button
+                      className="btn-ler"
+                      onClick={() => lerMensagemMencoes(n)}
+                    >
+                      Abrir
+                    </button>
+                  </div>
+                );
+              }
+              return null;
+            })
           )}
         </div>
 

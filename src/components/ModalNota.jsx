@@ -1,9 +1,9 @@
 // ModalNota.jsx
-import React from "react";
+import React, { useCallback } from "react";
 import { FaTimes } from "react-icons/fa";
 import Listagem from "./Listagem";
 import AtaCard from "./AtaCard";
-import Task from "./Task"; // ✅ IMPORTADO
+import Task from "./Task";
 import "./Cards.css";
 
 export default function ModalNota({
@@ -25,7 +25,15 @@ export default function ModalNota({
   notaProgresso,
   setNotaProgresso
 }) {
-  if (!showNovaNota && !showEditarNota && !showVisualizarNota) return null;
+  // ✅ Hooks sempre no topo, antes de qualquer return condicional
+  const handleProgressoChange = useCallback((progresso) => {
+    if (notaSelecionada?.id) {
+      setNotaProgresso(prev => ({
+        ...prev,
+        [notaSelecionada.id]: progresso
+      }));
+    }
+  }, [notaSelecionada?.id, setNotaProgresso]);
 
   const handleFieldChange = (field, value) => {
     if (showNovaNota) {
@@ -34,6 +42,11 @@ export default function ModalNota({
       setNotaEditData(prev => ({ ...prev, [field]: value }));
     }
   };
+
+  // Renderiza placeholder vazio quando nenhum modal está ativo
+  if (!showNovaNota && !showEditarNota && !showVisualizarNota) {
+    return <></>;
+  }
 
   return (
     <div className="modal-overlay">
@@ -59,9 +72,7 @@ export default function ModalNota({
                   onChange={(e) => setFormData(prev => ({ ...prev, tipo: e.target.value }))}
                 >
                   {["Lista", "Diário de Obra", "Atas", "Medição", "Tarefas"].map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
+                    <option key={t} value={t}>{t}</option>
                   ))}
                 </select>
               </>
@@ -93,7 +104,7 @@ export default function ModalNota({
               <FaTimes />
             </button>
 
-            {/* ✅ Renderização condicional por tipo */}
+            {/* Renderização condicional por tipo da nota */}
             {(() => {
               const commonProps = {
                 projetoAtual: project,
@@ -103,20 +114,9 @@ export default function ModalNota({
               };
 
               if (notaSelecionada.tipo === "Atas") {
-                return (
-                  <AtaCard
-                    {...commonProps}
-                    onProgressoChange={(p) =>
-                      setNotaProgresso(prev => ({ ...prev, [notaSelecionada.id]: p }))
-                    }
-                  />
-                );
+                return <AtaCard {...commonProps} onProgressoChange={handleProgressoChange} />;
               } else if (notaSelecionada.tipo === "Tarefas") {
-                // Passa pilhaAtual com base no pilha_id da nota
-                const pilhaAtual = notaSelecionada.pilha_id
-                  ? { id: notaSelecionada.pilha_id }
-                  : null;
-
+                const pilhaAtual = notaSelecionada.pilha_id ? { id: notaSelecionada.pilha_id } : null;
                 return <Task {...commonProps} pilhaAtual={pilhaAtual} />;
               } else {
                 return <Listagem {...commonProps} />;

@@ -4,11 +4,13 @@ import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
 import "./AtaCard.css";
 
-const VERBOS = ["verificar", "acompanhar", "implementar", "analisar", "finalizar", "revisar", "enviar", "agendar", "checar"];
+const VERBOS = [
+  "verificar", "acompanhar", "implementar", "analisar", "finalizar", "revisar", "enviar", "agendar", "checar", "executar", "conferir", "monitorar", "organizar", "planejar", "solicitar", "providenciar", "designar", "repassar", "avaliar", "confirmar", "documentar", "registrar", "controlar", "inspecionar", "medir", "orçar", "nivelar", "concretar", "dimensionar", "instalar", "regularizar", "liberar", "aprovar", "adequar", "corrigir", "homologar", "cotar", "negociar", "comprar", "requisitar", "receber", "armazenar",  "devolver", "auditar", "contratar", "renovar", "pesquisar", "padronizar", "conferir",  "emitir", "acompanhar", "rastrear", "autorizar",  "validar", "orientar", "supervisionar", "delegar", "capacitar", "reportar",  "alocar", "resolver", "alinhar"
+];
+
 
 export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onProgressoChange }) {
   const [projetoNome, setProjetoNome] = useState("");
-  const [dataLocal, setDataLocal] = useState("");
   const [pauta, setPauta] = useState("");
   const [local, setLocal] = useState("");
   const [texto, setTexto] = useState("");
@@ -24,33 +26,18 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
   const [usuarioId, setUsuarioId] = useState(null);
   const [ataId, setAtaId] = useState(null);
   const [editing, setEditing] = useState({ pauta: false, local: false });
+  const [editingDataLocal, setEditingDataLocal] = useState(false);
+  const [dataLocal, setDataLocal] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // Carregar projeto
+  // --- Fetch projeto ---
   const fetchProjeto = useCallback(async () => {
     if (!projetoAtual?.id) return;
     const { data } = await supabase.from("projects").select("name").eq("id", projetoAtual.id).single();
     setProjetoNome(data?.name || "Projeto sem nome");
   }, [projetoAtual?.id]);
 
-  // Obter data + cidade
-  const obterLocalizacao = useCallback(async () => {
-    const fmt = (cidade) =>
-      `${cidade || ""}, ${new Date().toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" })}`;
-    try {
-      const res = await fetch("https://ipapi.co/json/");
-      setDataLocal(fmt((await res.json()).city));
-    } catch {
-      try {
-        const res = await fetch("https://ipwho.is/");
-        setDataLocal(fmt((await res.json()).city));
-      } catch {
-        setDataLocal(fmt());
-      }
-    }
-  }, []);
-
-  // Obter autor
+  // --- Fetch autor ---
   const fetchAutor = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return setAutorNome("Usuário desconhecido");
@@ -58,9 +45,8 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
 
     let perfil = null;
     const { data: p1 } = await supabase.from("profiles").select("nome").eq("id", user.id).single();
-    if (p1) {
-      perfil = p1;
-    } else {
+    if (p1) perfil = p1;
+    else {
       const { data: p2 } = await supabase.from("profiles").select("nome").eq("user_id", user.id).single();
       perfil = p2;
     }
@@ -74,7 +60,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     );
   }, []);
 
-  // Extrair objetivos
+  // --- Extrair objetivos automaticamente ---
   const extrairObjetivos = useCallback((txt) => {
     if (!criarObjetivos) return [];
     const objetivos = [];
@@ -83,9 +69,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     txt.split(/\n/).forEach((linha) => {
       const matches = [];
       let match;
-      while ((match = regex.exec(linha)) !== null) {
-        matches.push({ index: match.index });
-      }
+      while ((match = regex.exec(linha)) !== null) matches.push({ index: match.index });
       matches.forEach((m, i) => {
         const start = m.index;
         const end = i + 1 < matches.length ? matches[i + 1].index : linha.length;
@@ -95,10 +79,11 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
         }
       });
     });
+
     return objetivos;
   }, [criarObjetivos]);
 
-  // Carregar ata
+  // --- Fetch ata ---
   const fetchAta = useCallback(async () => {
     if (!notaAtual?.id) return setLoading(false);
 
@@ -115,6 +100,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
         setObjetivosConcluidos([]);
         setParticipantes([]);
         setCriarObjetivos(false);
+        setDataLocal("");
         setLoading(false);
         return;
       }
@@ -124,6 +110,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
       setLocal(ata.local || "");
       setTexto(ata.texto || "");
       setProxima(ata.proxima_reuniao || "");
+      setDataLocal(ata.data_local || "");
 
       const { data: partData } = await supabase
         .from("ata_participantes")
@@ -161,9 +148,8 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
 
   useEffect(() => {
     fetchProjeto();
-    obterLocalizacao();
     fetchAutor();
-  }, [fetchProjeto, obterLocalizacao, fetchAutor]);
+  }, [fetchProjeto, fetchAutor]);
 
   useEffect(() => {
     if (projetoAtual?.id && notaAtual?.id) fetchAta();
@@ -181,23 +167,25 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     : 0;
 
   useEffect(() => {
-    if (typeof onProgressoChange === "function") {
-      onProgressoChange(progressoPercent);
-    }
+    if (typeof onProgressoChange === "function") onProgressoChange(progressoPercent);
   }, [progressoPercent, onProgressoChange]);
 
+  // --- Salvar ata ---
   const salvarAta = useCallback(async () => {
-    if (!usuarioId || !notaAtual?.id || !projetoAtual?.id) {
-      return alert("Dados insuficientes para salvar.");
-    }
+    if (!usuarioId || !notaAtual?.id || !projetoAtual?.id) return alert("Dados insuficientes para salvar.");
 
     try {
       let savedAta;
-
       if (ataId) {
         const { data, error } = await supabase
           .from("atas")
-          .update({ pauta, local, texto, proxima_reuniao: proxima || null })
+          .update({
+            pauta,
+            local,
+            texto,
+            proxima_reuniao: proxima || null,
+            data_local: dataLocal
+          })
           .eq("id", ataId)
           .select()
           .single();
@@ -213,6 +201,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
             local,
             texto,
             proxima_reuniao: proxima || null,
+            data_local: dataLocal,
             redigido_por: usuarioId,
             criado_em: new Date().toISOString(),
           }])
@@ -247,10 +236,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
       console.error(e);
       alert(`❌ Erro ao salvar ata: ${e.message}`);
     }
-  }, [
-    ataId, usuarioId, notaAtual?.id, projetoAtual?.id, pauta, local, texto, proxima,
-    participantes, objetivosList, objetivosConcluidos, progressoPercent
-  ]);
+  }, [ataId, usuarioId, notaAtual?.id, projetoAtual?.id, pauta, local, texto, proxima, dataLocal, participantes, objetivosList, objetivosConcluidos, progressoPercent]);
 
   // --- Handlers ---
   const toggleObjetivo = (i) => {
@@ -263,15 +249,11 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     if (v.startsWith("@") && v.length > 1) {
       supabase.from("profiles").select("id,nome,funcao").ilike("nome", `%${v.slice(1)}%`).limit(10)
         .then(({ data }) => setSugestoesParticipantes(data || []));
-    } else {
-      setSugestoesParticipantes([]);
-    }
+    } else setSugestoesParticipantes([]);
   };
 
   const selecionarSugestao = (item) => {
-    if (!participantes.some(p => p.id === item.id)) {
-      setParticipantes([...participantes, item]);
-    }
+    if (!participantes.some(p => p.id === item.id)) setParticipantes([...participantes, item]);
     setParticipanteInput("");
     setSugestoesParticipantes([]);
   };
@@ -288,9 +270,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     if (v.startsWith("@") && v.length > 1) {
       supabase.from("profiles").select("id,nome,funcao").ilike("nome", `%${v.slice(1)}%`).limit(10)
         .then(({ data }) => setSugestoesResponsavel(prev => ({ ...prev, [i]: data || [] })));
-    } else {
-      setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
-    }
+    } else setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
   };
 
   const selecionarResponsavel = (item, i) => {
@@ -301,12 +281,11 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
   };
 
-  // --- Render ---
   if (loading) return <div className="ata-card-loading"><Loading size={200} /></div>;
 
   return (
     <div className="ata-card">
-      {/* Header sem nome da pilha */}
+      {/* Header */}
       <div className="listagem-card">
         <div className="listagem-header-container">
           <div className="listagem-header-titles">
@@ -315,18 +294,21 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
               <span className="nota-name">{notaAtual?.nome || "Sem nota"}</span>
             </div>
           </div>
-          <div className="alteracao-info">{dataLocal || ultimaAlteracao}</div>
+          <div className="alteracao-info">{ultimaAlteracao}</div>
         </div>
       </div>
 
+      {/* Body */}
       <div className="ata-body">
+
+        {/* Pauta e Local */}
         {["pauta", "local"].map(campo => (
           <div key={campo} className="ata-section">
             {editing[campo] ? (
               <input
                 className={`${campo}-input`}
                 value={campo === "pauta" ? pauta : local}
-                onChange={e => (campo === "pauta" ? setPauta(e.target.value) : setLocal(e.target.value))}
+                onChange={e => campo === "pauta" ? setPauta(e.target.value) : setLocal(e.target.value)}
                 onBlur={() => setEditing({ ...editing, [campo]: false })}
                 onKeyDown={e => e.key === "Enter" && setEditing({ ...editing, [campo]: false })}
                 autoFocus
@@ -335,6 +317,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
               <span
                 className={`${campo}-text`}
                 onDoubleClick={() => setEditing({ ...editing, [campo]: true })}
+                style={{ cursor: "pointer" }}
               >
                 {campo === "pauta" ? pauta || "Digite a pauta da reunião" : local || "Digite o local"}
               </span>
@@ -342,6 +325,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
           </div>
         ))}
 
+        {/* Participantes */}
         <div className="ata-section">
           <input
             type="text"
@@ -352,9 +336,8 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
             onKeyDown={e => {
               if (e.key === "Enter") {
                 e.preventDefault();
-                if (sugestoesParticipantes.length > 0) {
-                  selecionarSugestao(sugestoesParticipantes[0]);
-                } else if (participanteInput.trim()) {
+                if (sugestoesParticipantes.length > 0) selecionarSugestao(sugestoesParticipantes[0]);
+                else if (participanteInput.trim()) {
                   setParticipantes(prev => [...prev, { id: `ext-${Date.now()}`, nome: participanteInput.trim(), funcao: "Externo" }]);
                   setParticipanteInput("");
                 }
@@ -381,6 +364,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
           </div>
         </div>
 
+        {/* Texto e objetivos */}
         <div className="ata-section">
           <textarea
             value={texto}
@@ -389,11 +373,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
             placeholder="Digite o texto da ata..."
           />
           <label className="checkbox-objetivos">
-            <input
-              type="checkbox"
-              checked={criarObjetivos}
-              onChange={() => setCriarObjetivos(!criarObjetivos)}
-            />
+            <input type="checkbox" checked={criarObjetivos} onChange={() => setCriarObjetivos(!criarObjetivos)} />
             Criar objetivos a partir da ata?
           </label>
         </div>
@@ -403,11 +383,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
             <div className="ata-objectives">
               {objetivosList.map((o, i) => (
                 <div key={i} className="objetivo-item">
-                  <input
-                    type="checkbox"
-                    checked={objetivosConcluidos.includes(i)}
-                    onChange={() => toggleObjetivo(i)}
-                  />
+                  <input type="checkbox" checked={objetivosConcluidos.includes(i)} onChange={() => toggleObjetivo(i)} />
                   <span>{o.texto}</span>
                   <div style={{ position: "relative" }}>
                     <input
@@ -427,15 +403,28 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
                       </div>
                     )}
                   </div>
-                  <input
-                    type="date"
-                    value={o.dataEntrega || ""}
-                    onChange={e => {
-                      const novos = [...objetivosList];
-                      novos[i].dataEntrega = e.target.value;
-                      setObjetivosList(novos);
-                    }}
-                  />
+                  <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    <input
+                      type="date"
+                      value={o.dataEntrega || ""}
+                      onChange={e => {
+                        const novos = [...objetivosList];
+                        novos[i].dataEntrega = e.target.value;
+                        setObjetivosList(novos);
+                      }}
+                    />
+                    <span
+                      style={{ cursor: "pointer", color: "red", fontWeight: "bold" }}
+                      onClick={() => {
+                        const novos = [...objetivosList];
+                        novos.splice(i, 1);
+                        setObjetivosList(novos);
+                        setObjetivosConcluidos(prev => prev.filter(idx => idx !== i));
+                      }}
+                    >
+                      ×
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -446,21 +435,44 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
           </div>
         )}
 
+        {/* Próxima reunião e salvar */}
         <div className="ata-section proxima-reuniao-container">
           <div className="proxima-reuniao-linha">
             <label>Próxima reunião em:</label>
-            <input
-              type="date"
-              value={proxima}
-              onChange={e => setProxima(e.target.value)}
-              className="proxima-data-input"
-            />
+            <input type="date" value={proxima} onChange={e => setProxima(e.target.value)} className="proxima-data-input" />
           </div>
+
           <button className="btn-salvar-ata" onClick={salvarAta}>Salvar</button>
+
+          {/* Cidade e data (editable com duplo clique) */}
+          <div className="ata-data-local">
+            {editingDataLocal ? (
+              <input
+                type="text"
+                value={dataLocal}
+                placeholder="Cidade, DD de Mês de AAAA"
+                onChange={e => setDataLocal(e.target.value)}
+                onBlur={() => setEditingDataLocal(false)}
+                onKeyDown={e => e.key === "Enter" && setEditingDataLocal(false)}
+                autoFocus
+              />
+            ) : (
+              <span
+                className="data-local-text"
+                onDoubleClick={() => setEditingDataLocal(true)}
+                style={{ cursor: "pointer" }}
+              >
+                {dataLocal || "Clique duas vezes para inserir cidade e data"}
+              </span>
+            )}
+          </div>
+
+          {/* Autor */}
           <div className="ata-autor">
             <p>Ata redigida por <strong>{autorNome || "Usuário desconhecido"}</strong></p>
           </div>
         </div>
+
       </div>
     </div>
   );
