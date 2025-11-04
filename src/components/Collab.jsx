@@ -13,11 +13,11 @@ export default function Collab({ onClose, user }) {
   const [removendo, setRemovendo] = useState(null);
 
   useEffect(() => {
-    if (user?.email) {
+    if (user?.id) { // ✅ Verifica se o ID existe
       fetchNotificacoes();
       fetchIntegrantes();
     }
-  }, [user?.email]);
+  }, [user?.id]); // ✅ Depende do ID, não do email
 
   // ==============================
   // 🔔 BUSCAR NOTIFICAÇÕES (convites + menções)

@@ -27,7 +27,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
         setUserId(user.id);
         const { data: profile } = await supabase
           .from("profiles")
-          .select("nome,avatar_url")
+          .select("nome, nickname, avatar_url") // ⬅️ Adicionado nickname
           .eq("id", user.id)
           .single();
         setUserProfile(profile);
@@ -36,7 +36,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     fetchUser();
   }, []);
 
-  // 🔹 Função para lidar com autocomplete (igual ao AtaCard)
+  // 🔹 Função para lidar com autocomplete (agora com nickname)
   const handleComentarioChange = (e) => {
     const valor = e.target.value;
     setComentario(valor);
@@ -50,8 +50,8 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
       if (termo.length >= 1) {
         supabase
           .from("profiles")
-          .select("id, nome, avatar_url")
-          .ilike("nome", `%${termo}%`)
+          .select("id, nome, nickname, avatar_url") // ⬅️ nickname aqui também
+          .ilike("nickname", `%${termo}%`) // ⬅️ busca por nickname
           .limit(5)
           .then(({ data }) => {
             setSugestoesMencoes(data || []);
@@ -64,7 +64,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     }
   };
 
-  // 🔹 Função para inserir menção selecionada
+  // 🔹 Função para inserir menção selecionada (usa nickname na exibição)
   const inserirMencoes = (usuario) => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -72,7 +72,9 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     const cursorPos = textarea.selectionStart;
     const textoAntes = comentario.slice(0, cursorPos);
     const textoDepois = comentario.slice(cursorPos);
-    const novoTextoAntes = textoAntes.replace(/@[\p{L}\p{N}_-]*$/u, `@${usuario.nome}`);
+    // ⬇️ Usa nickname para exibir na menção
+    const nomeParaMencoes = usuario.nickname || usuario.nome;
+    const novoTextoAntes = textoAntes.replace(/@[\p{L}\p{N}_-]*$/u, `@${nomeParaMencoes}`);
     const novoTexto = novoTextoAntes + " " + textoDepois;
 
     setComentario(novoTexto);
@@ -152,7 +154,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
           const userIds = [...new Set(comentariosData.map(c => c.user_id))];
           const { data: profiles, error: profilesError } = await supabase
             .from("profiles")
-            .select("id, nome, avatar_url")
+            .select("id, nome, nickname, avatar_url") // ⬅️ nickname aqui
             .in("id", userIds);
 
           const profileMap = {};
@@ -160,7 +162,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
 
           const comentariosComUsuario = comentariosData.map((c) => ({
             ...c,
-            profiles: profileMap[c.user_id] || { nome: "Usuário", avatar_url: null },
+            profiles: profileMap[c.user_id] || { nome: "Usuário", nickname: null, avatar_url: null },
             formattedDate: formatarDataComentario(c.created_at),
           }));
 
@@ -222,45 +224,61 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
 
       const comentarioFormatado = {
         ...novoComentarioDB,
-        profiles: userProfile || { nome: "Você", avatar_url: null },
+        profiles: userProfile || { nome: "Você", nickname: null, avatar_url: null },
         formattedDate: formatarDataComentario(novoComentarioDB.created_at),
       };
       setComentarios(prev => [comentarioFormatado, ...prev]);
       setComentario("");
-      setSugestoesMencoes([]); // ← Limpa sugestões ao enviar
+      setSugestoesMencoes([]);
 
-      // 🔹 Lógica de menção @ (mantida como estava)
-      const mencionados = comentario.match(/@(\S+)/g);
-      if (mencionados && mencionados.length > 0 && containerId) {
-        const nomesMencionados = mencionados.map(m => m.slice(1));
+      // 🔹 Lógica de menção @ — agora compara com nickname (fallback para nome)
+      // 🔹 Lógica corrigida de menção — usa user_id e nota_id
+        const mencionados = comentario.match(/@(\S+)/g);
+        if (mencionados?.length > 0) {
+          const nomesMencionados = mencionados.map(m => m.slice(1));
 
-        const { data: integrantes } = await supabase
-          .from("convites")
-          .select("email")
-          .eq("status", "aceito")
-          .eq("container_id", containerId);
+          // Buscar perfis com nickname ou nome que correspondam EXATAMENTE
+          const { data: candidatos, error: profilesError } = await supabase
+            .from("profiles")
+            .select("id, nickname, nome")
+            .or(
+              `nickname.in.(${nomesMencionados.map(n => `"${n}"`).join(',')})` +
+              `,nome.in.(${nomesMencionados.map(n => `"${n}"`).join(',')})`
+            );
 
-        const usersMencionados = integrantes.filter(i =>
-          nomesMencionados.includes(i.email.split("@")[0])
-        );
+          if (profilesError) {
+            console.error("Erro ao buscar perfis para menção:", profilesError);
+            return;
+          }
 
-        for (const u of usersMencionados) {
-          await supabase.from("notificacoes").insert({
-            user_email: u.email,
-            remetente_nome: userProfile?.nome || "Você",
-            tipo: "menção",
-            tarefa_id: notaAtual.id,
-            projeto_id: projetoAtual?.id,
-            mensagem: `${userProfile?.nome || "Você"} marcou você em um comentário na tarefa ${notaAtual.nome || notaAtual.name} do projeto ${projetoAtual.nome || projetoAtual.name}`,
-            lido: false,
+          const mencionadosValidos = (candidatos || []).filter(p => {
+            const nomeReal = p.nickname || p.nome;
+            return nomesMencionados.includes(nomeReal);
           });
-        }
-      }
 
+          // Inserir notificação para cada mencionado
+          for (const u of mencionadosValidos) {
+            const { error: notifError } = await supabase.from("notificacoes").insert({
+              user_id: u.id, // ✅ UUID do usuário mencionado
+              remetente_id: userId, // ✅ UUID de quem fez o comentário
+              nota_id: notaAtual.id, // ✅ Corrigido: era "tarefa_id", agora "nota_id"
+              projeto_id: projetoAtual?.id || null,
+              tipo: "menção",
+              mensagem: `${userProfile?.nickname || userProfile?.nome || "Você"} marcou você em um comentário na tarefa ${notaAtual.nome || notaAtual.name} do projeto ${projetoAtual?.nome || projetoAtual?.name || "Sem projeto"}`,
+              lido: false,
+            });
+
+            if (notifError) {
+              console.error("Erro ao criar notificação:", notifError);
+            }
+          }
+        }
     } catch (err) {
       console.error("Erro ao salvar comentário:", err);
       alert("Erro ao salvar comentário.");
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Editar comentário
@@ -282,7 +300,9 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     } catch (err) {
       console.error("Erro ao editar comentário:", err);
       alert("Erro ao editar comentário.");
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Excluir comentário
@@ -301,7 +321,9 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     } catch (err) {
       console.error("Erro ao excluir comentário:", err);
       alert("Erro ao excluir comentário.");
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Adicionar anexos
@@ -336,7 +358,9 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     } catch (err) {
       console.error("Erro ao enviar anexo:", err);
       alert("Erro ao enviar um ou mais anexos.");
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Remover anexo
@@ -354,7 +378,9 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     } catch (err) {
       console.error("Erro ao excluir anexo:", err);
       alert("Erro ao excluir anexo.");
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getNomeProjeto = () => projetoAtual?.nome || projetoAtual?.name || "Sem projeto";
@@ -430,7 +456,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
 
       <div className="comentarios-section">
         <h3>Comentários e atividades</h3>
-        {/* 🔹 Alterado: ref e onChange */}
         <textarea
           ref={textareaRef}
           placeholder="Escrever um comentário... (use @ para mencionar)"
@@ -440,23 +465,26 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
           disabled={loading}
         />
 
-        {/* 🔹 Dropdown de sugestões — igual ao AtaCard */}
+        {/* 🔹 Dropdown de sugestões — exibe nickname */}
         {sugestoesMencoes.length > 0 && (
           <div className="sugestoes-list" style={{ position: "absolute", zIndex: 10, backgroundColor: "white", border: "1px solid #ccc", borderRadius: "4px", marginTop: "4px", width: "250px" }}>
-            {sugestoesMencoes.map(u => (
-              <div
-                key={u.id}
-                onClick={() => inserirMencoes(u)}
-                style={{ padding: "8px", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}
-              >
-                {u.avatar_url ? (
-                  <img src={u.avatar_url} alt={u.nome} style={{ width: "24px", height: "24px", borderRadius: "50%" }} />
-                ) : (
-                  <FiUser style={{ width: "24px", height: "24px" }} />
-                )}
-                <span>{u.nome}</span>
-              </div>
-            ))}
+            {sugestoesMencoes.map(u => {
+              const nomeExibicao = u.nickname || u.nome; // ⬅️ prioriza nickname
+              return (
+                <div
+                  key={u.id}
+                  onClick={() => inserirMencoes(u)}
+                  style={{ padding: "8px", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}
+                >
+                  {u.avatar_url ? (
+                    <img src={u.avatar_url} alt={nomeExibicao} style={{ width: "24px", height: "24px", borderRadius: "50%" }} />
+                  ) : (
+                    <FiUser style={{ width: "24px", height: "24px" }} />
+                  )}
+                  <span>{nomeExibicao}</span>
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -471,7 +499,8 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
 
         <div className="comentarios-lista">
           {comentarios.map((c) => {
-            const profile = c.profiles || { nome: "Usuário", avatar_url: null };
+            const profile = c.profiles || { nome: "Usuário", nickname: null, avatar_url: null };
+            const nomeExibicao = profile.nickname || profile.nome; // ⬅️ usa nickname, fallback para nome
             const editavel = podeEditarComentario(c.created_at, c.user_id);
 
             return (
@@ -480,7 +509,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
                   {profile.avatar_url ? (
                     <img
                       src={profile.avatar_url}
-                      alt={profile.nome}
+                      alt={nomeExibicao}
                       onError={(e) => {
                         e.target.style.display = "none";
                         e.target.nextSibling.style.display = "block";
@@ -492,7 +521,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
                 </div>
                 <div className="comentario-conteudo">
                   <div className="comentario-header">
-                    <strong>{profile.nome}</strong>
+                    <strong>{nomeExibicao}</strong>
                     <span>{c.formattedDate}</span>
                     {editavel && (
                       <button
