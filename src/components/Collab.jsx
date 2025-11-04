@@ -12,56 +12,83 @@ export default function Collab({ onClose, user }) {
   const [menuAberto, setMenuAberto] = useState(null);
   const [removendo, setRemovendo] = useState(null);
 
+  // 🔍 Depuração: verifique quem está logado
   useEffect(() => {
-    if (user?.id) { // ✅ Verifica se o ID existe
+    if (user?.id) {
+      console.log("✅ Collab: buscando notificações para user.id =", user.id);
       fetchNotificacoes();
       fetchIntegrantes();
+    } else {
+      console.warn("⚠️ Collab: user.id não disponível");
     }
-  }, [user?.id]); // ✅ Depende do ID, não do email
+  }, [user?.id]);
 
   // ==============================
   // 🔔 BUSCAR NOTIFICAÇÕES (convites + menções)
   // ==============================
   const fetchNotificacoes = async () => {
     try {
-      // Convites pendentes
-      const {  convites } = await supabase
+      const allNotificacoes = [];
+
+      // 🔸 Convites pendentes
+      const { data: convites, error: convitesError } = await supabase
         .from("convites")
         .select("*")
         .eq("email", user.email)
         .eq("status", "pendente");
 
-      const convitesComPerfil = await Promise.all(
-        convites.map(async (c) => {
-          const {  remetente } = await supabase
-            .from("profiles")
-            .select("id,nome,email,avatar_url")
-            .eq("id", c.remetente_id)
-            .maybeSingle();
-          return { ...c, remetente, tipo: "convite" };
-        })
-      );
+      if (convitesError) {
+        console.error("Erro ao buscar convites:", convitesError);
+      } else if (convites?.length > 0) {
+        const convitesComPerfil = await Promise.all(
+          convites.map(async (c) => {
+            const { data: remetente } = await supabase
+              .from("profiles")
+              .select("id, nome, email, avatar_url")
+              .eq("id", c.remetente_id)
+              .maybeSingle();
+            return { ...c, remetente, tipo: "convite" };
+          })
+        );
+        allNotificacoes.push(...convitesComPerfil);
+      }
 
-      // Notificações de menção
-      const {  mencoes } = await supabase
-        .from("notificacoes")
-        .select(`
-          *,
-          remetente:profiles(id, nome, avatar_url),
-          nota:notas(nome),
-          projeto:projects(name)
-        `)
-        .eq("user_id", user.id)
-        .eq("lido", false);
+      // 🔸 Notificações de menção
+      const { data: mencoes, error: mencaoError } = await supabase
+      .from("notificacoes") // <-- schema explícito
+      .select(`
+        id,
+        user_id,
+        remetente_id,
+        nota_id,
+        projeto_id,
+        mensagem,
+        lido,
+        tipo,
+        created_at,
+        remetente:profiles!notificacoes_remetente_id_fkey(id, nome, avatar_url),
+        nota:notas(id, nome),
+        projeto:projects(id, name)
+      `)
+      .eq("user_id", user.id)
+      .eq("lido", false);
 
-      const mencoesFormatadas = mencoes.map(m => ({
-        ...m,
-        tipo: "menção"
-      }));
+      if (mencaoError) {
+        console.error("Erro ao buscar menções:", mencaoError);
+      } else if (mencoes?.length > 0) {
+        const mencoesFormatadas = mencoes.map(m => ({
+          ...m,
+          tipo: m.tipo || "menção"
+        }));
+        allNotificacoes.push(...mencoesFormatadas);
+        console.log("✅ Menções encontradas:", mencoesFormatadas);
+      } else {
+        console.log("ℹ️ Nenhuma menção encontrada para user.id:", user.id);
+      }
 
-      setNotificacoes([...convitesComPerfil, ...mencoesFormatadas]);
+      setNotificacoes(allNotificacoes);
     } catch (err) {
-      console.error("Erro ao buscar notificações:", err);
+      console.error("Erro geral ao buscar notificações:", err);
       setNotificacoes([]);
     }
   };
@@ -71,17 +98,23 @@ export default function Collab({ onClose, user }) {
   // ==============================
   const fetchIntegrantes = async () => {
     try {
-      const {  convitesAceitos } = await supabase
+      const { data: convitesAceitos, error: convitesError } = await supabase
         .from("convites")
         .select("*")
         .eq("remetente_id", user.id)
         .eq("status", "aceito");
 
+      if (convitesError) {
+        console.error("Erro ao buscar integrantes:", convitesError);
+        setIntegrantes([]);
+        return;
+      }
+
       const integrantesComPerfil = await Promise.all(
         (convitesAceitos || []).map(async (c) => {
-          const {  profile } = await supabase
+          const { data: profile } = await supabase
             .from("profiles")
-            .select("id,nome,email,avatar_url")
+            .select("id, nome, email, avatar_url")
             .ilike("email", c.email)
             .maybeSingle();
 
@@ -110,53 +143,51 @@ export default function Collab({ onClose, user }) {
     if (!emailConvite.trim()) return alert("Digite um e-mail válido.");
     setEnviando(true);
 
-    setTimeout(async () => {
-      try {
-        const {  profile } = await supabase
-          .from("profiles")
-          .select("id,nome,email")
-          .ilike("email", emailConvite)
-          .maybeSingle();
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id, nome, email")
+        .ilike("email", emailConvite)
+        .maybeSingle();
 
-        if (!profile) {
-          alert("Usuário não encontrado no OnBox.");
-          setEnviando(false);
-          return;
-        }
-
-        const {  existingInvite } = await supabase
-          .from("convites")
-          .select("*")
-          .eq("email", profile.email)
-          .eq("status", "pendente")
-          .maybeSingle();
-
-        if (existingInvite) {
-          alert("Convite já enviado.");
-          setEnviando(false);
-          return;
-        }
-
-        const { error: insertError } = await supabase.from("convites").insert([
-          {
-            email: profile.email,
-            remetente_id: user.id,
-            status: "pendente",
-          },
-        ]);
-
-        if (insertError) throw insertError;
-
-        alert(`Convite enviado para ${profile.nome}`);
-        setEmailConvite("");
-        fetchNotificacoes();
-      } catch (err) {
-        console.error("Erro ao enviar convite:", err);
-        alert("Erro ao enviar convite.");
-      } finally {
+      if (!profile) {
+        alert("Usuário não encontrado no OnBox.");
         setEnviando(false);
+        return;
       }
-    }, 800);
+
+      const { data: existingInvite } = await supabase
+        .from("convites")
+        .select("*")
+        .eq("email", profile.email)
+        .eq("status", "pendente")
+        .maybeSingle();
+
+      if (existingInvite) {
+        alert("Convite já enviado.");
+        setEnviando(false);
+        return;
+      }
+
+      const { error: insertError } = await supabase.from("convites").insert([
+        {
+          email: profile.email,
+          remetente_id: user.id,
+          status: "pendente",
+        },
+      ]);
+
+      if (insertError) throw insertError;
+
+      alert(`Convite enviado para ${profile.nome}`);
+      setEmailConvite("");
+      fetchNotificacoes();
+    } catch (err) {
+      console.error("Erro ao enviar convite:", err);
+      alert("Erro ao enviar convite.");
+    } finally {
+      setEnviando(false);
+    }
   };
 
   // ==============================
@@ -178,13 +209,10 @@ export default function Collab({ onClose, user }) {
   // ==============================
   const lerMensagemMencoes = async (notificacao) => {
     try {
-      // Marca como lida
       await supabase.from("notificacoes").update({ lido: true }).eq("id", notificacao.id);
-      
-      // Aqui você deve redirecionar para a tarefa
-      // Exemplo (ajuste conforme sua rota de navegação):
-      alert(`Abrir tarefa: ${notificacao.nota?.nome}`);
-      // window.location.href = `/task/${notificacao.nota_id}`;
+      // Redirecionar para a tarefa — ajuste conforme sua rota
+      const url = `/task?nota_id=${notificacao.nota_id}`;
+      window.location.href = url;
     } catch (err) {
       console.error("Erro ao marcar notificação como lida:", err);
     }
@@ -198,14 +226,12 @@ export default function Collab({ onClose, user }) {
     if (!ok) return;
     try {
       setRemovendo(item.convite_id);
-      setTimeout(async () => {
-        await supabase.from("convites").delete().eq("id", item.convite_id);
-        setIntegrantes((prev) =>
-          prev.filter((i) => i.convite_id !== item.convite_id)
-        );
-        setMenuAberto(null);
-        setRemovendo(null);
-      }, 300);
+      await supabase.from("convites").delete().eq("id", item.convite_id);
+      setIntegrantes((prev) =>
+        prev.filter((i) => i.convite_id !== item.convite_id)
+      );
+      setMenuAberto(null);
+      setRemovendo(null);
     } catch (err) {
       console.error("Erro ao remover integrante:", err);
       alert("Erro ao remover integrante.");
@@ -223,7 +249,6 @@ export default function Collab({ onClose, user }) {
           <h2>Colaborações</h2>
         </div>
 
-        {/* Enviar convite */}
         <div className="collab-section">
           <h3>
             <FaUserPlus className="icon" /> Enviar Convite
@@ -238,6 +263,7 @@ export default function Collab({ onClose, user }) {
             <button
               className={`btn-enviar ${enviando ? "plane-fly" : ""}`}
               onClick={!enviando ? enviarConvite : undefined}
+              disabled={enviando}
             >
               <FaPaperPlane className="plane-icon" />
               {!enviando && " Enviar"}
@@ -247,7 +273,6 @@ export default function Collab({ onClose, user }) {
 
         <hr />
 
-        {/* Notificações */}
         <div className="collab-section">
           <h3>Notificações</h3>
           {notificacoes.length === 0 ? (
@@ -292,7 +317,6 @@ export default function Collab({ onClose, user }) {
 
         <hr />
 
-        {/* Integrantes */}
         <div className="collab-section">
           <h3>Integrantes</h3>
           {integrantes.length === 0 ? (
