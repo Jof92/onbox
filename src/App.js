@@ -84,6 +84,7 @@ export default function App() {
           profile={profile}
           onLoginClick={handleLoginClick}
           onLogout={handleLogout}
+          onProfileUpdate={setProfile} // 👈 Linha adicionada
         />
 
         {/* Painel de login suspenso */}

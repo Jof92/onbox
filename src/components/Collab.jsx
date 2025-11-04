@@ -4,7 +4,7 @@ import "./Collab.css";
 import { FaPaperPlane, FaUserPlus, FaEllipsisV } from "react-icons/fa";
 import { supabase } from "../supabaseClient";
 
-export default function Collab({ onClose, user }) {
+export default function Collab({ onClose, user, onOpenTask }) {
   const [emailConvite, setEmailConvite] = useState("");
   const [notificacoes, setNotificacoes] = useState([]);
   const [integrantes, setIntegrantes] = useState([]);
@@ -55,23 +55,23 @@ export default function Collab({ onClose, user }) {
 
       // 🔸 Notificações de menção
       const { data: mencoes, error: mencaoError } = await supabase
-      .from("notificacoes") // <-- schema explícito
-      .select(`
-        id,
-        user_id,
-        remetente_id,
-        nota_id,
-        projeto_id,
-        mensagem,
-        lido,
-        tipo,
-        created_at,
-        remetente:profiles!notificacoes_remetente_id_fkey(id, nome, avatar_url),
-        nota:notas(id, nome),
-        projeto:projects(id, name)
-      `)
-      .eq("user_id", user.id)
-      .eq("lido", false);
+        .from("notificacoes")
+        .select(`
+          id,
+          user_id,
+          remetente_id,
+          nota_id,
+          projeto_id,
+          mensagem,
+          lido,
+          tipo,
+          created_at,
+          remetente:profiles!notificacoes_remetente_id_fkey(id, nome, avatar_url),
+          nota:notas(id, nome),
+          projeto:projects(id, name)
+        `)
+        .eq("user_id", user.id)
+        .eq("lido", false);
 
       if (mencaoError) {
         console.error("Erro ao buscar menções:", mencaoError);
@@ -210,9 +210,19 @@ export default function Collab({ onClose, user }) {
   const lerMensagemMencoes = async (notificacao) => {
     try {
       await supabase.from("notificacoes").update({ lido: true }).eq("id", notificacao.id);
-      // Redirecionar para a tarefa — ajuste conforme sua rota
-      const url = `/task?nota_id=${notificacao.nota_id}`;
-      window.location.href = url;
+      
+      // Fecha o Collab
+      onClose();
+      
+      // Notifica o componente pai para abrir a tarefa específica
+      if (onOpenTask) {
+        onOpenTask({
+          nota_id: notificacao.nota_id,
+          projeto_id: notificacao.projeto_id,
+          projeto_nome: notificacao.projeto?.name || "Projeto",
+          nota_nome: notificacao.nota?.nome || "Tarefa"
+        });
+      }
     } catch (err) {
       console.error("Erro ao marcar notificação como lida:", err);
     }

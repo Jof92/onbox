@@ -1,9 +1,11 @@
 // src/components/Task.jsx
-import React, { useState, useEffect, useRef } from "react"; // ← Adicionado useRef
+import React, { useState, useEffect, useRef } from "react";
 import "./Task.css";
 import { FiUploadCloud, FiUser } from "react-icons/fi";
 import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
+import Lottie from "lottie-react";
+import "./loader.css";
 
 export default function Task({ onClose, projetoAtual, notaAtual, containerId }) {
   const [descricao, setDescricao] = useState("");
@@ -14,8 +16,9 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
   const [menuAberto, setMenuAberto] = useState(null);
   const [userId, setUserId] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
+  const [comentando, setComentando] = useState(false);
+  const [loadingExcluir, setLoadingExcluir] = useState(false);
 
-  // 🔹 Adicionado para autocomplete
   const [sugestoesMencoes, setSugestoesMencoes] = useState([]);
   const textareaRef = useRef(null);
 
@@ -27,7 +30,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
         setUserId(user.id);
         const { data: profile } = await supabase
           .from("profiles")
-          .select("nome, nickname, avatar_url") // ⬅️ Adicionado nickname
+          .select("nome, nickname, avatar_url")
           .eq("id", user.id)
           .single();
         setUserProfile(profile);
@@ -36,11 +39,10 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     fetchUser();
   }, []);
 
-  // 🔹 Função para lidar com autocomplete (agora com nickname)
+  // Atualiza sugestões de menção
   const handleComentarioChange = (e) => {
     const valor = e.target.value;
     setComentario(valor);
-
     const cursor = e.target.selectionStart;
     const textoAteCursor = valor.slice(0, cursor);
     const match = textoAteCursor.match(/@([\p{L}\p{N}_-]*)$/u);
@@ -50,36 +52,26 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
       if (termo.length >= 1) {
         supabase
           .from("profiles")
-          .select("id, nome, nickname, avatar_url") // ⬅️ nickname aqui também
-          .ilike("nickname", `%${termo}%`) // ⬅️ busca por nickname
+          .select("id, nome, nickname, avatar_url")
+          .ilike("nickname", `%${termo}%`)
           .limit(5)
-          .then(({ data }) => {
-            setSugestoesMencoes(data || []);
-          });
-      } else {
-        setSugestoesMencoes([]);
-      }
-    } else {
-      setSugestoesMencoes([]);
-    }
+          .then(({ data }) => setSugestoesMencoes(data || []));
+      } else setSugestoesMencoes([]);
+    } else setSugestoesMencoes([]);
   };
 
-  // 🔹 Função para inserir menção selecionada (usa nickname na exibição)
+  // Inserir menção
   const inserirMencoes = (usuario) => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-
     const cursorPos = textarea.selectionStart;
     const textoAntes = comentario.slice(0, cursorPos);
     const textoDepois = comentario.slice(cursorPos);
-    // ⬇️ Usa nickname para exibir na menção
     const nomeParaMencoes = usuario.nickname || usuario.nome;
     const novoTextoAntes = textoAntes.replace(/@[\p{L}\p{N}_-]*$/u, `@${nomeParaMencoes}`);
     const novoTexto = novoTextoAntes + " " + textoDepois;
-
     setComentario(novoTexto);
     setSugestoesMencoes([]);
-
     setTimeout(() => {
       const novaPos = novoTextoAntes.length + 1;
       textarea.focus();
@@ -87,33 +79,26 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     }, 0);
   };
 
-  // Função para formatar data de forma amigável
   const formatarDataComentario = (dateString) => {
     const date = new Date(dateString);
     const hoje = new Date();
     const ontem = new Date();
     ontem.setDate(hoje.getDate() - 1);
-
     const isSameDay = (d1, d2) =>
       d1.getDate() === d2.getDate() &&
       d1.getMonth() === d2.getMonth() &&
       d1.getFullYear() === d2.getFullYear();
-
     const hora = date.toLocaleTimeString("pt-BR", {
       hour: "2-digit",
       minute: "2-digit",
     });
-
     if (isSameDay(date, hoje)) return `Hoje às ${hora}`;
     if (isSameDay(date, ontem)) return `Ontem às ${hora}`;
-
-    const dia = String(date.getDate()).padStart(2, "0");
-    const mes = String(date.getMonth() + 1).padStart(2, "0");
-    const ano = date.getFullYear();
-    return `em ${dia}/${mes}/${ano} às ${hora}`;
+    return `em ${String(date.getDate()).padStart(2, "0")}/${String(
+      date.getMonth() + 1
+    ).padStart(2, "0")}/${date.getFullYear()} às ${hora}`;
   };
 
-  // Verifica se o comentário pode ser editado (menos de 1h E é do usuário atual)
   const podeEditarComentario = (createdAt, autorId) => {
     if (autorId !== userId) return false;
     const agora = new Date();
@@ -122,7 +107,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     return diffMin < 60;
   };
 
-  // Carregar dados da nota
+  // Carregar nota, anexos e comentários
   useEffect(() => {
     if (!notaAtual?.id) {
       setDescricao("");
@@ -130,62 +115,58 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
       setAnexosSalvos([]);
       return;
     }
-
     let isMounted = true;
     const fetchData = async () => {
       setLoading(true);
       try {
-        // Descrição
-        const { data: nota, error: notaError } = await supabase
+        const { data: nota } = await supabase
           .from("notas")
           .select("descricao")
           .eq("id", notaAtual.id)
           .single();
-        if (isMounted && !notaError) setDescricao(nota?.descricao || "");
+        if (isMounted) setDescricao(nota?.descricao || "");
 
-        // Comentários
-        const { data: comentariosData, error: comentariosError } = await supabase
+        const { data: comentariosData } = await supabase
           .from("comentarios")
           .select("id, conteudo, created_at, user_id")
           .eq("nota_id", notaAtual.id)
           .order("created_at", { ascending: false });
 
-        if (isMounted && !comentariosError && comentariosData?.length > 0) {
-          const userIds = [...new Set(comentariosData.map(c => c.user_id))];
-          const { data: profiles, error: profilesError } = await supabase
+        if (comentariosData?.length > 0) {
+          const userIds = [...new Set(comentariosData.map((c) => c.user_id))];
+          const { data: profiles } = await supabase
             .from("profiles")
-            .select("id, nome, nickname, avatar_url") // ⬅️ nickname aqui
+            .select("id, nome, nickname, avatar_url")
             .in("id", userIds);
-
           const profileMap = {};
-          if (!profilesError && profiles) profiles.forEach(p => (profileMap[p.id] = p));
-
+          profiles?.forEach((p) => (profileMap[p.id] = p));
           const comentariosComUsuario = comentariosData.map((c) => ({
             ...c,
             profiles: profileMap[c.user_id] || { nome: "Usuário", nickname: null, avatar_url: null },
             formattedDate: formatarDataComentario(c.created_at),
+            // campo para controle local de edição inline
+            isEditing: false,
+            editValue: undefined,
           }));
-
           if (isMounted) setComentarios(comentariosComUsuario);
-        } else if (isMounted) setComentarios([]);
+        } else setComentarios([]);
 
-        // Anexos
-        const { data: anexos, error: anexosError } = await supabase
+        const { data: anexos } = await supabase
           .from("anexos")
           .select("id, file_name, file_url")
           .eq("nota_id", notaAtual.id)
           .order("created_at", { ascending: true });
-
-        if (isMounted && !anexosError && anexos) setAnexosSalvos(anexos);
+        if (isMounted) setAnexosSalvos(anexos || []);
       } catch (err) {
         console.error("Erro ao carregar dados da nota:", err);
       } finally {
         if (isMounted) setLoading(false);
       }
     };
-
     fetchData();
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+    };
   }, [notaAtual?.id, userId]);
 
   // Salvar descrição
@@ -193,11 +174,10 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     if (!notaAtual?.id) return;
     setLoading(true);
     try {
-      const { error } = await supabase
+      await supabase
         .from("notas")
         .update({ descricao: descricao || null })
         .eq("id", notaAtual.id);
-      if (error) throw error;
     } catch (err) {
       console.error("Erro ao salvar descrição:", err);
       alert("Erro ao salvar descrição.");
@@ -206,10 +186,10 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     }
   };
 
-  // Adicionar comentário
+  // Adicionar comentário (sem usar loading global)
   const handleAddComentario = async () => {
     if (!notaAtual?.id || !userId || !comentario.trim()) return;
-    setLoading(true);
+    setComentando(true);
     try {
       const { data: novoComentarioDB, error } = await supabase
         .from("comentarios")
@@ -220,83 +200,78 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
         })
         .select("id, conteudo, created_at, user_id")
         .single();
+
       if (error) throw error;
 
       const comentarioFormatado = {
         ...novoComentarioDB,
         profiles: userProfile || { nome: "Você", nickname: null, avatar_url: null },
         formattedDate: formatarDataComentario(novoComentarioDB.created_at),
+        isEditing: false,
+        editValue: undefined,
       };
-      setComentarios(prev => [comentarioFormatado, ...prev]);
+
+      setComentarios((prev) => [comentarioFormatado, ...prev]);
       setComentario("");
       setSugestoesMencoes([]);
 
-      // 🔹 Lógica de menção @ — agora compara com nickname (fallback para nome)
-      // 🔹 Lógica corrigida de menção — usa user_id e nota_id
-        const mencionados = comentario.match(/@(\S+)/g);
-        if (mencionados?.length > 0) {
-          const nomesMencionados = mencionados.map(m => m.slice(1));
-
-          // Buscar perfis com nickname ou nome que correspondam EXATAMENTE
-          const { data: candidatos, error: profilesError } = await supabase
-            .from("profiles")
-            .select("id, nickname, nome")
-            .or(
-              `nickname.in.(${nomesMencionados.map(n => `"${n}"`).join(',')})` +
-              `,nome.in.(${nomesMencionados.map(n => `"${n}"`).join(',')})`
-            );
-
-          if (profilesError) {
-            console.error("Erro ao buscar perfis para menção:", profilesError);
-            return;
-          }
-
-          const mencionadosValidos = (candidatos || []).filter(p => {
-            const nomeReal = p.nickname || p.nome;
-            return nomesMencionados.includes(nomeReal);
+      // menções (mantive igual)
+      const mencionados = comentario.match(/@(\S+)/g);
+      if (mencionados?.length > 0) {
+        const nomesMencionados = mencionados.map((m) => m.slice(1));
+        const { data: candidatos } = await supabase
+          .from("profiles")
+          .select("id, nickname, nome")
+          .or(
+            `nickname.in.(${nomesMencionados.map((n) => `"${n}"`).join(",")}),nome.in.(${nomesMencionados
+              .map((n) => `"${n}"`)
+              .join(",")})`
+          );
+        const mencionadosValidos = (candidatos || []).filter((p) =>
+          nomesMencionados.includes(p.nickname || p.nome)
+        );
+        for (const u of mencionadosValidos) {
+          await supabase.from("notificacoes").insert({
+            user_id: u.id,
+            remetente_id: userId,
+            nota_id: notaAtual.id,
+            projeto_id: projetoAtual?.id || null,
+            tipo: "menção",
+            mensagem: `${userProfile?.nickname || userProfile?.nome || "Você"} marcou você em um comentário na tarefa ${notaAtual.nome || notaAtual.name
+              } do projeto ${projetoAtual?.nome || projetoAtual?.name || "Sem projeto"}`,
+            lido: false,
           });
-
-          // Inserir notificação para cada mencionado
-          for (const u of mencionadosValidos) {
-            const { error: notifError } = await supabase.from("notificacoes").insert({
-              user_id: u.id, // ✅ UUID do usuário mencionado
-              remetente_id: userId, // ✅ UUID de quem fez o comentário
-              nota_id: notaAtual.id, // ✅ Corrigido: era "tarefa_id", agora "nota_id"
-              projeto_id: projetoAtual?.id || null,
-              tipo: "menção",
-              mensagem: `${userProfile?.nickname || userProfile?.nome || "Você"} marcou você em um comentário na tarefa ${notaAtual.nome || notaAtual.name} do projeto ${projetoAtual?.nome || projetoAtual?.name || "Sem projeto"}`,
-              lido: false,
-            });
-
-            if (notifError) {
-              console.error("Erro ao criar notificação:", notifError);
-            }
-          }
         }
+      }
     } catch (err) {
       console.error("Erro ao salvar comentário:", err);
       alert("Erro ao salvar comentário.");
     } finally {
-      setLoading(false);
+      setComentando(false);
     }
   };
 
-  // Editar comentário
-  const handleEditarComentario = async (comentarioId, novoConteudo) => {
+  // Editar comentário (salvar)
+  const handleSaveEdit = async (comentarioId) => {
+    const alvo = comentarios.find((c) => c.id === comentarioId);
+    const novoConteudo = (alvo && (alvo.editValue !== undefined ? alvo.editValue : alvo.conteudo)) || "";
     if (!novoConteudo.trim()) return;
+
     setLoading(true);
     try {
-      const { error } = await supabase
+      await supabase
         .from("comentarios")
         .update({ conteudo: novoConteudo.trim() })
         .eq("id", comentarioId)
         .eq("user_id", userId);
-      if (error) throw error;
 
-      setComentarios(prev =>
-        prev.map(c => c.id === comentarioId ? { ...c, conteudo: novoConteudo.trim() } : c)
+      setComentarios((prev) =>
+        prev.map((c) =>
+          c.id === comentarioId
+            ? { ...c, conteudo: novoConteudo.trim(), isEditing: false, editValue: undefined }
+            : c
+        )
       );
-      setMenuAberto(null);
     } catch (err) {
       console.error("Erro ao editar comentário:", err);
       alert("Erro ao editar comentário.");
@@ -305,43 +280,58 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     }
   };
 
-  // Excluir comentário
+  // Iniciar edição localmente
+  const handleStartEdit = (comentarioId) => {
+    setComentarios((prev) =>
+      prev.map((c) =>
+        c.id === comentarioId ? { ...c, isEditing: true, editValue: c.conteudo } : c
+      )
+    );
+    setMenuAberto(null);
+  };
+
+  // Cancelar edição localmente
+  const handleCancelEdit = (comentarioId) => {
+    setComentarios((prev) =>
+      prev.map((c) =>
+        c.id === comentarioId ? { ...c, isEditing: false, editValue: undefined } : c
+      )
+    );
+    setMenuAberto(null);
+  };
+
+  // Excluir comentário (sem confirmação)
   const handleExcluirComentario = async (comentarioId) => {
-    if (!window.confirm("Tem certeza que deseja excluir este comentário?")) return;
-    setLoading(true);
+    setLoadingExcluir(true);
     try {
-      const { error } = await supabase
+      await supabase
         .from("comentarios")
         .delete()
         .eq("id", comentarioId)
         .eq("user_id", userId);
-      if (error) throw error;
-      setComentarios(prev => prev.filter(c => c.id !== comentarioId));
+      setComentarios((prev) => prev.filter((c) => c.id !== comentarioId));
       setMenuAberto(null);
     } catch (err) {
       console.error("Erro ao excluir comentário:", err);
       alert("Erro ao excluir comentário.");
     } finally {
-      setLoading(false);
+      setLoadingExcluir(false);
     }
   };
 
-  // Adicionar anexos
+  // Anexos (mantive como estava)
   const handleAddAnexos = async (e) => {
     const files = Array.from(e.target.files || []);
     if (!notaAtual?.id || !userId || files.length === 0) return;
-
     setLoading(true);
     try {
       for (const file of files) {
         const fileName = `anexos/${notaAtual.id}_${Date.now()}_${file.name}`;
         const { error: uploadError } = await supabase.storage.from("anexos").upload(fileName, file);
         if (uploadError) throw uploadError;
-
         const { data } = supabase.storage.from("anexos").getPublicUrl(fileName);
         const fileUrl = data.publicUrl;
-
-        const { data: insertedAnexo, error: insertError } = await supabase
+        const { data: insertedAnexo } = await supabase
           .from("anexos")
           .insert({
             nota_id: notaAtual.id,
@@ -351,9 +341,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
           })
           .select()
           .single();
-        if (insertError) throw insertError;
-
-        setAnexosSalvos(prev => [...prev, insertedAnexo]);
+        setAnexosSalvos((prev) => [...prev, insertedAnexo]);
       }
     } catch (err) {
       console.error("Erro ao enviar anexo:", err);
@@ -363,18 +351,15 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     }
   };
 
-  // Remover anexo
   const handleRemoverAnexo = async (anexoId, fileUrl) => {
     if (!window.confirm("Deseja realmente excluir este anexo?")) return;
     setLoading(true);
     try {
       const url = new URL(fileUrl);
-      const path = url.pathname;
-      const fileName = path.split('/').pop();
-
+      const fileName = url.pathname.split("/").pop();
       await supabase.storage.from("anexos").remove([fileName]);
       await supabase.from("anexos").delete().eq("id", anexoId).eq("user_id", userId);
-      setAnexosSalvos(prev => prev.filter(a => a.id !== anexoId));
+      setAnexosSalvos((prev) => prev.filter((a) => a.id !== anexoId));
     } catch (err) {
       console.error("Erro ao excluir anexo:", err);
       alert("Erro ao excluir anexo.");
@@ -439,7 +424,9 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
         <div className="anexos-lista">
           {anexosSalvos.map((anexo) => (
             <div key={anexo.id} className="anexo-item">
-              <a href={anexo.file_url} target="_blank" rel="noopener noreferrer">{anexo.file_name}</a>
+              <a href={anexo.file_url} target="_blank" rel="noopener noreferrer">
+                {anexo.file_name}
+              </a>
               <button
                 type="button"
                 title="Remover"
@@ -465,19 +452,39 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
           disabled={loading}
         />
 
-        {/* 🔹 Dropdown de sugestões — exibe nickname */}
         {sugestoesMencoes.length > 0 && (
-          <div className="sugestoes-list" style={{ position: "absolute", zIndex: 10, backgroundColor: "white", border: "1px solid #ccc", borderRadius: "4px", marginTop: "4px", width: "250px" }}>
-            {sugestoesMencoes.map(u => {
-              const nomeExibicao = u.nickname || u.nome; // ⬅️ prioriza nickname
+          <div
+            className="sugestoes-list"
+            style={{
+              position: "absolute",
+              zIndex: 10,
+              backgroundColor: "white",
+              border: "1px solid #ccc",
+              borderRadius: "4px",
+              marginTop: "4px",
+              width: "250px",
+            }}
+          >
+            {sugestoesMencoes.map((u) => {
+              const nomeExibicao = u.nickname || u.nome;
               return (
                 <div
                   key={u.id}
                   onClick={() => inserirMencoes(u)}
-                  style={{ padding: "8px", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}
+                  style={{
+                    padding: "8px",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
                 >
                   {u.avatar_url ? (
-                    <img src={u.avatar_url} alt={nomeExibicao} style={{ width: "24px", height: "24px", borderRadius: "50%" }} />
+                    <img
+                      src={u.avatar_url}
+                      alt={nomeExibicao}
+                      style={{ width: "24px", height: "24px", borderRadius: "50%" }}
+                    />
                   ) : (
                     <FiUser style={{ width: "24px", height: "24px" }} />
                   )}
@@ -488,19 +495,29 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
           </div>
         )}
 
-        <button
-          type="button"
-          className="coment-btn"
-          onClick={handleAddComentario}
-          disabled={loading || !userId}
-        >
-          Comentar
-        </button>
+        {/* 🔹 Área do botão + loader lateral */}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <button
+            type="button"
+            className="coment-btn"
+            onClick={handleAddComentario}
+            disabled={loading || !userId || comentando}
+          >
+            Comentar
+          </button>
+
+          {/* Loader lateral aparece ao comentar OU ao excluir comentário */}
+          {(comentando || loadingExcluir) && <span className="loader"></span>}
+        </div>
 
         <div className="comentarios-lista">
           {comentarios.map((c) => {
-            const profile = c.profiles || { nome: "Usuário", nickname: null, avatar_url: null };
-            const nomeExibicao = profile.nickname || profile.nome; // ⬅️ usa nickname, fallback para nome
+            const profile = c.profiles || {
+              nome: "Usuário",
+              nickname: null,
+              avatar_url: null,
+            };
+            const nomeExibicao = profile.nickname || profile.nome;
             const editavel = podeEditarComentario(c.created_at, c.user_id);
 
             return (
@@ -523,7 +540,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
                   <div className="comentario-header">
                     <strong>{nomeExibicao}</strong>
                     <span>{c.formattedDate}</span>
-                    {editavel && (
+                    {editavel && !c.isEditing && (
                       <button
                         type="button"
                         className="comentario-menu-btn"
@@ -537,17 +554,48 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
                       </button>
                     )}
                   </div>
-                  <p>{c.conteudo}</p>
 
-                  {menuAberto === c.id && editavel && (
+                  {/* === EDIÇÃO INLINE: se isEditing === true mostra textarea + Salvar/Cancelar === */}
+                  {c.isEditing ? (
+                    <div>
+                      <textarea
+                        value={c.editValue !== undefined ? c.editValue : c.conteudo}
+                        onChange={(e) =>
+                          setComentarios((prev) =>
+                            prev.map((x) =>
+                              x.id === c.id ? { ...x, editValue: e.target.value } : x
+                            )
+                          )
+                        }
+                        rows={3}
+                        style={{ width: "100%", resize: "none", marginTop: "4px" }}
+                      />
+                      <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+                        <button
+                          type="button"
+                          onClick={() => handleSaveEdit(c.id)}
+                          disabled={loading}
+                        >
+                          Salvar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleCancelEdit(c.id)}
+                          disabled={loading}
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p>{c.conteudo}</p>
+                  )}
+
+                  {menuAberto === c.id && editavel && !c.isEditing && (
                     <div className="comentario-menu">
                       <button
                         type="button"
-                        onClick={() => {
-                          const novoTexto = prompt("Editar comentário:", c.conteudo);
-                          if (novoTexto !== null) handleEditarComentario(c.id, novoTexto);
-                          setMenuAberto(null);
-                        }}
+                        onClick={() => handleStartEdit(c.id)}
                       >
                         Editar
                       </button>
