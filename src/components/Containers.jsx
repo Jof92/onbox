@@ -3,43 +3,76 @@ import React, { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
 import ThinSidebar from "./ThinSidebar";
-import ProjectManager from "../components/ProjectManager"; // ajuste o caminho conforme sua estrutura
+import ProjectManager from "./ProjectManager";
 import "./Containers.css";
 
 export default function Containers() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
-  const [containerAtual, setContainerAtual] = useState(null);
+  const [containerAtual, setContainerAtual] = useState(null); // pode ser user.id ou outro
+  const [nomeContainer, setNomeContainer] = useState("");
   const [loading, setLoading] = useState(true);
 
+  // Carrega usuário logado
   useEffect(() => {
-    const loadUser = async () => {
-      const { data, error } = await supabase.auth.getUser();
-      if (!error && data.user) {
-        setUser(data.user);
-        setContainerAtual(data.user.id);
-        await fetchProfile(data.user.id);
-      }
-      setLoading(false);
-    };
-    loadUser();
-  }, []);
+      const loadUser = async () => {
+        const { data, error } = await supabase.auth.getUser();
+        if (!error && data.user) {
+          setUser(data.user);
+        }
+        setLoading(false);
+      };
+      loadUser();
+    }, []);
 
-  const fetchProfile = async (userId) => {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("container")
-      .eq("id", userId)
-      .single();
-    if (!error) setProfile(data);
-  };
+  // ✅ Inicializa containerAtual com user.id SOMENTE se ainda não definido
+      useEffect(() => {
+      if (user && containerAtual === null) {
+        setContainerAtual(user.id);
+      }
+    }, [user, containerAtual]);
+
+  // Busca nome do container (perfil) sempre que containerAtual mudar
+  useEffect(() => {
+    const fetchContainerNome = async () => {
+      if (!containerAtual) return;
+
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("container")
+          .eq("id", containerAtual)
+          .single();
+
+        if (error) {
+          console.error("Erro ao buscar nome do container:", error.message);
+          setNomeContainer("Desconhecido");
+          return;
+        }
+        setNomeContainer(data.container || "Sem nome");
+      } catch (err) {
+        console.error("Erro ao buscar nome do container:", err.message);
+        setNomeContainer("Erro");
+      }
+    };
+
+    fetchContainerNome();
+  }, [containerAtual]);
 
   if (loading) return <Loading />;
+
+  if (!user) {
+    // Opcional: redirecionar para login
+    window.location.href = "/login";
+    return null;
+  }
 
   return (
     <div className="containers-page">
       <header className="containers-header">
-        <h1 className="tittle-cont">Container {profile?.container ? `- ${profile.container}` : ""}</h1>
+        <h1 className="tittle-cont">
+          Container {nomeContainer ? `- ${nomeContainer}` : ""}
+        </h1>
       </header>
 
       <div className="containers-content">
@@ -49,7 +82,6 @@ export default function Containers() {
           user={user}
         />
 
-        {/* Componente isolado para gerenciar projetos */}
         <ProjectManager
           containerAtual={containerAtual}
           onProjectSelect={(proj) => console.log("Projeto selecionado:", proj)}

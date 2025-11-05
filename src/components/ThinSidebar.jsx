@@ -111,7 +111,9 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
           {colaboradores.map((c) => (
             <button
               key={c.id}
-              className="thin-btn thin-btn-avatar"
+              className={`thin-btn thin-btn-avatar ${
+                containerAtual === c.remetente?.id ? "active" : ""
+              }`}
               title={c.remetente?.nome || "Colaborador"}
               onClick={() => handleTrocarContainer(c)}
             >

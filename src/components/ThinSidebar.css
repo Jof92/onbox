@@ -24,6 +24,11 @@
   transition: all 0.25s ease;
 }
 
+.thin-btn-avatar.active {
+  outline: 2px solid #3903ff;
+  outline-offset: -2px;
+}
+
 /* Efeito hover */
 .thin-btn:hover {
   background: #e1ac22;

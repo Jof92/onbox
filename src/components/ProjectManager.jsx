@@ -1,6 +1,6 @@
 // src/components/ProjectManager.jsx
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { FaArrowLeft, FaPlus, FaTrash, FaCamera } from "react-icons/fa";
 import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
@@ -10,6 +10,7 @@ import "./Containers.css";
 
 export default function ProjectManager({ containerAtual, onProjectSelect, onProjectDeleted }) {
   const navigate = useNavigate();
+  const location = useLocation(); // para passar 'from' ao navegar
 
   const [projects, setProjects] = useState([]);
   const [setores, setSetores] = useState([]);
@@ -32,7 +33,6 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
     };
   }
 
-  // --- Fetch Projects ---
   const fetchProjects = async (userId) => {
     const { data: projectsData, error } = await supabase
       .from("projects")
@@ -52,7 +52,6 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
 
     const projectsWithPhotos = await Promise.all(
       (projectsData || []).map(async (proj) => {
-        // Ordenar pavimentos e EAP pela coluna 'ordem'
         const sortedPavimentos = [...(proj.pavimentos || [])].sort(
           (a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)
         );
@@ -81,7 +80,6 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
     setSelectedProject(null);
   };
 
-  // --- Fetch Setores ---
   const fetchSetores = async (userId) => {
     const { data: setoresData, error } = await supabase
       .from("setores")
@@ -125,7 +123,6 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
     return colors[Math.floor(Math.random() * colors.length)];
   };
 
-  // --- Handlers de projeto ---
   const handlePhotoUpload = (e) => {
     const file = e.target.files?.[0];
     if (file)
@@ -167,7 +164,6 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
         currentProjectId = data.id;
       }
 
-      // Upload de foto (se houver)
       if (newProject.photoFile) {
         const fileName = `${Date.now()}_${newProject.photoFile.name}`;
         const { error: uploadError } = await supabase.storage
@@ -182,33 +178,22 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
         ]);
       }
 
-      // Salvar pavimentos com ordem
       await supabase.from("pavimentos").delete().eq("project_id", currentProjectId);
       const pavimentosToInsert = newProject.pavimentos
         .filter(Boolean)
-        .map((name, index) => ({
-          name,
-          project_id: currentProjectId,
-          ordem: index,
-        }));
+        .map((name, index) => ({ name, project_id: currentProjectId, ordem: index }));
       if (pavimentosToInsert.length > 0) {
         await supabase.from("pavimentos").insert(pavimentosToInsert);
       }
 
-      // Salvar EAP com ordem
       await supabase.from("eap").delete().eq("project_id", currentProjectId);
       const eapToInsert = newProject.eap
         .filter(Boolean)
-        .map((name, index) => ({
-          name,
-          project_id: currentProjectId,
-          ordem: index,
-        }));
+        .map((name, index) => ({ name, project_id: currentProjectId, ordem: index }));
       if (eapToInsert.length > 0) {
         await supabase.from("eap").insert(eapToInsert);
       }
 
-      // Reset e atualização
       setNewProject(initialProjectState());
       setShowForm(false);
       setIsEditing(false);
@@ -265,10 +250,16 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
     });
   };
 
-  // --- Navegação ---
+  // ✅ Navegação com `from` para permitir retorno preciso nas Pilhas
   const openCardsPage = (proj) => {
     navigate(`/cards/${encodeURIComponent(proj.name || "Projeto")}`, {
-      state: { projectId: proj.id, projectName: proj.name, projectPhoto: proj.photo_url },
+      state: {
+        projectId: proj.id,
+        projectName: proj.name,
+        projectPhoto: proj.photo_url,
+        from: location.pathname,
+        containerId: containerAtual,
+      },
     });
   };
 
@@ -279,6 +270,8 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
         setorName: setor.name,
         setorPhoto: setor.photo_url,
         entityType: "setor",
+        from: location.pathname,
+        containerId: containerAtual,
       },
     });
   };
@@ -291,7 +284,6 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
     setShowSetoresModal(true);
   };
 
-  // --- Ações de Setor ---
   const handleUpdateSetorPhoto = async (setor) => {
     const fileInput = document.createElement("input");
     fileInput.type = "file";
@@ -392,7 +384,6 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
       <main className="containers-main">
         {!selectedProject ? (
           <>
-            {/* Projetos */}
             {projects.length > 0 ? (
               <div className="projects-grid">
                 {projects.map((proj) => (
@@ -425,7 +416,6 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
               <p className="no-projects">Tudo calmo por aqui ainda...</p>
             )}
 
-            {/* Setores */}
             {setores.length > 0 && (
               <>
                 <hr className="setores-divider" />
@@ -492,7 +482,6 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
             )}
           </>
         ) : (
-          /* Detalhes do projeto */
           <div className="project-details">
             <button className="back-btn" onClick={() => setSelectedProject(null)}>
               <FaArrowLeft />
@@ -515,7 +504,9 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
             <h2>{selectedProject.name || "Projeto"}</h2>
             <p>
               Tipo:{" "}
-              {selectedProject.type === "vertical" ? "Edificação Vertical" : "Edificação Horizontal"}
+              {selectedProject.type === "vertical"
+                ? "Edificação Vertical"
+                : "Edificação Horizontal"}
             </p>
 
             {(selectedProject.pavimentos?.length > 0 || selectedProject.eap?.length > 0) && (

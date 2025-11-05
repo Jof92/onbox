@@ -36,7 +36,11 @@ export default function Cards() {
     const entityPhoto = projectPhoto || setorPhoto;
     const type = typeFromState || (projectId ? "project" : "setor");
 
-    if (!entityId) return navigate("/containers", { replace: true });
+    if (!entityId) {
+      alert("Projeto ou setor não encontrado.");
+      navigate(-1); // ou navigate("/", { replace: true });
+      return null;
+}
 
     setEntityType(type);
 
@@ -249,10 +253,16 @@ export default function Cards() {
   return (
     <div className="cards-page">
       <header className="cards-header">
-        <button className="btn-voltar" onClick={() => navigate("/containers")} title="Voltar">
+        <button
+          className="btn-voltar"
+          onClick={() => navigate(-1)}
+          title="Voltar"
+        >
           <FaArrowLeft />
         </button>
-        {entity?.photo_url && <img src={entity.photo_url} alt={entity.name} className="project-photo-header" />}
+        {entity?.photo_url && (
+          <img src={entity.photo_url} alt={entity.name} className="project-photo-header" />
+        )}
         <h1>
           Pilhas - <span className="project-name">{entity?.name || "Entidade Desconhecida"}</span>
         </h1>

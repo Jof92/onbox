@@ -5,7 +5,7 @@ import Loading from "./Loading";
 import "./AtaCard.css";
 
 const VERBOS = [
-  "verificar", "acompanhar", "implementar", "analisar", "finalizar", "revisar", "enviar", "agendar", "checar", "executar", "conferir", "monitorar", "organizar", "planejar", "solicitar", "providenciar", "designar", "repassar", "avaliar", "confirmar", "documentar", "registrar", "controlar", "inspecionar", "medir", "orçar", "nivelar", "concretar", "dimensionar", "instalar", "regularizar", "liberar", "aprovar", "adequar", "corrigir", "homologar", "cotar", "negociar", "comprar", "requisitar", "receber", "armazenar",  "devolver", "auditar", "contratar", "renovar", "pesquisar", "padronizar", "conferir",  "emitir", "acompanhar", "rastrear", "autorizar",  "validar", "orientar", "supervisionar", "delegar", "capacitar", "reportar",  "alocar", "resolver", "alinhar"
+  "verificar", "reduzir", "alcançar" , "acompanhar", "implementar", "analisar", "finalizar", "revisar", "enviar", "agendar", "checar", "executar", "conferir", "monitorar", "organizar", "planejar", "solicitar", "providenciar", "designar", "repassar", "avaliar", "confirmar", "documentar", "registrar", "controlar", "inspecionar", "medir", "orçar", "nivelar", "concretar", "dimensionar", "instalar", "regularizar", "liberar", "aprovar", "adequar", "corrigir", "homologar", "cotar", "negociar", "comprar", "requisitar", "receber", "armazenar",  "devolver", "auditar", "contratar", "renovar", "pesquisar", "padronizar", "conferir",  "emitir", "acompanhar", "rastrear", "autorizar",  "validar", "orientar", "supervisionar", "delegar", "capacitar", "reportar",  "alocar", "resolver", "alinhar"
 ];
 
 
