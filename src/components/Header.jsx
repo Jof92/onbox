@@ -1,48 +1,103 @@
+// src/components/Header.jsx
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Header.css";
+import "./loader.css"; // ✅ Importa o loader
 import { supabase } from "../supabaseClient";
 import ob2 from "../assets/ob2.png";
-import { FaSignOutAlt, FaCamera, FaUserCircle, FaUserEdit } from "react-icons/fa";
+import { FaSignOutAlt, FaUserCircle, FaUserEdit } from "react-icons/fa";
 
-export default function Header({ onLoginClick, onLogout, session, profile: externalProfile, onProfileUpdate }) {
+export default function Header({
+  onLoginClick,
+  onLogout,
+  session,
+  profile: externalProfile,
+  onProfileUpdate,
+}) {
   const navigate = useNavigate();
+
   const [showMenu, setShowMenu] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [msg, setMsg] = useState({ error: "", success: false });
-  const [tempPreview, setTempPreview] = useState(null); // 👈 Preview temporário (antes do upload)
-  const [savedAvatarUrl, setSavedAvatarUrl] = useState(externalProfile?.avatar_url || ""); // 👈 Avatar salvo
+  const [msg, setMsg] = useState({ error: "" });
 
-  const fileInputRef = useRef(null);
+  const [formData, setFormData] = useState({
+    nome: "",
+    empresa: "",
+    funcao: "",
+    container: "",
+  });
+
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const [tempPreview, setTempPreview] = useState(null);
+
   const menuRef = useRef(null);
+  const fileInputRef = useRef(null);
 
-  // Atualiza avatar salvo quando externalProfile mudar (ex: login inicial)
+  // 🔹 Atualiza dados quando o perfil externo muda
   useEffect(() => {
-    setSavedAvatarUrl(externalProfile?.avatar_url || "");
-  }, [externalProfile?.avatar_url]);
+    if (externalProfile) {
+      setFormData({
+        nome: externalProfile.nome || "",
+        empresa: externalProfile.empresa || "",
+        funcao: externalProfile.funcao || "",
+        container: externalProfile.container || "",
+      });
+      if (externalProfile.avatar_url) {
+        setAvatarUrl(externalProfile.avatar_url);
+      }
+    }
+  }, [externalProfile]);
 
-  const perfilIncompleto =
-    !externalProfile?.nome || !externalProfile?.empresa || !externalProfile?.funcao || !externalProfile?.container;
+  // 🔹 Busca avatar diretamente do Supabase se houver sessão
+  useEffect(() => {
+    const fetchAvatar = async () => {
+      if (!session?.user) return;
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("avatar_url")
+        .eq("id", session.user.id)
+        .single();
 
+      if (!error && data?.avatar_url) {
+        setAvatarUrl(data.avatar_url);
+      }
+    };
+    fetchAvatar();
+  }, [session]);
+
+  // 🔹 Detecta clique fora do menu
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!menuRef.current?.contains(e.target)) setShowMenu(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      if (tempPreview) URL.revokeObjectURL(tempPreview);
+    };
+  }, [tempPreview]);
+
+  // 🔹 Upload do avatar para o Supabase
   const uploadAvatar = async (file) => {
     if (!file || !session?.user) return null;
     const ext = file.name.split(".").pop();
     const fileName = `${session.user.id}.${ext}`;
     const filePath = `avatars/${fileName}`;
+
     const { error: uploadError } = await supabase.storage
       .from("avatars")
       .upload(filePath, file, { upsert: true });
+
     if (uploadError) throw uploadError;
+
     const { data } = supabase.storage.from("avatars").getPublicUrl(filePath);
     return data.publicUrl;
   };
 
-  // === Lida com upload e atualiza estado ===
+  // 🔹 Atualiza avatar (modal ou menu)
   const handleAvatarSelect = async (file, isFromModal = false) => {
     if (!file) return;
-
-    // Mostra preview imediatamente (só no modal)
     if (isFromModal) {
       const url = URL.createObjectURL(file);
       setTempPreview(url);
@@ -53,35 +108,29 @@ export default function Header({ onLoginClick, onLogout, session, profile: exter
       const publicUrl = await uploadAvatar(file);
       if (!publicUrl) return;
 
-      // Salva no banco
       const { error } = await supabase
         .from("profiles")
         .update({ avatar_url: publicUrl })
         .eq("id", session.user.id);
+
       if (error) throw error;
 
-      // Atualiza estado local
-        setSavedAvatarUrl(publicUrl);
+      setAvatarUrl(publicUrl);
 
-        // ✅ Atualiza o perfil no componente pai (App)
-        if (onProfileUpdate) {
-          onProfileUpdate(prev => ({
-            ...prev,
-            avatar_url: publicUrl
-          }));
-        }
+      if (onProfileUpdate) {
+        onProfileUpdate((prev) => ({
+          ...prev,
+          avatar_url: publicUrl,
+        }));
+      }
 
-        // Limpa preview temporário
-        if (tempPreview) {
-          URL.revokeObjectURL(tempPreview);
-          setTempPreview(null);
-        }
-
-      setMsg({ error: "", success: true });
-      setTimeout(() => setMsg({ error: "", success: false }), 2000);
+      if (tempPreview) {
+        URL.revokeObjectURL(tempPreview);
+        setTempPreview(null);
+      }
     } catch (err) {
       console.error("Erro no upload:", err);
-      setMsg({ error: "Erro ao enviar imagem.", success: false });
+      setMsg({ error: "Erro ao enviar imagem." });
     } finally {
       setUploading(false);
     }
@@ -92,62 +141,46 @@ export default function Header({ onLoginClick, onLogout, session, profile: exter
     if (file) handleAvatarSelect(file, isFromModal);
   };
 
-  useEffect(() => {
-    const clickOutside = (e) => !menuRef.current?.contains(e.target) && setShowMenu(false);
-    document.addEventListener("mousedown", clickOutside);
-    return () => {
-      document.removeEventListener("mousedown", clickOutside);
-      if (tempPreview) URL.revokeObjectURL(tempPreview);
-    };
-  }, [tempPreview]);
-
+  // 🔹 Logout
   const handleLogout = async () => {
     await supabase.auth.signOut();
     onLogout?.();
     navigate("/");
   };
 
-  // === Modal de edição ===
-  const [formData, setFormData] = useState({
-    nome: "", empresa: "", funcao: "", container: "",
-  });
-
-  useEffect(() => {
-    if (externalProfile) {
-      setFormData({
-        nome: externalProfile.nome || "",
-        empresa: externalProfile.empresa || "",
-        funcao: externalProfile.funcao || "",
-        container: externalProfile.container || "",
-      });
-    }
-  }, [externalProfile]);
-
+  // 🔹 Salvar alterações no perfil
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!session?.user) return setMsg({ error: "Usuário não autenticado.", success: false });
+    if (!session?.user)
+      return setMsg({ error: "Usuário não autenticado." });
 
     try {
       const updates = {
         id: session.user.id,
         email: session.user.email,
         ...formData,
-        avatar_url: savedAvatarUrl || null,
       };
 
       const { error } = await supabase.from("profiles").upsert([updates]);
       if (error) throw error;
 
-      setMsg({ error: "", success: true });
-      setTimeout(() => setShowEditModal(false), 1500);
+      setShowEditModal(false);
     } catch (err) {
       console.error("Erro ao salvar:", err);
-      setMsg({ error: "Erro ao salvar informações.", success: false });
+      setMsg({ error: "Erro ao salvar informações." });
     }
   };
 
-  // Avatar atual: preview temporário (modal) > avatar salvo > avatar externo
-  const currentAvatar = tempPreview || savedAvatarUrl;
+  const currentAvatar = tempPreview
+    ? tempPreview
+    : avatarUrl
+      ? `${avatarUrl}?v=${Date.now()}`
+      : null;
+  const perfilIncompleto =
+    !externalProfile?.nome ||
+    !externalProfile?.empresa ||
+    !externalProfile?.funcao ||
+    !externalProfile?.container;
 
   return (
     <>
@@ -155,19 +188,29 @@ export default function Header({ onLoginClick, onLogout, session, profile: exter
         <div className="header-left" onClick={() => navigate("/")}>
           <img src={ob2} alt="Logo" />
         </div>
+
         <div className="header-right">
           {session ? (
             <div className="header-user-info" ref={menuRef}>
-              <div className="header-avatar-wrapper" onClick={() => setShowMenu(!showMenu)}>
+              <div
+                className="header-avatar-wrapper"
+                onClick={() => setShowMenu(!showMenu)}
+              >
                 {currentAvatar ? (
-                  <img src={currentAvatar} alt="Avatar" className="header-avatar" />
+                  <img
+                    src={currentAvatar}
+                    alt="Avatar"
+                    className="header-avatar"
+                  />
                 ) : (
                   <FaUserCircle className="header-avatar-placeholder" />
                 )}
               </div>
 
               {perfilIncompleto && (
-                <div className="perfil-warning-bubble">⚠️ Antes de iniciar, conclua seu perfil.</div>
+                <div className="perfil-warning-bubble">
+                  ⚠️ Antes de iniciar, conclua seu perfil.
+                </div>
               )}
 
               <p className="header-welcome">
@@ -176,15 +219,6 @@ export default function Header({ onLoginClick, onLogout, session, profile: exter
 
               {showMenu && (
                 <div className="header-menu animate-dropdown">
-                  <button
-                    onClick={() => {
-                      fileInputRef.current?.click();
-                      setShowMenu(false);
-                    }}
-                    className="header-menu-item"
-                  >
-                    <FaCamera /> Alterar foto
-                  </button>
                   <button
                     onClick={() => {
                       setShowEditModal(true);
@@ -216,54 +250,70 @@ export default function Header({ onLoginClick, onLogout, session, profile: exter
         </div>
       </header>
 
-      {/* Modal de edição */}
       {showEditModal && (
         <div className="modal-overlay">
           <div className="loginfull-container">
-            <button className="close-modal" onClick={() => {
-              setShowEditModal(false);
-              if (tempPreview) URL.revokeObjectURL(tempPreview);
-              setTempPreview(null);
-            }}>
+            <button
+              className="close-modal"
+              onClick={() => {
+                setShowEditModal(false);
+                if (tempPreview) URL.revokeObjectURL(tempPreview);
+                setTempPreview(null);
+              }}
+            >
               X
             </button>
+
             <div className="loginfull-card">
               <h2>Perfil do Usuário</h2>
               <form onSubmit={handleSubmit}>
                 <div className="avatar-upload">
                   {currentAvatar ? (
-                    <img src={currentAvatar} alt="Avatar" className="avatar-preview" />
+                    <img
+                      src={currentAvatar}
+                      alt="Avatar"
+                      className="avatar-preview"
+                    />
                   ) : (
                     <div className="avatar-placeholder">+</div>
                   )}
+
                   <label className="upload-btn">
-                    {uploading ? "Enviando..." : "Alterar foto"}
+                    Alterar foto
                     <input
                       type="file"
                       accept="image/*"
                       hidden
                       onChange={(e) => handleFileChange(e, true)}
                     />
+                    {uploading && <div className="loader" style={{ marginLeft: 8 }}></div>}
                   </label>
                 </div>
 
                 {["nome", "empresa", "funcao", "container"].map((field) => (
                   <div className="form-group" key={field}>
                     <label>
-                      {field === "container" ? "Nomeie seu container" : field.charAt(0).toUpperCase() + field.slice(1)}
+                      {field === "container"
+                        ? "Nomeie seu container"
+                        : field.charAt(0).toUpperCase() + field.slice(1)}
                     </label>
                     <input
                       type="text"
                       value={formData[field] || ""}
-                      onChange={(e) => setFormData({ ...formData, [field]: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, [field]: e.target.value })
+                      }
                       required={field === "nome" || field === "container"}
-                      placeholder={field === "container" ? "Ex: Projeto OnBox Principal" : ""}
+                      placeholder={
+                        field === "container"
+                          ? "Ex: Projeto OnBox Principal"
+                          : ""
+                      }
                     />
                   </div>
                 ))}
 
                 {msg.error && <div className="error-msg">{msg.error}</div>}
-                {msg.success && <div className="success-msg">Perfil atualizado com sucesso!</div>}
 
                 <button type="submit" className="save-btn" disabled={uploading}>
                   Salvar informações

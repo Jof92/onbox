@@ -35,7 +35,7 @@ export default function App() {
   }, []);
 
   // === Buscar perfil do usuário ===
-  useEffect(() => {
+    useEffect(() => {
     const fetchProfile = async () => {
       if (!session?.user) {
         setProfile(null);
@@ -54,7 +54,7 @@ export default function App() {
       }
     };
     fetchProfile();
-  }, [session]);
+  }, [session, session?.user?.id]);
 
   // === Fechar painel de login com a tecla ESC ===
   useEffect(() => {
