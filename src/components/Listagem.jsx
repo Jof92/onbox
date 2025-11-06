@@ -5,7 +5,7 @@ import "./Listagem.css";
 import { FaPlus, FaTimes, FaPaperPlane } from "react-icons/fa";
 import Loading from "./Loading";
 
-export default function Listagem({ projetoAtual, notaAtual, usuarioAtual }) {
+export default function Listagem({ projetoAtual, notaAtual }) {
   const [rows, setRows] = useState([]);
   const [ultimaAlteracao, setUltimaAlteracao] = useState("");
   const [locacoes, setLocacoes] = useState([]);
@@ -13,26 +13,38 @@ export default function Listagem({ projetoAtual, notaAtual, usuarioAtual }) {
   const [unidadesDisponiveis, setUnidadesDisponiveis] = useState([]);
   const [direcionarPara, setDirecionarPara] = useState("");
   const [loading, setLoading] = useState(true);
+  const [nomeUsuarioLogado, setNomeUsuarioLogado] = useState("Usuário");
 
-  const registrarAlteracao = (autor = usuarioAtual) => {
+  // Busca o nome real do usuário logado
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", user.id)
+          .single();
+        setNomeUsuarioLogado(profile?.full_name || user.email?.split("@")[0] || "Usuário");
+      }
+    };
+    fetchUserProfile();
+  }, []);
+
+  const registrarAlteracao = (autor = nomeUsuarioLogado) => {
     const agora = new Date();
-    const timestamp = `${autor || "Usuário"} alterou em ${agora.toLocaleDateString()} ${agora.toLocaleTimeString()}`;
+    const timestamp = `${autor} alterou em ${agora.toLocaleDateString()} ${agora.toLocaleTimeString()}`;
     setUltimaAlteracao(timestamp);
   };
 
-  // -------------------------
-  // Ordena por criado_em DESC: mais novo primeiro
-  // Linhas sem criado_em são tratadas como muito antigas (timestamp = 0)
   const sortRowsByCreatedDesc = (arr) => {
     return [...arr].sort((a, b) => {
       const ta = a?.criado_em ? new Date(a.criado_em).getTime() : 0;
       const tb = b?.criado_em ? new Date(b.criado_em).getTime() : 0;
-      return tb - ta; // ordem decrescente: mais novo no topo
+      return tb - ta;
     });
   };
-  // -------------------------
 
-  // fetch inicial / refresh
   const carregarDados = async () => {
     setLoading(true);
     try {
@@ -44,26 +56,22 @@ export default function Listagem({ projetoAtual, notaAtual, usuarioAtual }) {
         return;
       }
 
-      // locações
       const { data: pavimentosData } = await supabase
         .from("pavimentos")
         .select("name")
         .eq("project_id", projetoAtual.id);
       setLocacoes(pavimentosData?.map(p => p.name) || []);
 
-      // eaps
       const { data: eapsData } = await supabase
         .from("eap")
         .select("name")
         .eq("project_id", projetoAtual.id);
       setEaps(eapsData?.map(e => e.name) || []);
 
-      // unidades únicas
       const { data: unidadesData } = await supabase.from("itens").select("unidade");
       const unidadesUnicas = [...new Set(unidadesData?.map(u => u.unidade).filter(Boolean))];
       setUnidadesDisponiveis(unidadesUnicas);
 
-      // itens da nota — solicitando ordem decrescente no banco (mais novo primeiro)
       const { data: itensSalvos, error: itensErr } = await supabase
         .from("planilha_itens")
         .select("*")
@@ -82,7 +90,10 @@ export default function Listagem({ projetoAtual, notaAtual, usuarioAtual }) {
           locacao: item.locacao || "",
           eap: item.eap || "",
           fornecedor: item.fornecedor || "",
-          criado_em: item.criado_em || null
+          criado_em: item.criado_em || null,
+          grupo_envio: item.grupo_envio || "antigo",
+          data_envio: item.data_envio || item.criado_em,
+          enviado_por: item.enviado_por || "Usuário"
         }));
         setRows(sortRowsByCreatedDesc(mapped));
       } else {
@@ -103,9 +114,8 @@ export default function Listagem({ projetoAtual, notaAtual, usuarioAtual }) {
   useEffect(() => {
     carregarDados();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projetoAtual, notaAtual, usuarioAtual]);
+  }, [projetoAtual, notaAtual]);
 
-  // buscar item por codigo
   const buscarItemPorCodigo = async (index, codigo) => {
     if (!codigo?.trim() || codigo.toLowerCase() === "criar") return;
     try {
@@ -124,7 +134,6 @@ export default function Listagem({ projetoAtual, notaAtual, usuarioAtual }) {
     }
   };
 
-  // handle changes
   const handleInputChange = (index, campo, valor) => {
     const novas = [...rows];
     novas[index][campo] = valor;
@@ -136,20 +145,24 @@ export default function Listagem({ projetoAtual, notaAtual, usuarioAtual }) {
     if (e.key === "Enter") buscarItemPorCodigo(index, codigo);
   };
 
-  // addRow -> adiciona no final do array, mas ordena para que fique no topo
   const addRow = () => {
     const novaLinha = {
-      codigo: "", descricao: "", unidade: "", quantidade: "", locacao: "", eap: "", fornecedor: "",
+      codigo: "",
+      descricao: "",
+      unidade: "",
+      quantidade: "",
+      locacao: "",
+      eap: "",
+      fornecedor: "",
       criado_em: new Date().toISOString()
     };
     setRows(prev => {
       const next = [...prev, novaLinha];
-      return sortRowsByCreatedDesc(next); // mantém mais novo no topo
+      return sortRowsByCreatedDesc(next);
     });
     registrarAlteracao();
   };
 
-  // removeRow: remove local e, se existir id, remove do Supabase
   const removeRow = async (index) => {
     const linha = rows[index];
     setRows(prev => prev.filter((_, i) => i !== index));
@@ -167,7 +180,6 @@ export default function Listagem({ projetoAtual, notaAtual, usuarioAtual }) {
     }
   };
 
-  // salvar: atualiza existentes e insere novos; depois recarrega
   const handleSave = async () => {
     if (!notaAtual?.id) {
       alert("Nota não selecionada. Não é possível salvar.");
@@ -175,12 +187,15 @@ export default function Listagem({ projetoAtual, notaAtual, usuarioAtual }) {
     }
     setLoading(true);
     try {
-      const linhasValidas = rows.filter(r => r.codigo?.trim() || r.descricao?.trim() || r.quantidade);
+      const grupoEnvio = `envio_${Date.now()}`;
+      const dataEnvio = new Date().toISOString();
+      const remetente = nomeUsuarioLogado;
 
+      const linhasValidas = rows.filter(r => r.codigo?.trim() || r.descricao?.trim() || r.quantidade);
       const existentes = linhasValidas.filter(r => r.id);
       const novos = linhasValidas.filter(r => !r.id);
 
-      // Atualizar existentes
+      // Atualiza apenas campos editáveis — NÃO atualiza data_envio, grupo_envio nem enviado_por
       if (existentes.length) {
         await Promise.all(existentes.map(async (it) => {
           const payload = {
@@ -198,7 +213,7 @@ export default function Listagem({ projetoAtual, notaAtual, usuarioAtual }) {
         }));
       }
 
-      // Inserir novos
+      // Insere novas linhas com metadados
       if (novos.length) {
         const inserts = novos.map(it => ({
           projeto_id: projetoAtual.id,
@@ -211,7 +226,10 @@ export default function Listagem({ projetoAtual, notaAtual, usuarioAtual }) {
           eap: it.eap || null,
           fornecedor: it.fornecedor || null,
           direcionar_para: direcionarPara?.trim() || null,
-          criado_em: it.criado_em || new Date().toISOString()
+          grupo_envio: grupoEnvio,
+          data_envio: dataEnvio,
+          enviado_por: remetente,
+          criado_em: new Date().toISOString()
         }));
         const { error } = await supabase.from("planilha_itens").insert(inserts);
         if (error) throw error;
@@ -222,7 +240,7 @@ export default function Listagem({ projetoAtual, notaAtual, usuarioAtual }) {
       registrarAlteracao();
     } catch (err) {
       console.error("Erro ao salvar lista:", err);
-      alert("Erro ao salvar lista: " + (err.message || "Erro desconhecido"));
+      alert("Erro ao salvar lista.");
     } finally {
       setLoading(false);
     }
@@ -248,7 +266,6 @@ export default function Listagem({ projetoAtual, notaAtual, usuarioAtual }) {
 
       <div className="action-buttons">
         <button className="add-row-btn" onClick={addRow}><FaPlus /> Adicionar linha</button>
-
         <input
           type="text"
           className="direcionar-para-input"
@@ -256,7 +273,6 @@ export default function Listagem({ projetoAtual, notaAtual, usuarioAtual }) {
           value={direcionarPara}
           onChange={(e) => setDirecionarPara(e.target.value)}
         />
-
         <button className="send-btn" onClick={handleSave}>
           <FaPaperPlane style={{ marginRight: 6 }} /> Enviar
         </button>
@@ -280,92 +296,141 @@ export default function Listagem({ projetoAtual, notaAtual, usuarioAtual }) {
           <tbody>
             {rows.map((row, idx) => {
               const isCriar = row.codigo?.toLowerCase() === "criar";
+
+              // Editável se: nova linha OU enviada há < 1h
+              const isEditavel = (() => {
+                if (!row.id) return true;
+                if (!row.data_envio) return false;
+                const envioMs = new Date(row.data_envio).getTime();
+                return (Date.now() - envioMs) < 60 * 60 * 1000;
+              })();
+
+              const isLinhaCongelada = !isEditavel;
+
+              const currentGroup = row.grupo_envio;
+              const nextRow = rows[idx + 1];
+              const isLastInGroup = !nextRow || nextRow.grupo_envio !== currentGroup;
+
               return (
-                <tr key={row.id ?? idx}>
-                  <td>{idx + 1}</td>
-                  <td>
-                    <input
-                      type="text"
-                      value={row.codigo}
-                      onChange={(e) => handleInputChange(idx, "codigo", e.target.value)}
-                      onBlur={() => buscarItemPorCodigo(idx, row.codigo)}
-                      onKeyPress={(e) => handleCodigoEnter(e, idx, row.codigo)}
-                      placeholder="Código"
-                    />
-                  </td>
-                  <td>
-                    {isCriar ? (
+                <React.Fragment key={row.id ?? idx}>
+                  <tr className={isLinhaCongelada ? "linha-congelada" : ""}>
+                    <td>{idx + 1}</td>
+                    <td>
                       <input
                         type="text"
-                        value={row.descricao || ""}
-                        onChange={(e) => handleInputChange(idx, "descricao", e.target.value)}
-                        placeholder="Descrição do novo item"
+                        value={row.codigo}
+                        onChange={(e) => handleInputChange(idx, "codigo", e.target.value)}
+                        onBlur={() => buscarItemPorCodigo(idx, row.codigo)}
+                        onKeyPress={(e) => handleCodigoEnter(e, idx, row.codigo)}
+                        placeholder="Código"
+                        disabled={isLinhaCongelada}
                       />
-                    ) : (
-                      <span>{row.descricao || "—"}</span>
-                    )}
-                  </td>
-                  <td>
-                    {isCriar ? (
-                      <select
-                        value={row.unidade || ""}
-                        onChange={(e) => handleInputChange(idx, "unidade", e.target.value)}
-                      >
-                        <option value="">(selecionar)</option>
-                        {unidadesDisponiveis.map((un, i) => (
-                          <option key={i} value={un}>{un}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span>{row.unidade || ""}</span>
-                    )}
-                  </td>
-                  <td>
-                    <input
-                      type="number"
-                      value={row.quantidade ?? ""}
-                      onChange={(e) => handleInputChange(idx, "quantidade", e.target.value)}
-                      min="0"
-                      step="any"
-                    />
-                  </td>
-                  <td>
-                    <select
-                      value={row.locacao || ""}
-                      onChange={(e) => handleInputChange(idx, "locacao", e.target.value)}
-                    >
-                      <option value="">(selecionar)</option>
-                      {locacoes.map((loc, i) => (
-                        <option key={i} value={loc}>{loc}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>
-                    <select
-                      value={row.eap || ""}
-                      onChange={(e) => handleInputChange(idx, "eap", e.target.value)}
-                    >
-                      <option value="">(selecionar)</option>
-                      {eaps.map((eap, i) => (
-                        <option key={i} value={eap}>{eap}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>{row.fornecedor}</td>
-                  <td>
-                    <div className="button-group">
-                      <button
-                        className="add-supabase-btn"
-                        onClick={() => alert("Funcionalidade de adicionar insumo ainda em desenvolvimento")}
-                      >
-                        <FaPlus />
-                      </button>
-                      <button className="remove-btn" onClick={() => removeRow(idx)}>
-                        <FaTimes />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+                    </td>
+                    <td>
+                      {isCriar && isEditavel ? (
+                        <input
+                          type="text"
+                          value={row.descricao || ""}
+                          onChange={(e) => handleInputChange(idx, "descricao", e.target.value)}
+                          placeholder="Descrição do novo item"
+                        />
+                      ) : (
+                        <span>{row.descricao || "—"}</span>
+                      )}
+                    </td>
+                    <td>
+                      {/* ✅ Unidade só editável se for "criar" */}
+                      {isCriar && isEditavel ? (
+                        <select
+                          value={row.unidade || ""}
+                          onChange={(e) => handleInputChange(idx, "unidade", e.target.value)}
+                        >
+                          <option value="">(selecionar)</option>
+                          {unidadesDisponiveis.map((un, i) => (
+                            <option key={i} value={un}>{un}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span>{row.unidade || "—"}</span>
+                      )}
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        value={row.quantidade ?? ""}
+                        onChange={(e) => handleInputChange(idx, "quantidade", e.target.value)}
+                        min="0"
+                        step="any"
+                        disabled={isLinhaCongelada}
+                      />
+                    </td>
+                    <td>
+                      {isEditavel ? (
+                        <select
+                          value={row.locacao || ""}
+                          onChange={(e) => handleInputChange(idx, "locacao", e.target.value)}
+                        >
+                          <option value="">(selecionar)</option>
+                          {locacoes.map((loc, i) => (
+                            <option key={i} value={loc}>{loc}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span>{row.locacao || "—"}</span>
+                      )}
+                    </td>
+                    <td>
+                      {isEditavel ? (
+                        <select
+                          value={row.eap || ""}
+                          onChange={(e) => handleInputChange(idx, "eap", e.target.value)}
+                        >
+                          <option value="">(selecionar)</option>
+                          {eaps.map((eap, i) => (
+                            <option key={i} value={eap}>{eap}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span>{row.eap || "—"}</span>
+                      )}
+                    </td>
+                    <td>{row.fornecedor || "—"}</td>
+                    <td>
+                      <div className="button-group">
+                        {isEditavel && (
+                          <button
+                            className="add-supabase-btn"
+                            onClick={() => alert("Funcionalidade de adicionar insumo ainda em desenvolvimento")}
+                          >
+                            <FaPlus />
+                          </button>
+                        )}
+                        {isEditavel && (
+                          <button className="remove-btn" onClick={() => removeRow(idx)}>
+                            <FaTimes />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+
+                  {isLastInGroup && idx < rows.length - 1 && (
+                    <tr className="delimiter-row">
+                      <td colSpan="9">
+                        <div className="envio-delimiter">
+                          Enviado por <strong>{row.enviado_por}</strong> em{" "}
+                          {new Date(row.data_envio).toLocaleString("pt-BR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit"
+                          })}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               );
             })}
           </tbody>

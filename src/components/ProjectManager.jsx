@@ -27,6 +27,24 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
   const [menuSetorAberto, setMenuSetorAberto] = useState(null);
   const [background, setBackground] = useState("#f1f1f1ff"); // padrão
   const [showBackgroundMenu, setShowBackgroundMenu] = useState(false);
+  const handleSetBackground = async (value) => {
+      // Atualiza UI imediatamente
+      setBackground(value);
+      setShowBackgroundMenu(false);
+
+      // Salva no Supabase (tabela profiles)
+      if (containerAtual) {
+        const { error } = await supabase
+          .from("profiles")
+          .update({ background: value })
+          .eq("id", containerAtual);
+
+        if (error) {
+          console.error("Erro ao salvar fundo no Supabase:", error);
+          // Opcional: reverter UI ou mostrar alerta
+        }
+      }
+    };
 
   function initialProjectState() {
     return {
@@ -116,13 +134,31 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
   };
 
   useEffect(() => {
-    if (containerAtual) {
-      setLoading(true);
-      Promise.all([fetchProjects(containerAtual), fetchSetores(containerAtual)]).finally(() =>
-        setLoading(false)
-      );
-    }
-  }, [containerAtual]);
+  if (containerAtual) {
+    setLoading(true);
+    // Carrega o background do perfil
+    const loadUserBackground = async () => {
+      const { data: profile, error } = await supabase
+        .from("profiles")
+        .select("background")
+        .eq("id", containerAtual)
+        .single();
+
+      if (error) {
+        console.warn("Não foi possível carregar o fundo do perfil:", error);
+        setBackground("#f1f1f1ff");
+      } else {
+        setBackground(profile.background || "#f1f1f1ff");
+      }
+    };
+
+    Promise.all([
+      loadUserBackground(),
+      fetchProjects(containerAtual),
+      fetchSetores(containerAtual)
+    ]).finally(() => setLoading(false));
+  }
+}, [containerAtual]);
 
   const getRandomColor = () => {
     const colors = ["#FFB74D", "#4DB6AC", "#BA68C8", "#7986CB", "#F06292", "#81C784"];
@@ -427,10 +463,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
               <div
                 key={opt.value}
                 className="background-option"
-                onClick={() => {
-                  setBackground(opt.value);
-                  setShowBackgroundMenu(false);
-                }}
+                onClick={() => handleSetBackground(opt.value)}
               >
                 <div
                   className="background-swatch"

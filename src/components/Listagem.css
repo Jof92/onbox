@@ -244,8 +244,6 @@ select {
 .action-buttons {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 15px;
 }
 
 .add-row-btn, .send-btn {
@@ -281,4 +279,24 @@ select {
 .direcionar-para-input:focus {
   border-color: #00c48c;
   box-shadow: 0 0 3px rgba(0, 196, 140, 0.5);
+}
+
+.envio-delimiter {
+  text-align: center;
+  font-size: 12px;
+  color: #6c757d;
+  margin: 0 0 6px 0;
+  font-style: italic;
+}
+
+.envio-delimiter {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(to right, transparent, #96d9ff, transparent);
+}
+
+.linha-congelada,
+.linha-congelada td {
+  background-color: #ffffff !important;
+  border: none !important;
 }
