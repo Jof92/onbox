@@ -8,10 +8,7 @@
   text-align: center;
   font-size: 0.9rem;
   z-index: 1000;        /* garante que fique acima do conteúdo */
-  p{
-    margin: 5px 0;
-  }
-  
+   
 }
 
 .footer a {

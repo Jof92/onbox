@@ -6,6 +6,10 @@ import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
 import Sidebar from "./Sidebar";
 import SetoresManager from "./SetoresManager";
+import backImg from "../assets/back.png";
+import back1Img from "../assets/back1.png";
+import back2Img from "../assets/back2.png";
+import back3Img from "../assets/back3.png";
 import "./Containers.css";
 
 export default function ProjectManager({ containerAtual, onProjectSelect, onProjectDeleted }) {
@@ -21,6 +25,8 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
   const [newProject, setNewProject] = useState(initialProjectState());
   const [showSetoresModal, setShowSetoresModal] = useState(false);
   const [menuSetorAberto, setMenuSetorAberto] = useState(null);
+  const [background, setBackground] = useState("#f1f1f1ff"); // padrão
+  const [showBackgroundMenu, setShowBackgroundMenu] = useState(false);
 
   function initialProjectState() {
     return {
@@ -381,7 +387,65 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
         onOpenSetoresManager={handleOpenSetoresManager}
       />
 
-      <main className="containers-main">
+      <main className="containers-main"
+          style={{
+          background: background.startsWith("#")
+            ? background
+            : `url(${background}) center/300px auto repeat`,
+        }}
+      >
+        {/* Botão de três pontos */}
+        <div className="dot-btn"
+          style={{
+            position: "absolute",
+            right: "10px",
+            cursor: "pointer",
+            fontSize: "20px",
+            zIndex: 1001,
+            color: "#fff",
+            textShadow: "0 1px 2px rgba(0,0,0,0.5)",
+          }}
+          onClick={() => setShowBackgroundMenu(!showBackgroundMenu)}
+        >
+          ⋮
+        </div>
+
+        {/* Menu de fundo */}
+        {showBackgroundMenu && (
+          <div className="background-menu">
+            {[
+              { label: "Padrão", value: "#f1f1f1ff" },
+              { label: "Preto", value: "#000000" },
+              { label: "Branco", value: "#ffffff" },
+              { label: "Azul Leve", value: "#e3f2fd" },
+              { label: "Verde Leve", value: "#e8f5e9" },
+              { label: "Fundo 1", value: backImg },
+              { label: "Fundo 2", value: back1Img },
+              { label: "Fundo 3", value: back2Img },
+              { label: "Fundo 4", value: back3Img },
+            ].map((opt) => (
+              <div
+                key={opt.value}
+                className="background-option"
+                onClick={() => {
+                  setBackground(opt.value);
+                  setShowBackgroundMenu(false);
+                }}
+              >
+                <div
+                  className="background-swatch"
+                  style={{
+                    backgroundColor: opt.value.startsWith("#") ? opt.value : "transparent",
+                    backgroundImage: opt.value.startsWith("#")
+                      ? "none"
+                      : `url(${opt.value})`,
+                  }}
+                />
+                {opt.label}
+              </div>
+            ))}
+          </div>
+        )}
         {!selectedProject ? (
           <>
             {projects.length > 0 ? (

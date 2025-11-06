@@ -682,3 +682,43 @@
 .setor-actions-menu button:last-child {
   color: #d32f2f;
 }
+
+.background-menu {
+  position: absolute;
+  right: 30px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  z-index: 1000;
+  padding: 8px;
+  min-width: 180px;
+}
+
+.background-option {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  cursor: pointer;
+  border-radius: 4px;
+  margin: 2px 0;
+}
+
+.dot-btn:hover {
+  background-color: #f0f0f0;
+}
+
+.background-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  margin-right: 10px;
+  background-size: cover;
+  background-position: center;
+}
+
+.dot-btn{
+  background: #fff;
+  padding: 5px;
+  border-radius: 10px;
+}
