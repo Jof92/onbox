@@ -119,7 +119,10 @@
   justify-content: flex-start;
   overflow-y: auto;
   padding: 20px;
+  background-image: url(../assets/back.png);
+  background-attachment: fixed;  /* opcional: fixa ao scroll */
 }
+
 
 /* Mensagem sem projetos */
 .no-projects {
