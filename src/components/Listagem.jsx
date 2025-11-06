@@ -14,6 +14,7 @@ export default function Listagem({ projetoAtual, notaAtual }) {
   const [direcionarPara, setDirecionarPara] = useState("");
   const [loading, setLoading] = useState(true);
   const [nomeUsuarioLogado, setNomeUsuarioLogado] = useState("Usuário");
+  const [codigoErro, setCodigoErro] = useState(new Set()); // ✅ controle de erros
 
   // Busca o nome real do usuário logado
   useEffect(() => {
@@ -117,20 +118,42 @@ export default function Listagem({ projetoAtual, notaAtual }) {
   }, [projetoAtual, notaAtual]);
 
   const buscarItemPorCodigo = async (index, codigo) => {
-    if (!codigo?.trim() || codigo.toLowerCase() === "criar") return;
+    if (!codigo?.trim() || codigo.toLowerCase() === "criar") {
+      setCodigoErro(prev => {
+        const novo = new Set(prev);
+        novo.delete(index);
+        return novo;
+      });
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from("itens")
         .select("descricao, unidade")
         .eq("codigo", codigo)
         .maybeSingle();
+
       if (error) throw error;
+
       const novas = [...rows];
-      novas[index] = { ...novas[index], descricao: data?.descricao || "", unidade: data?.unidade || "" };
+      if (data) {
+        novas[index] = { ...novas[index], descricao: data.descricao || "", unidade: data.unidade || "" };
+        setCodigoErro(prev => {
+          const novo = new Set(prev);
+          novo.delete(index);
+          return novo;
+        });
+      } else {
+        // ❌ Código não encontrado
+        setCodigoErro(prev => new Set(prev).add(index));
+        novas[index] = { ...novas[index], descricao: "", unidade: "" };
+      }
       setRows(novas);
       registrarAlteracao();
     } catch (err) {
       console.error("Erro ao buscar item por código:", err);
+      setCodigoErro(prev => new Set(prev).add(index));
     }
   };
 
@@ -195,7 +218,6 @@ export default function Listagem({ projetoAtual, notaAtual }) {
       const existentes = linhasValidas.filter(r => r.id);
       const novos = linhasValidas.filter(r => !r.id);
 
-      // Atualiza apenas campos editáveis — NÃO atualiza data_envio, grupo_envio nem enviado_por
       if (existentes.length) {
         await Promise.all(existentes.map(async (it) => {
           const payload = {
@@ -213,7 +235,6 @@ export default function Listagem({ projetoAtual, notaAtual }) {
         }));
       }
 
-      // Insere novas linhas com metadados
       if (novos.length) {
         const inserts = novos.map(it => ({
           projeto_id: projetoAtual.id,
@@ -235,6 +256,7 @@ export default function Listagem({ projetoAtual, notaAtual }) {
         if (error) throw error;
       }
 
+      setCodigoErro(new Set()); // Limpa erros após salvar
       await carregarDados();
       alert("Lista salva com sucesso!");
       registrarAlteracao();
@@ -297,7 +319,6 @@ export default function Listagem({ projetoAtual, notaAtual }) {
             {rows.map((row, idx) => {
               const isCriar = row.codigo?.toLowerCase() === "criar";
 
-              // Editável se: nova linha OU enviada há < 1h
               const isEditavel = (() => {
                 if (!row.id) return true;
                 if (!row.data_envio) return false;
@@ -319,11 +340,21 @@ export default function Listagem({ projetoAtual, notaAtual }) {
                       <input
                         type="text"
                         value={row.codigo}
-                        onChange={(e) => handleInputChange(idx, "codigo", e.target.value)}
+                        onChange={(e) => {
+                          handleInputChange(idx, "codigo", e.target.value);
+                          if (codigoErro.has(idx)) {
+                            setCodigoErro(prev => {
+                              const novo = new Set(prev);
+                              novo.delete(idx);
+                              return novo;
+                            });
+                          }
+                        }}
                         onBlur={() => buscarItemPorCodigo(idx, row.codigo)}
                         onKeyPress={(e) => handleCodigoEnter(e, idx, row.codigo)}
                         placeholder="Código"
                         disabled={isLinhaCongelada}
+                        className={codigoErro.has(idx) ? "codigo-invalido" : ""}
                       />
                     </td>
                     <td>
@@ -339,7 +370,6 @@ export default function Listagem({ projetoAtual, notaAtual }) {
                       )}
                     </td>
                     <td>
-                      {/* ✅ Unidade só editável se for "criar" */}
                       {isCriar && isEditavel ? (
                         <select
                           value={row.unidade || ""}
