@@ -14,7 +14,7 @@ import "./Containers.css";
 
 export default function ProjectManager({ containerAtual, onProjectSelect, onProjectDeleted }) {
   const navigate = useNavigate();
-  const location = useLocation(); // para passar 'from' ao navegar
+  const location = useLocation();
 
   const [projects, setProjects] = useState([]);
   const [setores, setSetores] = useState([]);
@@ -25,26 +25,16 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
   const [newProject, setNewProject] = useState(initialProjectState());
   const [showSetoresModal, setShowSetoresModal] = useState(false);
   const [menuSetorAberto, setMenuSetorAberto] = useState(null);
-  const [background, setBackground] = useState("#f1f1f1ff"); // padrão
+  const [background, setBackground] = useState("#f1f1f1ff");
   const [showBackgroundMenu, setShowBackgroundMenu] = useState(false);
-  const handleSetBackground = async (value) => {
-      // Atualiza UI imediatamente
-      setBackground(value);
-      setShowBackgroundMenu(false);
+  const [profile, setProfile] = useState(null);
 
-      // Salva no Supabase (tabela profiles)
-      if (containerAtual) {
-        const { error } = await supabase
-          .from("profiles")
-          .update({ background: value })
-          .eq("id", containerAtual);
-
-        if (error) {
-          console.error("Erro ao salvar fundo no Supabase:", error);
-          // Opcional: reverter UI ou mostrar alerta
-        }
-      }
-    };
+  // Estados para membros do projeto
+  const [membrosTexto, setMembrosTexto] = useState("");
+  const [membrosSelecionados, setMembrosSelecionados] = useState([]); // { id, nickname, avatar_url }
+  const [sugestoesMembros, setSugestoesMembros] = useState([]);
+  const [mostrarSugestoesMembros, setMostrarSugestoesMembros] = useState(false);
+  const [posicaoCaretMembros, setPosicaoCaretMembros] = useState(0);
 
   function initialProjectState() {
     return {
@@ -56,6 +46,35 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
       photoUrl: null,
     };
   }
+
+  // Carregar perfil do usuário logado
+  useEffect(() => {
+    if (containerAtual) {
+      const fetchProfile = async () => {
+        const { data } = await supabase
+          .from("profiles")
+          .select("nome")
+          .eq("id", containerAtual)
+          .single();
+        setProfile(data);
+      };
+      fetchProfile();
+    }
+  }, [containerAtual]);
+
+  const handleSetBackground = async (value) => {
+    setBackground(value);
+    setShowBackgroundMenu(false);
+    if (containerAtual) {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ background: value })
+        .eq("id", containerAtual);
+      if (error) {
+        setBackground("#f1f1f1ff");
+      }
+    }
+  };
 
   const fetchProjects = async (userId) => {
     const { data: projectsData, error } = await supabase
@@ -69,7 +88,6 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("Erro ao buscar projetos:", error);
       setProjects([]);
       return;
     }
@@ -112,7 +130,6 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
       .order("created_at", { ascending: true });
 
     if (error) {
-      console.error("Erro ao buscar setores:", error);
       setSetores([]);
       return;
     }
@@ -134,50 +151,113 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
   };
 
   useEffect(() => {
-  if (containerAtual) {
-    setLoading(true);
-    // Carrega o background do perfil
-    const loadUserBackground = async () => {
-      const { data: profile, error } = await supabase
-        .from("profiles")
-        .select("background")
-        .eq("id", containerAtual)
-        .single();
+    if (containerAtual) {
+      setLoading(true);
+      const loadUserBackground = async () => {
+        const { data: profile, error } = await supabase
+          .from("profiles")
+          .select("background")
+          .eq("id", containerAtual)
+          .single();
+        setBackground(profile?.background || "#f1f1f1ff");
+      };
 
-      if (error) {
-        console.warn("Não foi possível carregar o fundo do perfil:", error);
-        setBackground("#f1f1f1ff");
-      } else {
-        setBackground(profile.background || "#f1f1f1ff");
-      }
-    };
-
-    Promise.all([
-      loadUserBackground(),
-      fetchProjects(containerAtual),
-      fetchSetores(containerAtual)
-    ]).finally(() => setLoading(false));
-  }
-}, [containerAtual]);
+      Promise.all([
+        loadUserBackground(),
+        fetchProjects(containerAtual),
+        fetchSetores(containerAtual)
+      ]).finally(() => setLoading(false));
+    }
+  }, [containerAtual]);
 
   const getRandomColor = () => {
     const colors = ["#FFB74D", "#4DB6AC", "#BA68C8", "#7986CB", "#F06292", "#81C784"];
     return colors[Math.floor(Math.random() * colors.length)];
   };
 
-  const handlePhotoUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (file)
-      setNewProject((p) => ({ ...p, photoFile: file, photoUrl: URL.createObjectURL(file) }));
+  // === Funções de menção de membros ===
+  const buscarSugestoesMembros = async (termo) => {
+    if (!termo.trim() || !containerAtual) {
+      setSugestoesMembros([]);
+      return;
+    }
+
+    try {
+      const { data: convites } = await supabase
+        .from("convites")
+        .select("remetente_id")
+        .eq("user_id", containerAtual)
+        .eq("status", "aceito");
+
+      if (!convites?.length) {
+        setSugestoesMembros([]);
+        return;
+      }
+
+      const remetenteIds = convites.map(c => c.remetente_id);
+      const { data: perfis } = await supabase
+        .from("profiles")
+        .select("id, nickname, avatar_url")
+        .in("id", remetenteIds)
+        .ilike("nickname", `%${termo}%`)
+        .limit(5);
+
+      setSugestoesMembros(perfis || []);
+    } catch {
+      setSugestoesMembros([]);
+    }
   };
 
-  const handleListChange = (list, index, value) =>
-    setNewProject((p) => ({ ...p, [list]: p[list].map((item, i) => (i === index ? value : item)) }));
+  const handleMembrosChange = (e) => {
+    const valor = e.target.value;
+    setMembrosTexto(valor);
 
-  const addListItem = (list) => setNewProject((p) => ({ ...p, [list]: [...p[list], ""] }));
-  const removeListItem = (list, index) =>
-    setNewProject((p) => ({ ...p, [list]: p[list].filter((_, i) => i !== index) }));
+    const pos = e.target.selectionStart;
+    const antes = valor.substring(0, pos);
+    const ultimaArroba = antes.lastIndexOf("@");
 
+    if (ultimaArroba !== -1) {
+      const termo = antes.substring(ultimaArroba + 1).trim();
+      if (termo) {
+        setPosicaoCaretMembros(pos);
+        setMostrarSugestoesMembros(true);
+        buscarSugestoesMembros(termo);
+      } else {
+        setMostrarSugestoesMembros(false);
+      }
+    } else {
+      setMostrarSugestoesMembros(false);
+    }
+  };
+
+  const inserirMembro = (perfil) => {
+    const prefixo = membrosTexto.substring(0, posicaoCaretMembros);
+    const sufixo = membrosTexto.substring(posicaoCaretMembros);
+    const ultimaArroba = prefixo.lastIndexOf("@");
+    if (ultimaArroba === -1) return;
+
+    const novoTexto = prefixo.substring(0, ultimaArroba + 1) + perfil.nickname + " " + sufixo;
+    setMembrosTexto(novoTexto);
+    setMostrarSugestoesMembros(false);
+
+    if (!membrosSelecionados.some(m => m.id === perfil.id)) {
+      setMembrosSelecionados(prev => [...prev, {
+        id: perfil.id,
+        nickname: perfil.nickname,
+        avatar_url: perfil.avatar_url
+      }]);
+    }
+
+    setTimeout(() => {
+      const input = document.getElementById("membros-input");
+      if (input) {
+        input.focus();
+        input.setSelectionRange(novoTexto.length, novoTexto.length);
+      }
+    }, 0);
+  };
+
+  // === Salvamento com membros ===
   const saveProject = async () => {
     if (!newProject.name.trim()) return alert("Digite o nome do projeto!");
     setLoading(true);
@@ -206,12 +286,12 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
         currentProjectId = data.id;
       }
 
+      // Upload de foto
       if (newProject.photoFile) {
         const fileName = `${Date.now()}_${newProject.photoFile.name}`;
         const { error: uploadError } = await supabase.storage
           .from("projects_photos")
           .upload(fileName, newProject.photoFile, { upsert: true });
-
         if (uploadError) throw uploadError;
 
         const { data: urlData } = supabase.storage.from("projects_photos").getPublicUrl(fileName);
@@ -220,6 +300,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
         ]);
       }
 
+      // Pavimentos e EAP
       await supabase.from("pavimentos").delete().eq("project_id", currentProjectId);
       const pavimentosToInsert = newProject.pavimentos
         .filter(Boolean)
@@ -236,12 +317,43 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
         await supabase.from("eap").insert(eapToInsert);
       }
 
+      // === SALVAR MEMBROS NA TABELA project_members ===
+      if (membrosSelecionados.length > 0) {
+        // Primeiro, remove membros antigos (se estiver editando)
+        if (isEditing && selectedProject) {
+          await supabase.from("project_members").delete().eq("project_id", currentProjectId);
+        }
+
+        // Insere novos membros
+        const membrosParaInserir = membrosSelecionados.map(m => ({
+          project_id: currentProjectId,
+          user_id: m.id,
+          added_by: containerAtual
+        }));
+        const { error: membrosError } = await supabase.from("project_members").insert(membrosParaInserir);
+        if (membrosError) throw membrosError;
+
+        // Envia notificações
+        const notificacoes = membrosSelecionados.map(m => ({
+          user_id: m.id,
+          remetente_id: containerAtual,
+          mensagem: `${profile?.nome || "Você"} te adicionou ao projeto "${projectResult.name}"`,
+          projeto_id: currentProjectId,
+          lido: false,
+          created_at: new Date().toISOString(),
+          tipo: "convite_projeto"
+        }));
+        await supabase.from("notificacoes").insert(notificacoes);
+      }
+
+      // Reset
       setNewProject(initialProjectState());
+      setMembrosTexto("");
+      setMembrosSelecionados([]);
       setShowForm(false);
       setIsEditing(false);
       await fetchProjects(containerAtual);
     } catch (err) {
-      console.error("Erro ao salvar projeto:", err);
       alert("Erro ao salvar projeto.");
     } finally {
       setLoading(false);
@@ -265,23 +377,44 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
 
       await supabase.from("pavimentos").delete().eq("project_id", projectId);
       await supabase.from("eap").delete().eq("project_id", projectId);
+      await supabase.from("project_members").delete().eq("project_id", projectId); // ✅ Remove membros
       await supabase.from("projects").delete().eq("id", projectId);
 
       if (selectedProject?.id === projectId) setSelectedProject(null);
       onProjectDeleted?.();
       await fetchProjects(containerAtual);
     } catch (err) {
-      console.error("Erro ao excluir projeto:", err);
       alert("Erro ao excluir projeto.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleEditProject = (project) => {
+  const handleEditProject = async (project) => {
     setSelectedProject(project);
     setIsEditing(true);
     setShowForm(true);
+
+    // Carregar membros do projeto
+    const { data: membros } = await supabase
+      .from("project_members")
+      .select("user_id")
+      .eq("project_id", project.id);
+
+    if (membros?.length) {
+      const userIds = membros.map(m => m.user_id);
+      const { data: perfis } = await supabase
+        .from("profiles")
+        .select("id, nickname, avatar_url")
+        .in("id", userIds);
+
+      setMembrosSelecionados(perfis || []);
+      setMembrosTexto(perfis?.map(p => `@${p.nickname}`).join(" ") || "");
+    } else {
+      setMembrosSelecionados([]);
+      setMembrosTexto("");
+    }
+
     setNewProject({
       name: project.name || "",
       type: project.type || "vertical",
@@ -292,7 +425,6 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
     });
   };
 
-  // ✅ Navegação com `from` para permitir retorno preciso nas Pilhas
   const openCardsPage = (proj) => {
     navigate(`/cards/${encodeURIComponent(proj.name || "Projeto")}`, {
       state: {
@@ -320,7 +452,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
 
   const handleOpenSetoresManager = () => {
     if (!containerAtual) {
-      alert("Usuário não identificado. Faça login novamente.");
+      alert("Usuário não identificado.");
       return;
     }
     setShowSetoresModal(true);
@@ -364,11 +496,9 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
         setSetores((prev) =>
           prev.map((s) => (s.id === setor.id ? { ...s, photo_url: newPhotoUrl } : s))
         );
-
-        alert("Foto atualizada com sucesso!");
+        alert("Foto atualizada!");
       } catch (err) {
-        console.error("Erro ao atualizar foto:", err);
-        alert("Erro ao atualizar a foto do setor.");
+        alert("Erro ao atualizar a foto.");
       } finally {
         setLoading(false);
       }
@@ -377,8 +507,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
   };
 
   const handleDeleteSetor = async (setorId) => {
-    if (!window.confirm("Deseja realmente excluir este setor?")) return;
-
+    if (!window.confirm("Excluir setor?")) return;
     setLoading(true);
     try {
       const { data: photoRecords } = await supabase
@@ -395,10 +524,9 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
       await supabase.from("setores").delete().eq("id", setorId);
       setSetores((prev) => prev.filter((s) => s.id !== setorId));
       setMenuSetorAberto(null);
-      alert("Setor excluído com sucesso!");
+      alert("Setor excluído!");
     } catch (err) {
-      console.error("Erro ao excluir setor:", err);
-      alert("Erro ao excluir o setor.");
+      alert("Erro ao excluir.");
     } finally {
       setLoading(false);
     }
@@ -414,6 +542,8 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
         onCreateProject={() => {
           setIsEditing(false);
           setShowForm(true);
+          setMembrosTexto("");
+          setMembrosSelecionados([]);
         }}
         onProjectSelect={(proj) => {
           setSelectedProject(proj);
@@ -424,13 +554,12 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
       />
 
       <main className="containers-main"
-          style={{
+        style={{
           background: background.startsWith("#")
             ? background
             : `url(${background}) center/300px auto repeat`,
         }}
       >
-        {/* Botão de três pontos */}
         <div className="dot-btn"
           style={{
             position: "absolute",
@@ -446,7 +575,6 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
           ⋮
         </div>
 
-        {/* Menu de fundo */}
         {showBackgroundMenu && (
           <div className="background-menu">
             {[
@@ -479,6 +607,8 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
             ))}
           </div>
         )}
+
+        {/* ... resto do conteúdo (grid de projetos/setores) ... */}
         {!selectedProject ? (
           <>
             {projects.length > 0 ? (
@@ -656,7 +786,11 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
                 type="file"
                 id="photo-upload"
                 accept="image/*"
-                onChange={handlePhotoUpload}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file)
+                    setNewProject((p) => ({ ...p, photoFile: file, photoUrl: URL.createObjectURL(file) }));
+                }}
                 hidden
               />
             </div>
@@ -667,6 +801,72 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
               value={newProject.name}
               onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
             />
+
+            {/* ✅ Input de membros */}
+            <label>Adicionar membros (digite @)</label>
+            <div style={{ position: "relative" }}>
+              <input
+                id="membros-input"
+                type="text"
+                value={membrosTexto}
+                onChange={handleMembrosChange}
+                placeholder="Ex: @joao, @maria"
+                style={{ width: "100%", padding: "8px", marginTop: "4px" }}
+                onBlur={() => setTimeout(() => setMostrarSugestoesMembros(false), 200)}
+                onKeyPress={(e) => {
+                  if (e.key === "Enter" && mostrarSugestoesMembros && sugestoesMembros.length > 0) {
+                    e.preventDefault();
+                    inserirMembro(sugestoesMembros[0]);
+                  }
+                }}
+              />
+
+              {mostrarSugestoesMembros && sugestoesMembros.length > 0 && (
+                <div className="sugestoes-dropdown" style={{ position: "absolute", zIndex: 1000, width: "100%", background: "#fff", border: "1px solid #ddd", borderRadius: "4px", maxHeight: "150px", overflowY: "auto" }}>
+                  {sugestoesMembros.map((sug) => (
+                    <div
+                      key={sug.id}
+                      onClick={() => inserirMembro(sug)}
+                      onMouseDown={(e) => e.preventDefault()}
+                      style={{ padding: "8px 12px", cursor: "pointer", borderBottom: "1px solid #eee" }}
+                    >
+                      {sug.avatar_url ? (
+                        <img src={sug.avatar_url} alt="" style={{ width: "20px", height: "20px", borderRadius: "50%", verticalAlign: "middle", marginRight: "8px" }} />
+                      ) : (
+                        <span style={{ display: "inline-block", width: "20px", height: "20px", backgroundColor: "#ccc", borderRadius: "50%", textAlign: "center", lineHeight: "20px", color: "#fff", marginRight: "8px" }}>
+                          {sug.nickname?.charAt(0).toUpperCase() || "?"}
+                        </span>
+                      )}
+                      {sug.nickname}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Avatares dos membros selecionados */}
+            {membrosSelecionados.length > 0 && (
+              <div style={{ marginTop: "8px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                {membrosSelecionados.map((membro) => (
+                  <div key={membro.id} style={{ position: "relative", textAlign: "center" }}>
+                    {membro.avatar_url ? (
+                      <img
+                        src={membro.avatar_url}
+                        alt={membro.nickname}
+                        style={{ width: "32px", height: "32px", borderRadius: "50%", border: "2px solid #007bff" }}
+                      />
+                    ) : (
+                      <div style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: "#ccc", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: "bold", border: "2px solid #007bff" }}>
+                        {membro.nickname?.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <span style={{ fontSize: "10px", display: "block", marginTop: "2px" }}>
+                      {membro.nickname}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <label>Tipo de Projeto</label>
             <select
@@ -681,7 +881,9 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
               <div>
                 <div className="list-header">
                   Pavimentos{" "}
-                  <FaPlus className="add-icon" onClick={() => addListItem("pavimentos")} />
+                  <FaPlus className="add-icon" onClick={() => {
+                    setNewProject(p => ({ ...p, pavimentos: [...p.pavimentos, ""] }));
+                  }} />
                 </div>
                 <div className="list-container">
                   {newProject.pavimentos.map((p, i) => (
@@ -690,11 +892,18 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
                         type="text"
                         placeholder={`Pavimento ${i + 1}`}
                         value={p}
-                        onChange={(e) => handleListChange("pavimentos", i, e.target.value)}
+                        onChange={(e) => {
+                          const novos = [...newProject.pavimentos];
+                          novos[i] = e.target.value;
+                          setNewProject({ ...newProject, pavimentos: novos });
+                        }}
                       />
                       <FaTrash
                         className="delete-icon"
-                        onClick={() => removeListItem("pavimentos", i)}
+                        onClick={() => {
+                          const novos = newProject.pavimentos.filter((_, idx) => idx !== i);
+                          setNewProject({ ...newProject, pavimentos: novos });
+                        }}
                       />
                     </div>
                   ))}
@@ -703,7 +912,9 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
             )}
 
             <div className="list-header">
-              EAP <FaPlus className="add-icon" onClick={() => addListItem("eap")} />
+              EAP <FaPlus className="add-icon" onClick={() => {
+                setNewProject(p => ({ ...p, eap: [...p.eap, ""] }));
+              }} />
             </div>
             <div className="list-container">
               {newProject.eap.map((e, i) => (
@@ -712,9 +923,16 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
                     type="text"
                     placeholder={`EAP ${i + 1}`}
                     value={e}
-                    onChange={(ev) => handleListChange("eap", i, ev.target.value)}
+                    onChange={(ev) => {
+                      const novos = [...newProject.eap];
+                      novos[i] = ev.target.value;
+                      setNewProject({ ...newProject, eap: novos });
+                    }}
                   />
-                  <FaTrash className="delete-icon" onClick={() => removeListItem("eap", i)} />
+                  <FaTrash className="delete-icon" onClick={() => {
+                    const novos = newProject.eap.filter((_, idx) => idx !== i);
+                    setNewProject({ ...newProject, eap: novos });
+                  }} />
                 </div>
               ))}
             </div>
@@ -731,7 +949,6 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
         </div>
       )}
 
-      {/* Modal de Setor */}
       {showSetoresModal && containerAtual && (
         <SetoresManager
           userId={containerAtual}

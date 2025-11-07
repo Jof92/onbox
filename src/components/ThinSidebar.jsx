@@ -3,12 +3,12 @@ import React, { useState, useEffect } from "react";
 import { FaCog, FaUpload, FaUserFriends, FaHome } from "react-icons/fa";
 import "./ThinSidebar.css";
 import Collab from "./Collab";
-import ContainerSettings from "./ContainerSettings"; // 👈 Import do novo componente
+import ContainerSettings from "./ContainerSettings";
 import { supabase } from "../supabaseClient";
 
 export default function ThinSidebar({ containerAtual, setContainerAtual, user }) {
   const [showCollab, setShowCollab] = useState(false);
-  const [showSettings, setShowSettings] = useState(false); // 👈 Estado para configurações
+  const [showSettings, setShowSettings] = useState(false);
   const [notificacoesPendentes, setNotificacoesPendentes] = useState(0);
   const [colaboradores, setColaboradores] = useState([]);
 
@@ -73,10 +73,12 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
     if (user?.id) setContainerAtual(user.id);
   };
 
+  // ✅ SEMPRE use user.id para configurações pessoais, NUNCA containerAtual
+  const meuContainerId = user?.id;
+
   return (
     <>
       <aside className="thin-sidebar">
-        {/* Botões principais */}
         <button
           className="thin-btn"
           title="Voltar ao meu container"
@@ -87,8 +89,8 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
 
         <button
           className="thin-btn"
-          title="Configurações"
-          onClick={() => setShowSettings(true)} // 👈 Abre as configurações
+          title="Minhas configurações"
+          onClick={() => setShowSettings(true)} // ✅ Sempre abre minhas configurações
         >
           <FaCog />
         </button>
@@ -106,7 +108,6 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
           {notificacoesPendentes > 0 && <span className="badge"></span>}
         </button>
 
-        {/* 🔹 Grupo de colaboradores */}
         <div className="thin-collab-group">
           {colaboradores.map((c) => (
             <button
@@ -133,7 +134,6 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
         </div>
       </aside>
 
-      {/* Modal de Colaboração */}
       {showCollab && (
         <Collab
           onClose={() => {
@@ -146,11 +146,10 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
         />
       )}
 
-      {/* Modal de Configurações do Container */}
       {showSettings && (
         <ContainerSettings
           onClose={() => setShowSettings(false)}
-          containerId={containerAtual}
+          containerId={meuContainerId} // ✅ SEMPRE o seu container
           user={user}
         />
       )}

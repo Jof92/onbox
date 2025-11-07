@@ -11,22 +11,27 @@ export default function Listagem({ projetoAtual, notaAtual }) {
   const [locacoes, setLocacoes] = useState([]);
   const [eaps, setEaps] = useState([]);
   const [unidadesDisponiveis, setUnidadesDisponiveis] = useState([]);
-  const [direcionarPara, setDirecionarPara] = useState("");
   const [loading, setLoading] = useState(true);
   const [nomeUsuarioLogado, setNomeUsuarioLogado] = useState("Usuário");
-  const [codigoErro, setCodigoErro] = useState(new Set()); // ✅ controle de erros
+  const [codigoErro, setCodigoErro] = useState(new Set());
+  const [textoAtual, setTextoAtual] = useState("");
+  const [sugestoes, setSugestoes] = useState([]);
+  const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
+  const [posicaoCaret, setPosicaoCaret] = useState(0);
+  const [userIdLogado, setUserIdLogado] = useState("");
 
-  // Busca o nome real do usuário logado
   useEffect(() => {
     const fetchUserProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("full_name")
+          .select("nome, id")
           .eq("id", user.id)
           .single();
-        setNomeUsuarioLogado(profile?.full_name || user.email?.split("@")[0] || "Usuário");
+
+        setNomeUsuarioLogado(profile?.nome || user.email?.split("@")[0] || "Usuário");
+        setUserIdLogado(profile?.id || "");
       }
     };
     fetchUserProfile();
@@ -34,17 +39,15 @@ export default function Listagem({ projetoAtual, notaAtual }) {
 
   const registrarAlteracao = (autor = nomeUsuarioLogado) => {
     const agora = new Date();
-    const timestamp = `${autor} alterou em ${agora.toLocaleDateString()} ${agora.toLocaleTimeString()}`;
-    setUltimaAlteracao(timestamp);
+    setUltimaAlteracao(`${autor} alterou em ${agora.toLocaleDateString()} ${agora.toLocaleTimeString()}`);
   };
 
-  const sortRowsByCreatedDesc = (arr) => {
-    return [...arr].sort((a, b) => {
+  const sortRowsByCreatedDesc = (arr) =>
+    [...arr].sort((a, b) => {
       const ta = a?.criado_em ? new Date(a.criado_em).getTime() : 0;
       const tb = b?.criado_em ? new Date(b.criado_em).getTime() : 0;
       return tb - ta;
     });
-  };
 
   const carregarDados = async () => {
     setLoading(true);
@@ -53,33 +56,21 @@ export default function Listagem({ projetoAtual, notaAtual }) {
         setRows(Array.from({ length: 10 }, () => ({
           codigo: "", descricao: "", unidade: "", quantidade: "", locacao: "", eap: "", fornecedor: ""
         })));
-        setLoading(false);
         return;
       }
 
-      const { data: pavimentosData } = await supabase
-        .from("pavimentos")
-        .select("name")
-        .eq("project_id", projetoAtual.id);
-      setLocacoes(pavimentosData?.map(p => p.name) || []);
-
-      const { data: eapsData } = await supabase
-        .from("eap")
-        .select("name")
-        .eq("project_id", projetoAtual.id);
-      setEaps(eapsData?.map(e => e.name) || []);
-
-      const { data: unidadesData } = await supabase.from("itens").select("unidade");
-      const unidadesUnicas = [...new Set(unidadesData?.map(u => u.unidade).filter(Boolean))];
-      setUnidadesDisponiveis(unidadesUnicas);
-
-      const { data: itensSalvos, error: itensErr } = await supabase
-        .from("planilha_itens")
-        .select("*")
-        .eq("nota_id", notaAtual.id)
-        .order("criado_em", { ascending: false });
+      const [{ data: pavimentosData }, { data: eapsData }, { data: unidadesData }, { data: itensSalvos, error: itensErr }] = await Promise.all([
+        supabase.from("pavimentos").select("name").eq("project_id", projetoAtual.id),
+        supabase.from("eap").select("name").eq("project_id", projetoAtual.id),
+        supabase.from("itens").select("unidade"),
+        supabase.from("planilha_itens").select("*").eq("nota_id", notaAtual.id).order("criado_em", { ascending: false })
+      ]);
 
       if (itensErr) throw itensErr;
+
+      setLocacoes(pavimentosData?.map(p => p.name) || []);
+      setEaps(eapsData?.map(e => e.name) || []);
+      setUnidadesDisponiveis([...new Set(unidadesData?.map(u => u.unidade).filter(Boolean) || [])]);
 
       if (itensSalvos?.length) {
         const mapped = itensSalvos.map(item => ({
@@ -105,7 +96,6 @@ export default function Listagem({ projetoAtual, notaAtual }) {
 
       registrarAlteracao();
     } catch (err) {
-      console.error("Erro ao carregar dados:", err);
       alert("Erro ao carregar os dados da lista.");
     } finally {
       setLoading(false);
@@ -128,13 +118,11 @@ export default function Listagem({ projetoAtual, notaAtual }) {
     }
 
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("itens")
         .select("descricao, unidade")
         .eq("codigo", codigo)
         .maybeSingle();
-
-      if (error) throw error;
 
       const novas = [...rows];
       if (data) {
@@ -145,14 +133,12 @@ export default function Listagem({ projetoAtual, notaAtual }) {
           return novo;
         });
       } else {
-        // ❌ Código não encontrado
         setCodigoErro(prev => new Set(prev).add(index));
         novas[index] = { ...novas[index], descricao: "", unidade: "" };
       }
       setRows(novas);
       registrarAlteracao();
     } catch (err) {
-      console.error("Erro ao buscar item por código:", err);
       setCodigoErro(prev => new Set(prev).add(index));
     }
   };
@@ -169,20 +155,8 @@ export default function Listagem({ projetoAtual, notaAtual }) {
   };
 
   const addRow = () => {
-    const novaLinha = {
-      codigo: "",
-      descricao: "",
-      unidade: "",
-      quantidade: "",
-      locacao: "",
-      eap: "",
-      fornecedor: "",
-      criado_em: new Date().toISOString()
-    };
-    setRows(prev => {
-      const next = [...prev, novaLinha];
-      return sortRowsByCreatedDesc(next);
-    });
+    const novaLinha = { codigo: "", descricao: "", unidade: "", quantidade: "", locacao: "", eap: "", fornecedor: "", criado_em: new Date().toISOString() };
+    setRows(prev => sortRowsByCreatedDesc([...prev, novaLinha]));
     registrarAlteracao();
   };
 
@@ -196,18 +170,114 @@ export default function Listagem({ projetoAtual, notaAtual }) {
         const { error } = await supabase.from("planilha_itens").delete().eq("id", linha.id);
         if (error) throw error;
       } catch (err) {
-        console.error("Erro ao excluir item:", err);
         alert("Erro ao excluir item: " + (err.message || "Erro desconhecido"));
         await carregarDados();
       }
     }
   };
 
-  const handleSave = async () => {
-    if (!notaAtual?.id) {
-      alert("Nota não selecionada. Não é possível salvar.");
+  const extrairMencaoNicknames = (texto) => [...new Set([...texto.matchAll(/@([^\s@]+)/g)].map(m => m[1]))];
+
+  const buscarSugestoes = async (termo) => {
+    if (!termo.trim() || !userIdLogado) {
+      setSugestoes([]);
       return;
     }
+
+    try {
+      const todasSugestoes = [];
+
+      const { data: convites } = await supabase
+        .from("convites")
+        .select("remetente_id")
+        .eq("user_id", userIdLogado)
+        .eq("status", "aceito");
+
+      if (convites?.length) {
+        const remetenteIds = convites.map(c => c.remetente_id);
+        const { data: perfis } = await supabase
+          .from("profiles")
+          .select("id, nome, nickname")
+          .in("id", remetenteIds)
+          .ilike("nickname", `%${termo}%`)
+          .limit(3);
+
+        todasSugestoes.push(...(perfis?.map(p => ({ id: p.id, tipo: "perfil", display: p.nickname || p.nome })) || []));
+      }
+
+      const { data: projetos } = await supabase
+        .from("projects")
+        .select("id, name, nickname")
+        .eq("user_id", userIdLogado)
+        .ilike("nickname", `%${termo}%`)
+        .limit(3);
+      todasSugestoes.push(...(projetos?.map(p => ({ id: p.id, tipo: "projeto", display: p.nickname || p.name })) || []));
+
+      const { data: setores } = await supabase
+        .from("setores")
+        .select("id, name, nickname")
+        .eq("user_id", userIdLogado)
+        .ilike("nickname", `%${termo}%`)
+        .limit(3);
+      todasSugestoes.push(...(setores?.map(s => ({ id: s.id, tipo: "setor", display: s.nickname || s.name })) || []));
+
+      setSugestoes(todasSugestoes);
+    } catch (err) {
+      setSugestoes([]);
+    }
+  };
+
+  const inserirMencoes = (sugestao) => {
+    const prefixo = textoAtual.substring(0, posicaoCaret);
+    const sufixo = textoAtual.substring(posicaoCaret);
+    const ultimaArroba = prefixo.lastIndexOf("@");
+
+    if (ultimaArroba === -1) return;
+
+    const novoTexto = prefixo.substring(0, ultimaArroba + 1) + sugestao.display + " " + sufixo;
+    setTextoAtual(novoTexto);
+    setMostrarSugestoes(false);
+    setSugestoes([]);
+
+    setTimeout(() => {
+      const input = document.querySelector('.direcionar-para-input');
+      if (input) {
+        input.focus();
+        input.setSelectionRange(novoTexto.length, novoTexto.length);
+      }
+    }, 0);
+  };
+
+  const handleDirecionarParaChange = (e) => {
+    const valor = e.target.value;
+    setTextoAtual(valor);
+
+    const posicaoCursor = e.target.selectionStart;
+    const textoAntesCursor = valor.substring(0, posicaoCursor);
+    const ultimaArroba = textoAntesCursor.lastIndexOf("@");
+
+    if (ultimaArroba !== -1) {
+      const termo = textoAntesCursor.substring(ultimaArroba + 1).trim();
+      if (termo) {
+        setPosicaoCaret(posicaoCursor);
+        setMostrarSugestoes(true);
+        buscarSugestoes(termo);
+      } else {
+        setMostrarSugestoes(false);
+        setSugestoes([]);
+      }
+    } else {
+      setMostrarSugestoes(false);
+      setSugestoes([]);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!notaAtual?.id || !projetoAtual?.id) {
+      alert("Projeto ou nota não selecionados. Não é possível salvar.");
+      return;
+    }
+
     setLoading(true);
     try {
       const grupoEnvio = `envio_${Date.now()}`;
@@ -220,7 +290,7 @@ export default function Listagem({ projetoAtual, notaAtual }) {
 
       if (existentes.length) {
         await Promise.all(existentes.map(async (it) => {
-          const payload = {
+          const { error } = await supabase.from("planilha_itens").update({
             codigo: it.codigo?.trim() || null,
             descricao: it.descricao || null,
             unidade: it.unidade || null,
@@ -228,9 +298,8 @@ export default function Listagem({ projetoAtual, notaAtual }) {
             locacao: it.locacao || null,
             eap: it.eap || null,
             fornecedor: it.fornecedor || null,
-            direcionar_para: direcionarPara?.trim() || null
-          };
-          const { error } = await supabase.from("planilha_itens").update(payload).eq("id", it.id);
+            direcionar_para: textoAtual
+          }).eq("id", it.id);
           if (error) throw error;
         }));
       }
@@ -246,7 +315,7 @@ export default function Listagem({ projetoAtual, notaAtual }) {
           locacao: it.locacao || null,
           eap: it.eap || null,
           fornecedor: it.fornecedor || null,
-          direcionar_para: direcionarPara?.trim() || null,
+          direcionar_para: textoAtual,
           grupo_envio: grupoEnvio,
           data_envio: dataEnvio,
           enviado_por: remetente,
@@ -256,12 +325,55 @@ export default function Listagem({ projetoAtual, notaAtual }) {
         if (error) throw error;
       }
 
-      setCodigoErro(new Set()); // Limpa erros após salvar
+      let notificacoesParaInserir = [];
+      if (textoAtual.trim()) {
+        const nicknamesMencionados = extrairMencaoNicknames(textoAtual);
+        if (nicknamesMencionados.length > 0) {
+          const { data: perfis } = await supabase
+            .from("profiles")
+            .select("id, nickname")
+            .in("nickname", nicknamesMencionados);
+
+          if (perfis?.length) {
+            const { data: convitesAceitos } = await supabase
+              .from("convites")
+              .select("remetente_id")
+              .eq("user_id", userIdLogado)
+              .eq("status", "aceito");
+
+            const remetenteIdsValidos = convitesAceitos?.map(c => c.remetente_id) || [];
+            const destinatariosValidos = perfis.filter(p => remetenteIdsValidos.includes(p.id));
+
+            if (destinatariosValidos.length > 0) {
+              const mensagemBase = `${remetente} enviou uma atualização da listagem da nota "${notaAtual.nome}" do projeto "${projetoAtual.name}"`;
+              notificacoesParaInserir = destinatariosValidos.map(dest => ({
+                user_id: dest.id,
+                remetente_id: userIdLogado,
+                mensagem: mensagemBase,
+                projeto_id: projetoAtual.id,
+                nota_id: notaAtual.id,
+                lido: false,
+                created_at: new Date().toISOString(),
+                tipo: "menção"
+              }));
+            }
+          }
+        }
+      }
+
+      if (notificacoesParaInserir.length > 0) {
+        const { error: notifError } = await supabase.from("notificacoes").insert(notificacoesParaInserir);
+        if (notifError) {
+          // opcional: logar erro silenciosamente
+        }
+      }
+
+      setCodigoErro(new Set());
+      setTextoAtual(""); // ✅ Limpa o campo após o envio
       await carregarDados();
       alert("Lista salva com sucesso!");
       registrarAlteracao();
     } catch (err) {
-      console.error("Erro ao salvar lista:", err);
       alert("Erro ao salvar lista.");
     } finally {
       setLoading(false);
@@ -283,18 +395,44 @@ export default function Listagem({ projetoAtual, notaAtual }) {
           <span className="project-name">{projetoAtual?.name || "Sem projeto"}</span>
           <div className="sub-info"><span className="nota-name">{notaAtual?.nome || "Sem nota"}</span></div>
         </div>
-        <div className="alteracao-info">{ultimaAlteracao}</div>
       </div>
 
       <div className="action-buttons">
         <button className="add-row-btn" onClick={addRow}><FaPlus /> Adicionar linha</button>
-        <input
-          type="text"
-          className="direcionar-para-input"
-          placeholder="Direcionar para"
-          value={direcionarPara}
-          onChange={(e) => setDirecionarPara(e.target.value)}
-        />
+
+        <div style={{ position: "relative", maxWidth: "300px" }}>
+          <input
+            type="text"
+            className="direcionar-para-input"
+            placeholder="Direcionar para (ex: @joao, @projeto_x)"
+            value={textoAtual}
+            onChange={handleDirecionarParaChange}
+            onKeyPress={(e) => {
+              if (e.key === "Enter" && mostrarSugestoes && sugestoes.length > 0) {
+                e.preventDefault();
+                inserirMencoes(sugestoes[0]);
+              }
+            }}
+            onBlur={() => setTimeout(() => setMostrarSugestoes(false), 200)}
+          />
+
+          {mostrarSugestoes && sugestoes.length > 0 && (
+            <div className="sugestoes-dropdown">
+              {sugestoes.map((sug, idx) => (
+                <div
+                  key={idx}
+                  className="sugestao-item"
+                  onClick={() => inserirMencoes(sug)}
+                  onMouseDown={(e) => e.preventDefault()}
+                >
+                  <span>{sug.display}</span>
+                  <small>({sug.tipo})</small>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <button className="send-btn" onClick={handleSave}>
           <FaPaperPlane style={{ marginRight: 6 }} /> Enviar
         </button>
@@ -307,7 +445,7 @@ export default function Listagem({ projetoAtual, notaAtual }) {
               <th>#</th>
               <th>Código</th>
               <th>Descrição</th>
-              <th>Unidade</th>
+              <th>Unid</th>
               <th>Qtd.</th>
               <th>Locação</th>
               <th>EAP</th>
@@ -318,16 +456,8 @@ export default function Listagem({ projetoAtual, notaAtual }) {
           <tbody>
             {rows.map((row, idx) => {
               const isCriar = row.codigo?.toLowerCase() === "criar";
-
-              const isEditavel = (() => {
-                if (!row.id) return true;
-                if (!row.data_envio) return false;
-                const envioMs = new Date(row.data_envio).getTime();
-                return (Date.now() - envioMs) < 60 * 60 * 1000;
-              })();
-
+              const isEditavel = !row.id || (row.data_envio && (Date.now() - new Date(row.data_envio).getTime()) < 60 * 60 * 1000);
               const isLinhaCongelada = !isEditavel;
-
               const currentGroup = row.grupo_envio;
               const nextRow = rows[idx + 1];
               const isLastInGroup = !nextRow || nextRow.grupo_envio !== currentGroup;
@@ -366,7 +496,7 @@ export default function Listagem({ projetoAtual, notaAtual }) {
                           placeholder="Descrição do novo item"
                         />
                       ) : (
-                        <span>{row.descricao || "—"}</span>
+                        <span>{row.descricao || ""}</span>
                       )}
                     </td>
                     <td>
@@ -381,7 +511,7 @@ export default function Listagem({ projetoAtual, notaAtual }) {
                           ))}
                         </select>
                       ) : (
-                        <span>{row.unidade || "—"}</span>
+                        <span>{row.unidade || ""}</span>
                       )}
                     </td>
                     <td>
@@ -406,7 +536,7 @@ export default function Listagem({ projetoAtual, notaAtual }) {
                           ))}
                         </select>
                       ) : (
-                        <span>{row.locacao || "—"}</span>
+                        <span>{row.locacao || ""}</span>
                       )}
                     </td>
                     <td>
@@ -421,10 +551,10 @@ export default function Listagem({ projetoAtual, notaAtual }) {
                           ))}
                         </select>
                       ) : (
-                        <span>{row.eap || "—"}</span>
+                        <span>{row.eap || ""}</span>
                       )}
                     </td>
-                    <td>{row.fornecedor || "—"}</td>
+                    <td>{row.fornecedor || ""}</td>
                     <td>
                       <div className="button-group">
                         {isEditavel && (

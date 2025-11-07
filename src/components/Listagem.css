@@ -87,6 +87,10 @@
   transform: scale(1.05);
 }
 
+.head-list{
+  text-align: center;
+}
+
 /* ==============================
    📝 Tabela
    ============================== */
@@ -103,7 +107,6 @@
   background: #fafafa;
   padding: 10px;
   border-bottom: 1px solid #eee;
-  text-align: left;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -112,8 +115,8 @@
   padding: 10px;
   border-bottom: 1px dashed #eee;
   vertical-align: middle;
+  text-align: center;
 }
-
 .item-col {
   width: 50px;
   text-align: center;
@@ -312,4 +315,35 @@ select {
   border: 2px solid #e74c3c !important;
   animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
   background-color: #fdf2f2;
+}
+
+.direcionar-para-input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.sugestoes-dropdown {
+  position: absolute;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  width: 100%;
+  top: 100%;
+  left: 0;
+}
+
+.sugestao-item {
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.sugestao-item:hover {
+  background-color: #f0f0f0;
 }
