@@ -4,7 +4,6 @@ import "./Task.css";
 import { FiUploadCloud, FiUser } from "react-icons/fi";
 import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
-import Lottie from "lottie-react";
 import "./loader.css";
 
 export default function Task({ onClose, projetoAtual, notaAtual, containerId }) {

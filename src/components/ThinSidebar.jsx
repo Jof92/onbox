@@ -1,5 +1,5 @@
 // src/components/ThinSidebar.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { FaCog, FaUpload, FaUserFriends, FaHome } from "react-icons/fa";
 import "./ThinSidebar.css";
 import Collab from "./Collab";
@@ -12,14 +12,9 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
   const [notificacoesPendentes, setNotificacoesPendentes] = useState(0);
   const [colaboradores, setColaboradores] = useState([]);
 
-  useEffect(() => {
-    if (user?.email) {
-      fetchNotificacoes();
-      fetchColaboradores();
-    }
-  }, [user?.email]);
-
-  const fetchNotificacoes = async () => {
+  // ✅ Envolver fetchNotificacoes com useCallback
+  const fetchNotificacoes = useCallback(async () => {
+    if (!user?.email) return;
     try {
       const { data: convites, error } = await supabase
         .from("convites")
@@ -31,9 +26,11 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
     } catch {
       setNotificacoesPendentes(0);
     }
-  };
+  }, [user?.email]);
 
-  const fetchColaboradores = async () => {
+  // ✅ Envolver fetchColaboradores com useCallback
+  const fetchColaboradores = useCallback(async () => {
+    if (!user?.email) return;
     try {
       const { data: convitesAceitos, error } = await supabase
         .from("convites")
@@ -43,7 +40,7 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
       if (error) throw error;
 
       const colaboradoresComPerfil = await Promise.all(
-        convitesAceitos.map(async (c) => {
+        (convitesAceitos || []).map(async (c) => {
           const { data: remetente } = await supabase
             .from("profiles")
             .select("id,nome,email,avatar_url,container")
@@ -57,7 +54,13 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
     } catch {
       setColaboradores([]);
     }
-  };
+  }, [user?.email]);
+
+  // ✅ Agora as funções estão nas dependências
+  useEffect(() => {
+    fetchNotificacoes();
+    fetchColaboradores();
+  }, [user?.email, fetchNotificacoes, fetchColaboradores]);
 
   const handleOpenCollab = () => {
     setShowCollab(true);
@@ -73,7 +76,6 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
     if (user?.id) setContainerAtual(user.id);
   };
 
-  // ✅ SEMPRE use user.id para configurações pessoais, NUNCA containerAtual
   const meuContainerId = user?.id;
 
   return (
@@ -90,7 +92,7 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
         <button
           className="thin-btn"
           title="Minhas configurações"
-          onClick={() => setShowSettings(true)} // ✅ Sempre abre minhas configurações
+          onClick={() => setShowSettings(true)}
         >
           <FaCog />
         </button>
@@ -140,16 +142,15 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
             setShowCollab(false);
             fetchColaboradores();
           }}
-          containerAtual={containerAtual}
           user={user}
-          onAtualizarNotificacoes={fetchNotificacoes}
+          onOpenTask={() => {}}
         />
       )}
 
       {showSettings && (
         <ContainerSettings
           onClose={() => setShowSettings(false)}
-          containerId={meuContainerId} // ✅ SEMPRE o seu container
+          containerId={meuContainerId}
           user={user}
         />
       )}

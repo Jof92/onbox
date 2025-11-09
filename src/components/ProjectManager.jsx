@@ -1,7 +1,6 @@
 // src/components/ProjectManager.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { FaArrowLeft, FaPlus, FaTrash } from "react-icons/fa";
 import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
 import Sidebar from "./Sidebar";

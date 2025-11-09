@@ -11,7 +11,7 @@ export default function SetoresManager({ userId, setorId = null, onClose }) {
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [isEditing, setIsEditing] = useState(!!setorId);
+  const isEditing = !!setorId; // ✅ Substituição feita aqui
 
   const [membrosTexto, setMembrosTexto] = useState("");
   const [membrosSelecionados, setMembrosSelecionados] = useState([]);

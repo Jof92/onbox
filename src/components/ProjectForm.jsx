@@ -28,7 +28,6 @@ export default function ProjectForm({
 
   const [sugestoesMembros, setSugestoesMembros] = useState([]);
   const [mostrarSugestoesMembros, setMostrarSugestoesMembros] = useState(false);
-  const [posicaoCaret, setPosicaoCaret] = useState(0);
 
   // Atualiza estado quando initialData muda (ex: ao editar)
   useEffect(() => {
@@ -118,7 +117,6 @@ export default function ProjectForm({
     const valor = e.target.value;
     const pos = e.target.selectionStart;
     setFormData((prev) => ({ ...prev, membrosTexto: valor }));
-    setPosicaoCaret(pos);
 
     const antes = valor.substring(0, pos);
     const ultimaArroba = antes.lastIndexOf("@");
