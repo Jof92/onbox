@@ -1,11 +1,14 @@
 // src/components/ProjectManager.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { FaArrowLeft, FaPlus, FaTrash, FaCamera } from "react-icons/fa";
+import { FaArrowLeft, FaPlus, FaTrash } from "react-icons/fa";
 import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
 import Sidebar from "./Sidebar";
 import SetoresManager from "./SetoresManager";
+import ProjectForm from "./ProjectForm";
+import ContainerGrid from "./ContainerGrid";
+import EntityDetails from "./EntityDetails";
 import backImg from "../assets/back.png";
 import back1Img from "../assets/back1.png";
 import back2Img from "../assets/back2.png";
@@ -19,47 +22,32 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
   const [projects, setProjects] = useState([]);
   const [setores, setSetores] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
+  const [selectedSetor, setSelectedSetor] = useState(null);
+  const [setorDetalhado, setSetorDetalhado] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [newProject, setNewProject] = useState(initialProjectState());
   const [showSetoresModal, setShowSetoresModal] = useState(false);
   const [menuSetorAberto, setMenuSetorAberto] = useState(null);
   const [background, setBackground] = useState("#f1f1f1ff");
   const [showBackgroundMenu, setShowBackgroundMenu] = useState(false);
   const [profile, setProfile] = useState(null);
+  const [initialFormData, setInitialFormData] = useState(null);
+  const [error, setError] = useState(null);
+  const [setorEmEdicao, setSetorEmEdicao] = useState(null); // ✅ para edição de setor
 
-  // Estados para membros do projeto
-  const [membrosTexto, setMembrosTexto] = useState("");
-  const [membrosSelecionados, setMembrosSelecionados] = useState([]); // { id, nickname, avatar_url }
-  const [sugestoesMembros, setSugestoesMembros] = useState([]);
-  const [mostrarSugestoesMembros, setMostrarSugestoesMembros] = useState(false);
-  const [posicaoCaretMembros, setPosicaoCaretMembros] = useState(0);
-
-  function initialProjectState() {
-    return {
-      name: "",
-      type: "vertical",
-      pavimentos: [],
-      eap: [],
-      photoFile: null,
-      photoUrl: null,
-    };
-  }
-
-  // Carregar perfil do usuário logado
+  // Carregar perfil
   useEffect(() => {
-    if (containerAtual) {
-      const fetchProfile = async () => {
-        const { data } = await supabase
-          .from("profiles")
-          .select("nome")
-          .eq("id", containerAtual)
-          .single();
-        setProfile(data);
-      };
-      fetchProfile();
-    }
+    const loadProfile = async () => {
+      if (!containerAtual) return;
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("nome")
+        .eq("id", containerAtual)
+        .single();
+      if (!error) setProfile(data);
+    };
+    loadProfile();
   }, [containerAtual]);
 
   const handleSetBackground = async (value) => {
@@ -70,206 +58,207 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
         .from("profiles")
         .update({ background: value })
         .eq("id", containerAtual);
-      if (error) {
-        setBackground("#f1f1f1ff");
-      }
+      if (error) setBackground("#f1f1f1ff");
     }
   };
 
   const fetchProjects = async (userId) => {
-    const { data: projectsData, error } = await supabase
-      .from("projects")
-      .select(`
-        *,
-        pavimentos(*),
-        eap(*)
-      `)
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false });
-
-    if (error) {
+    if (!userId) {
       setProjects([]);
       return;
     }
 
-    const projectsWithPhotos = await Promise.all(
-      (projectsData || []).map(async (proj) => {
-        const sortedPavimentos = [...(proj.pavimentos || [])].sort(
-          (a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)
-        );
-        const sortedEap = [...(proj.eap || [])].sort(
-          (a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)
-        );
+    try {
+      const { data: projectsData, error: projectsError } = await supabase
+        .from("projects")
+        .select(`*, pavimentos(*), eap(*)`)
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
 
-        const { data: photoData } = await supabase
-          .from("projects_photos")
-          .select("photo_url")
-          .eq("project_id", proj.id)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .single();
+      if (projectsError) throw projectsError;
 
-        return {
-          ...proj,
-          pavimentos: sortedPavimentos,
-          eap: sortedEap,
-          photo_url: photoData?.photo_url || null,
-        };
-      })
-    );
+      const enhancedProjects = [];
+      for (const proj of projectsData || []) {
+        try {
+          const { data: photoData } = await supabase
+            .from("projects_photos")
+            .select("photo_url")
+            .eq("project_id", proj.id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .single();
 
-    setProjects(projectsWithPhotos);
-    setSelectedProject(null);
+          const { data: membersData, error: membersError } = await supabase
+            .from("project_members")
+            .select("user_id")
+            .eq("project_id", proj.id);
+
+          let membrosDetalhados = [];
+          if (!membersError && membersData?.length) {
+            const userIds = membersData.map(m => m.user_id);
+            const { data: perfis, error: perfisError } = await supabase
+              .from("profiles")
+              .select("id, nickname, avatar_url")
+              .in("id", userIds);
+
+            if (!perfisError) {
+              membrosDetalhados = perfis || [];
+            }
+          }
+
+          const sortedPavimentos = [...(proj.pavimentos || [])].sort(
+            (a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)
+          );
+          const sortedEap = [...(proj.eap || [])].sort(
+            (a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)
+          );
+
+          enhancedProjects.push({
+            ...proj,
+            pavimentos: sortedPavimentos,
+            eap: sortedEap,
+            photo_url: photoData?.photo_url || null,
+            membros: membrosDetalhados,
+          });
+        } catch (err) {
+          enhancedProjects.push({
+            ...proj,
+            pavimentos: proj.pavimentos || [],
+            eap: proj.eap || [],
+            photo_url: null,
+            membros: [],
+          });
+        }
+      }
+
+      setProjects(enhancedProjects);
+    } catch (err) {
+      setError("Erro ao carregar projetos");
+      setProjects([]);
+    }
   };
 
   const fetchSetores = async (userId) => {
-    const { data: setoresData, error } = await supabase
-      .from("setores")
-      .select("*")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: true });
-
-    if (error) {
+    if (!userId) {
       setSetores([]);
       return;
     }
 
-    const setoresComFoto = await Promise.all(
-      (setoresData || []).map(async (setor) => {
-        const { data: photoData } = await supabase
-          .from("setores_photos")
-          .select("photo_url")
-          .eq("setor_id", setor.id)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .single();
-        return { ...setor, photo_url: photoData?.photo_url || null };
-      })
-    );
+    try {
+      const { data: setoresData, error } = await supabase
+        .from("setores")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: true });
 
-    setSetores(setoresComFoto);
+      if (error) throw error;
+
+      const setoresComFoto = await Promise.all(
+        (setoresData || []).map(async (setor) => {
+          const { data: photoData } = await supabase
+            .from("setores_photos")
+            .select("photo_url")
+            .eq("setor_id", setor.id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .single();
+          return { ...setor, photo_url: photoData?.photo_url || null };
+        })
+      );
+
+      setSetores(setoresComFoto);
+    } catch (err) {
+      setError("Erro ao carregar setores");
+      setSetores([]);
+    }
+  };
+
+  const loadSetorDetails = async (setor) => {
+    setLoading(true);
+    try {
+      const { data: membersData, error: membersError } = await supabase
+        .from("setor_members")
+        .select("user_id")
+        .eq("setor_id", setor.id);
+
+      let membrosDetalhados = [];
+      if (!membersError && membersData?.length) {
+        const userIds = membersData.map(m => m.user_id);
+        const { data: perfis, error: perfisError } = await supabase
+          .from("profiles")
+          .select("id, nickname, avatar_url")
+          .in("id", userIds);
+
+        if (!perfisError) {
+          membrosDetalhados = perfis || [];
+        }
+      }
+
+      setSetorDetalhado({ ...setor, membros: membrosDetalhados });
+    } catch (err) {
+      console.error("Erro ao carregar membros do setor:", err);
+      setSetorDetalhado({ ...setor, membros: [] });
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    if (containerAtual) {
-      setLoading(true);
-      const loadUserBackground = async () => {
-        const { data: profile, error } = await supabase
+    if (!containerAtual) {
+      setLoading(false);
+      setError("Usuário não identificado");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    const loadAll = async () => {
+      try {
+        const { data: profileData } = await supabase
           .from("profiles")
           .select("background")
           .eq("id", containerAtual)
           .single();
-        setBackground(profile?.background || "#f1f1f1ff");
-      };
+        setBackground(profileData?.background || "#f1f1f1ff");
 
-      Promise.all([
-        loadUserBackground(),
-        fetchProjects(containerAtual),
-        fetchSetores(containerAtual)
-      ]).finally(() => setLoading(false));
-    }
+        await Promise.all([
+          fetchProjects(containerAtual),
+          fetchSetores(containerAtual)
+        ]);
+      } catch (err) {
+        setError("Falha ao carregar dados do container");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadAll();
   }, [containerAtual]);
 
-  const getRandomColor = () => {
-    const colors = ["#FFB74D", "#4DB6AC", "#BA68C8", "#7986CB", "#F06292", "#81C784"];
-    return colors[Math.floor(Math.random() * colors.length)];
-  };
+  // === Projetos ===
 
-  // === Funções de menção de membros ===
-  const buscarSugestoesMembros = async (termo) => {
-    if (!termo.trim() || !containerAtual) {
-      setSugestoesMembros([]);
-      return;
-    }
+  const handleSaveProject = async (formData) => {
+    const {
+      name,
+      type,
+      pavimentos,
+      eap,
+      photoFile,
+      membrosSelecionados
+    } = formData;
 
-    try {
-      const { data: convites } = await supabase
-        .from("convites")
-        .select("remetente_id")
-        .eq("user_id", containerAtual)
-        .eq("status", "aceito");
-
-      if (!convites?.length) {
-        setSugestoesMembros([]);
-        return;
-      }
-
-      const remetenteIds = convites.map(c => c.remetente_id);
-      const { data: perfis } = await supabase
-        .from("profiles")
-        .select("id, nickname, avatar_url")
-        .in("id", remetenteIds)
-        .ilike("nickname", `%${termo}%`)
-        .limit(5);
-
-      setSugestoesMembros(perfis || []);
-    } catch {
-      setSugestoesMembros([]);
-    }
-  };
-
-  const handleMembrosChange = (e) => {
-    const valor = e.target.value;
-    setMembrosTexto(valor);
-
-    const pos = e.target.selectionStart;
-    const antes = valor.substring(0, pos);
-    const ultimaArroba = antes.lastIndexOf("@");
-
-    if (ultimaArroba !== -1) {
-      const termo = antes.substring(ultimaArroba + 1).trim();
-      if (termo) {
-        setPosicaoCaretMembros(pos);
-        setMostrarSugestoesMembros(true);
-        buscarSugestoesMembros(termo);
-      } else {
-        setMostrarSugestoesMembros(false);
-      }
-    } else {
-      setMostrarSugestoesMembros(false);
-    }
-  };
-
-  const inserirMembro = (perfil) => {
-    const prefixo = membrosTexto.substring(0, posicaoCaretMembros);
-    const sufixo = membrosTexto.substring(posicaoCaretMembros);
-    const ultimaArroba = prefixo.lastIndexOf("@");
-    if (ultimaArroba === -1) return;
-
-    const novoTexto = prefixo.substring(0, ultimaArroba + 1) + perfil.nickname + " " + sufixo;
-    setMembrosTexto(novoTexto);
-    setMostrarSugestoesMembros(false);
-
-    if (!membrosSelecionados.some(m => m.id === perfil.id)) {
-      setMembrosSelecionados(prev => [...prev, {
-        id: perfil.id,
-        nickname: perfil.nickname,
-        avatar_url: perfil.avatar_url
-      }]);
-    }
-
-    setTimeout(() => {
-      const input = document.getElementById("membros-input");
-      if (input) {
-        input.focus();
-        input.setSelectionRange(novoTexto.length, novoTexto.length);
-      }
-    }, 0);
-  };
-
-  // === Salvamento com membros ===
-  const saveProject = async () => {
-    if (!newProject.name.trim()) return alert("Digite o nome do projeto!");
+    if (!name?.trim()) return alert("Digite o nome do projeto!");
     setLoading(true);
 
-    let currentProjectId = selectedProject?.id;
+    let currentProjectId = isEditing ? selectedProject?.id : null;
     let projectResult;
 
     try {
       if (isEditing && selectedProject) {
         const { data, error } = await supabase
           .from("projects")
-          .update({ name: newProject.name, type: newProject.type })
+          .update({ name, type })
           .eq("id", selectedProject.id)
           .select()
           .single();
@@ -278,7 +267,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
       } else {
         const { data, error } = await supabase
           .from("projects")
-          .insert([{ name: newProject.name, type: newProject.type, user_id: containerAtual }])
+          .insert([{ name, type, user_id: containerAtual }])
           .select()
           .single();
         if (error) throw error;
@@ -286,12 +275,11 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
         currentProjectId = data.id;
       }
 
-      // Upload de foto
-      if (newProject.photoFile) {
-        const fileName = `${Date.now()}_${newProject.photoFile.name}`;
+      if (photoFile) {
+        const fileName = `${Date.now()}_${photoFile.name}`;
         const { error: uploadError } = await supabase.storage
           .from("projects_photos")
-          .upload(fileName, newProject.photoFile, { upsert: true });
+          .upload(fileName, photoFile, { upsert: true });
         if (uploadError) throw uploadError;
 
         const { data: urlData } = supabase.storage.from("projects_photos").getPublicUrl(fileName);
@@ -300,9 +288,8 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
         ]);
       }
 
-      // Pavimentos e EAP
       await supabase.from("pavimentos").delete().eq("project_id", currentProjectId);
-      const pavimentosToInsert = newProject.pavimentos
+      const pavimentosToInsert = pavimentos
         .filter(Boolean)
         .map((name, index) => ({ name, project_id: currentProjectId, ordem: index }));
       if (pavimentosToInsert.length > 0) {
@@ -310,21 +297,17 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
       }
 
       await supabase.from("eap").delete().eq("project_id", currentProjectId);
-      const eapToInsert = newProject.eap
+      const eapToInsert = eap
         .filter(Boolean)
         .map((name, index) => ({ name, project_id: currentProjectId, ordem: index }));
       if (eapToInsert.length > 0) {
         await supabase.from("eap").insert(eapToInsert);
       }
 
-      // === SALVAR MEMBROS NA TABELA project_members ===
-      if (membrosSelecionados.length > 0) {
-        // Primeiro, remove membros antigos (se estiver editando)
-        if (isEditing && selectedProject) {
+      if (membrosSelecionados?.length > 0) {
+        if (isEditing) {
           await supabase.from("project_members").delete().eq("project_id", currentProjectId);
         }
-
-        // Insere novos membros
         const membrosParaInserir = membrosSelecionados.map(m => ({
           project_id: currentProjectId,
           user_id: m.id,
@@ -333,7 +316,6 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
         const { error: membrosError } = await supabase.from("project_members").insert(membrosParaInserir);
         if (membrosError) throw membrosError;
 
-        // Envia notificações
         const notificacoes = membrosSelecionados.map(m => ({
           user_id: m.id,
           remetente_id: containerAtual,
@@ -346,13 +328,11 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
         await supabase.from("notificacoes").insert(notificacoes);
       }
 
-      // Reset
-      setNewProject(initialProjectState());
-      setMembrosTexto("");
-      setMembrosSelecionados([]);
       setShowForm(false);
       setIsEditing(false);
+      setSelectedProject(null);
       await fetchProjects(containerAtual);
+      onProjectSelect?.(projectResult);
     } catch (err) {
       alert("Erro ao salvar projeto.");
     } finally {
@@ -377,7 +357,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
 
       await supabase.from("pavimentos").delete().eq("project_id", projectId);
       await supabase.from("eap").delete().eq("project_id", projectId);
-      await supabase.from("project_members").delete().eq("project_id", projectId); // ✅ Remove membros
+      await supabase.from("project_members").delete().eq("project_id", projectId);
       await supabase.from("projects").delete().eq("id", projectId);
 
       if (selectedProject?.id === projectId) setSelectedProject(null);
@@ -391,39 +371,45 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
   };
 
   const handleEditProject = async (project) => {
-    setSelectedProject(project);
-    setIsEditing(true);
-    setShowForm(true);
-
-    // Carregar membros do projeto
-    const { data: membros } = await supabase
+    const { data: membros, error: membrosError } = await supabase
       .from("project_members")
       .select("user_id")
       .eq("project_id", project.id);
 
-    if (membros?.length) {
+    let membrosSelecionados = [];
+    let membrosTexto = "";
+
+    if (!membrosError && membros?.length) {
       const userIds = membros.map(m => m.user_id);
-      const { data: perfis } = await supabase
+      const { data: perfis, error: perfisError } = await supabase
         .from("profiles")
         .select("id, nickname, avatar_url")
         .in("id", userIds);
 
-      setMembrosSelecionados(perfis || []);
-      setMembrosTexto(perfis?.map(p => `@${p.nickname}`).join(" ") || "");
-    } else {
-      setMembrosSelecionados([]);
-      setMembrosTexto("");
+      if (!perfisError) {
+        membrosSelecionados = perfis || [];
+        membrosTexto = perfis?.map(p => `@${p.nickname}`).join(" ") || "";
+      }
     }
 
-    setNewProject({
+    const formData = {
       name: project.name || "",
       type: project.type || "vertical",
       pavimentos: project.pavimentos?.map((p) => p.name) || [],
       eap: project.eap?.map((e) => e.name) || [],
       photoFile: null,
       photoUrl: project.photo_url || null,
-    });
+      membrosTexto,
+      membrosSelecionados,
+    };
+
+    setSelectedProject(project);
+    setIsEditing(true);
+    setInitialFormData(formData);
+    setShowForm(true);
   };
+
+  // === Navegação ===
 
   const openCardsPage = (proj) => {
     navigate(`/cards/${encodeURIComponent(proj.name || "Projeto")}`, {
@@ -450,60 +436,14 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
     });
   };
 
+  // === Setores ===
+
   const handleOpenSetoresManager = () => {
     if (!containerAtual) {
       alert("Usuário não identificado.");
       return;
     }
     setShowSetoresModal(true);
-  };
-
-  const handleUpdateSetorPhoto = async (setor) => {
-    const fileInput = document.createElement("input");
-    fileInput.type = "file";
-    fileInput.accept = "image/*";
-    fileInput.onchange = async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-
-      setLoading(true);
-      try {
-        const { data: oldPhotos } = await supabase
-          .from("setores_photos")
-          .select("photo_url")
-          .eq("setor_id", setor.id);
-
-        if (oldPhotos?.length) {
-          const fileNames = oldPhotos.map((p) => p.photo_url.split("/").pop());
-          await supabase.storage.from("setores_photos").remove(fileNames);
-          await supabase.from("setores_photos").delete().eq("setor_id", setor.id);
-        }
-
-        const fileName = `setores/${setor.id}_${Date.now()}_${file.name}`;
-        const { error: uploadError } = await supabase.storage
-          .from("setores_photos")
-          .upload(fileName, file, { upsert: true });
-
-        if (uploadError) throw uploadError;
-
-        const { data: urlData } = supabase.storage.from("setores_photos").getPublicUrl(fileName);
-        const newPhotoUrl = urlData.publicUrl;
-
-        await supabase
-          .from("setores_photos")
-          .insert({ setor_id: setor.id, photo_url: newPhotoUrl });
-
-        setSetores((prev) =>
-          prev.map((s) => (s.id === setor.id ? { ...s, photo_url: newPhotoUrl } : s))
-        );
-        alert("Foto atualizada!");
-      } catch (err) {
-        alert("Erro ao atualizar a foto.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fileInput.click();
   };
 
   const handleDeleteSetor = async (setorId) => {
@@ -521,9 +461,12 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
         await supabase.from("setores_photos").delete().eq("setor_id", setorId);
       }
 
+      await supabase.from("setor_members").delete().eq("setor_id", setorId);
       await supabase.from("setores").delete().eq("id", setorId);
       setSetores((prev) => prev.filter((s) => s.id !== setorId));
       setMenuSetorAberto(null);
+      setSelectedSetor(null);
+      setSetorDetalhado(null);
       alert("Setor excluído!");
     } catch (err) {
       alert("Erro ao excluir.");
@@ -532,7 +475,20 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
     }
   };
 
-  if (loading && !projects.length && !setores.length) return <Loading />;
+  // === Renderização ===
+
+  if (loading && !projects.length && !setores.length && !selectedSetor) {
+    return <Loading />;
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: "20px", color: "red", textAlign: "center" }}>
+        <h3>⚠️ Erro</h3>
+        <p>{error}</p>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -541,9 +497,8 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
         selectedProject={selectedProject}
         onCreateProject={() => {
           setIsEditing(false);
+          setInitialFormData(null);
           setShowForm(true);
-          setMembrosTexto("");
-          setMembrosSelecionados([]);
         }}
         onProjectSelect={(proj) => {
           setSelectedProject(proj);
@@ -553,14 +508,16 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
         onOpenSetoresManager={handleOpenSetoresManager}
       />
 
-      <main className="containers-main"
+      <main
+        className="containers-main"
         style={{
           background: background.startsWith("#")
             ? background
             : `url(${background}) center/300px auto repeat`,
         }}
       >
-        <div className="dot-btn"
+        <div
+          className="dot-btn"
           style={{
             position: "absolute",
             right: "10px",
@@ -608,134 +565,23 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
           </div>
         )}
 
-        {/* ... resto do conteúdo (grid de projetos/setores) ... */}
-        {!selectedProject ? (
-          <>
-            {projects.length > 0 ? (
-              <div className="projects-grid">
-                {projects.map((proj) => (
-                  <div
-                    key={proj.id}
-                    className="project-box"
-                    onClick={() => openCardsPage(proj)}
-                  >
-                    <div
-                      className="project-photo"
-                      style={{
-                        backgroundColor: proj.photo_url ? undefined : getRandomColor(),
-                        color: "#fff",
-                      }}
-                    >
-                      {proj.photo_url ? (
-                        <img src={proj.photo_url} alt={proj.name || "Projeto"} />
-                      ) : (
-                        proj.name?.charAt(0).toUpperCase() || "?"
-                      )}
-                    </div>
-                    <h3>{proj.name || "Projeto"}</h3>
-                    <p>
-                      {proj.type === "vertical" ? "Edificação Vertical" : "Edificação Horizontal"}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="no-projects">Tudo calmo por aqui ainda...</p>
-            )}
-
-            {setores.length > 0 && (
-              <>
-                <hr className="setores-divider" />
-                <div className="projects-grid">
-                  {setores.map((setor) => (
-                    <div
-                      key={setor.id}
-                      className="project-box"
-                      onClick={() => openSetorCardsPage(setor)}
-                      style={{ position: "relative", cursor: "pointer" }}
-                    >
-                      <div
-                        className="setor-actions-trigger"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setMenuSetorAberto(menuSetorAberto === setor.id ? null : setor.id);
-                        }}
-                      >
-                        <span className="setor-actions-dots">⋯</span>
-                      </div>
-
-                      {menuSetorAberto === setor.id && (
-                        <div className="setor-actions-menu">
-                          <button
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              await handleUpdateSetorPhoto(setor);
-                              setMenuSetorAberto(null);
-                            }}
-                          >
-                            Mudar foto
-                          </button>
-                          <button
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              await handleDeleteSetor(setor.id);
-                              setMenuSetorAberto(null);
-                            }}
-                          >
-                            Excluir
-                          </button>
-                        </div>
-                      )}
-
-                      <div
-                        className="project-photo"
-                        style={{
-                          backgroundColor: setor.photo_url ? undefined : getRandomColor(),
-                          color: "#fff",
-                        }}
-                      >
-                        {setor.photo_url ? (
-                          <img src={setor.photo_url} alt={setor.name || "Setor"} />
-                        ) : (
-                          setor.name?.charAt(0).toUpperCase() || "?"
-                        )}
-                      </div>
-                      <h3>{setor.name || "Setor"}</h3>
-                      <p>Setor</p>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </>
-        ) : (
-          <div className="project-details">
-            <button className="back-btn" onClick={() => setSelectedProject(null)}>
-              <FaArrowLeft />
-            </button>
-
-            <div
-              className="details-photo"
-              style={{
-                backgroundColor: selectedProject.photo_url ? undefined : getRandomColor(),
-                color: "#fff",
-              }}
-            >
-              {selectedProject.photo_url ? (
-                <img src={selectedProject.photo_url} alt={selectedProject.name || "Projeto"} />
-              ) : (
-                selectedProject.name?.charAt(0).toUpperCase() || "?"
-              )}
-            </div>
-
-            <h2>{selectedProject.name || "Projeto"}</h2>
-            <p>
-              Tipo:{" "}
-              {selectedProject.type === "vertical"
-                ? "Edificação Vertical"
-                : "Edificação Horizontal"}
-            </p>
-
+        {selectedSetor && setorDetalhado ? (
+          <EntityDetails
+            entityType="setor"
+            entity={setorDetalhado}
+            onBack={() => setSelectedSetor(null)}
+            onEdit={() => {
+              setSetorEmEdicao(setorDetalhado.id);
+              setShowSetoresModal(true);
+            }}
+          />
+        ) : selectedProject ? (
+          <EntityDetails
+            entityType="project"
+            entity={selectedProject}
+            onBack={() => setSelectedProject(null)}
+            onEdit={() => handleEditProject(selectedProject)}
+          >
             {(selectedProject.pavimentos?.length > 0 || selectedProject.eap?.length > 0) && (
               <div className="project-sections">
                 {selectedProject.pavimentos?.length > 0 && (
@@ -760,201 +606,51 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
                 )}
               </div>
             )}
-
-            <button className="edit-btn" onClick={() => handleEditProject(selectedProject)}>
-              Editar
-            </button>
-          </div>
+          </EntityDetails>
+        ) : (
+          <ContainerGrid
+            projects={projects}
+            setores={setores}
+            onProjectClick={openCardsPage}
+            onSetorClick={openSetorCardsPage}
+            onSetorAction={(action, setor) => {
+              if (action === "verPerfil") {
+                setSelectedSetor(setor);
+                loadSetorDetails(setor);
+              } else if (action === "delete") {
+                handleDeleteSetor(setor.id);
+              }
+            }}
+            menuSetorAberto={menuSetorAberto}
+            setMenuSetorAberto={setMenuSetorAberto}
+          />
         )}
       </main>
 
-      {/* Modal de projeto */}
-      {showForm && (
-        <div className="modal-overlay1">
-          <div className="modal-content1">
-            <h2>{isEditing ? "Editar Projeto" : "Novo Projeto"}</h2>
-
-            <div className="project-photo-upload">
-              <label htmlFor="photo-upload" className="photo-circle">
-                {newProject.photoUrl ? (
-                  <img src={newProject.photoUrl} alt="Projeto" />
-                ) : (
-                  <FaCamera />
-                )}
-              </label>
-              <input
-                type="file"
-                id="photo-upload"
-                accept="image/*"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file)
-                    setNewProject((p) => ({ ...p, photoFile: file, photoUrl: URL.createObjectURL(file) }));
-                }}
-                hidden
-              />
-            </div>
-
-            <label>Nome do Projeto</label>
-            <input
-              type="text"
-              value={newProject.name}
-              onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
-            />
-
-            {/* ✅ Input de membros */}
-            <label>Adicionar membros (digite @)</label>
-            <div style={{ position: "relative" }}>
-              <input
-                id="membros-input"
-                type="text"
-                value={membrosTexto}
-                onChange={handleMembrosChange}
-                placeholder="Ex: @joao, @maria"
-                style={{ width: "100%", padding: "8px", marginTop: "4px" }}
-                onBlur={() => setTimeout(() => setMostrarSugestoesMembros(false), 200)}
-                onKeyPress={(e) => {
-                  if (e.key === "Enter" && mostrarSugestoesMembros && sugestoesMembros.length > 0) {
-                    e.preventDefault();
-                    inserirMembro(sugestoesMembros[0]);
-                  }
-                }}
-              />
-
-              {mostrarSugestoesMembros && sugestoesMembros.length > 0 && (
-                <div className="sugestoes-dropdown" style={{ position: "absolute", zIndex: 1000, width: "100%", background: "#fff", border: "1px solid #ddd", borderRadius: "4px", maxHeight: "150px", overflowY: "auto" }}>
-                  {sugestoesMembros.map((sug) => (
-                    <div
-                      key={sug.id}
-                      onClick={() => inserirMembro(sug)}
-                      onMouseDown={(e) => e.preventDefault()}
-                      style={{ padding: "8px 12px", cursor: "pointer", borderBottom: "1px solid #eee" }}
-                    >
-                      {sug.avatar_url ? (
-                        <img src={sug.avatar_url} alt="" style={{ width: "20px", height: "20px", borderRadius: "50%", verticalAlign: "middle", marginRight: "8px" }} />
-                      ) : (
-                        <span style={{ display: "inline-block", width: "20px", height: "20px", backgroundColor: "#ccc", borderRadius: "50%", textAlign: "center", lineHeight: "20px", color: "#fff", marginRight: "8px" }}>
-                          {sug.nickname?.charAt(0).toUpperCase() || "?"}
-                        </span>
-                      )}
-                      {sug.nickname}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Avatares dos membros selecionados */}
-            {membrosSelecionados.length > 0 && (
-              <div style={{ marginTop: "8px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                {membrosSelecionados.map((membro) => (
-                  <div key={membro.id} style={{ position: "relative", textAlign: "center" }}>
-                    {membro.avatar_url ? (
-                      <img
-                        src={membro.avatar_url}
-                        alt={membro.nickname}
-                        style={{ width: "32px", height: "32px", borderRadius: "50%", border: "2px solid #007bff" }}
-                      />
-                    ) : (
-                      <div style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: "#ccc", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: "bold", border: "2px solid #007bff" }}>
-                        {membro.nickname?.charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                    <span style={{ fontSize: "10px", display: "block", marginTop: "2px" }}>
-                      {membro.nickname}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <label>Tipo de Projeto</label>
-            <select
-              value={newProject.type}
-              onChange={(e) => setNewProject({ ...newProject, type: e.target.value })}
-            >
-              <option value="vertical">Edificação Vertical</option>
-              <option value="horizontal">Edificação Horizontal</option>
-            </select>
-
-            {newProject.type === "vertical" && (
-              <div>
-                <div className="list-header">
-                  Pavimentos{" "}
-                  <FaPlus className="add-icon" onClick={() => {
-                    setNewProject(p => ({ ...p, pavimentos: [...p.pavimentos, ""] }));
-                  }} />
-                </div>
-                <div className="list-container">
-                  {newProject.pavimentos.map((p, i) => (
-                    <div key={i} className="list-item">
-                      <input
-                        type="text"
-                        placeholder={`Pavimento ${i + 1}`}
-                        value={p}
-                        onChange={(e) => {
-                          const novos = [...newProject.pavimentos];
-                          novos[i] = e.target.value;
-                          setNewProject({ ...newProject, pavimentos: novos });
-                        }}
-                      />
-                      <FaTrash
-                        className="delete-icon"
-                        onClick={() => {
-                          const novos = newProject.pavimentos.filter((_, idx) => idx !== i);
-                          setNewProject({ ...newProject, pavimentos: novos });
-                        }}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="list-header">
-              EAP <FaPlus className="add-icon" onClick={() => {
-                setNewProject(p => ({ ...p, eap: [...p.eap, ""] }));
-              }} />
-            </div>
-            <div className="list-container">
-              {newProject.eap.map((e, i) => (
-                <div key={i} className="list-item">
-                  <input
-                    type="text"
-                    placeholder={`EAP ${i + 1}`}
-                    value={e}
-                    onChange={(ev) => {
-                      const novos = [...newProject.eap];
-                      novos[i] = ev.target.value;
-                      setNewProject({ ...newProject, eap: novos });
-                    }}
-                  />
-                  <FaTrash className="delete-icon" onClick={() => {
-                    const novos = newProject.eap.filter((_, idx) => idx !== i);
-                    setNewProject({ ...newProject, eap: novos });
-                  }} />
-                </div>
-              ))}
-            </div>
-
-            <div className="modal-actions">
-              <button className="save-btn" onClick={saveProject}>
-                Salvar
-              </button>
-              <button className="cancel-btn" onClick={() => setShowForm(false)}>
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ProjectForm
+        isOpen={showForm}
+        onClose={() => setShowForm(false)}
+        onSave={handleSaveProject}
+        initialData={initialFormData}
+        containerAtual={containerAtual}
+        profile={profile}
+        isEditing={isEditing}
+      />
 
       {showSetoresModal && containerAtual && (
         <SetoresManager
           userId={containerAtual}
+          setorId={setorEmEdicao}
           onClose={() => {
             setShowSetoresModal(false);
+            setSetorEmEdicao(null);
             fetchSetores(containerAtual);
+            if (setorEmEdicao) {
+              const setorAtualizado = setores.find(s => s.id === setorEmEdicao);
+              if (setorAtualizado) {
+                loadSetorDetails(setorAtualizado);
+              }
+            }
           }}
         />
       )}

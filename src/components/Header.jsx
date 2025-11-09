@@ -214,7 +214,11 @@ export default function Header({
               )}
 
               <p className="header-welcome">
-                Bem-vindo, <strong>{externalProfile?.nome || "Usuário"}</strong>
+                Bem-vindo, <strong>
+                  {externalProfile?.nome
+                    ? externalProfile.nome.split(' ').slice(0, 2).join(' ')
+                    : "Usuário"}
+                </strong>
               </p>
 
               {showMenu && (

@@ -62,6 +62,7 @@
 
 .collab-section {
   margin-bottom: 20px;
+  
 }
 
 .collab-section h3 {
@@ -294,4 +295,55 @@
 
 .menu-opcoes button:hover {
   background: #ffeaea;
+}
+
+/* src/components/Collab.css */
+
+.notificacao-item {
+  border-bottom: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background-color 0.2s;
+}
+
+.notificacao-item.nao-lida {
+  background-color: #e8f4ff;
+  font-weight: bold;
+}
+
+.notificacao-item.lida {
+  background-color: #fff;
+  color: #666;
+}
+
+.btn-aceitar, .btn-ler {
+  padding: 4px 10px;
+  font-size: 14px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-aceitar {
+  background-color: #28a745;
+  color: white;
+}
+
+.btn-aceitar:hover {
+  background-color: #218838;
+}
+
+.btn-ler {
+  background-color: #17a2b8;
+  color: white;
+}
+
+.btn-ler:hover:not(:disabled) {
+  background-color: #138496;
+}
+
+.btn-ler:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
 }

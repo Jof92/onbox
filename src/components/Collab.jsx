@@ -24,18 +24,18 @@ export default function Collab({ onClose, user, onOpenTask }) {
   }, [user?.id]);
 
   // ==============================
-  // 🔔 BUSCAR NOTIFICAÇÕES (convites + menções)
+  // 🔔 BUSCAR TODAS AS NOTIFICAÇÕES (convites + menções)
   // ==============================
   const fetchNotificacoes = async () => {
     try {
       const allNotificacoes = [];
 
-      // 🔸 Convites pendentes
+      // 🔸 TODOS os convites (pendentes e aceitos)
       const { data: convites, error: convitesError } = await supabase
         .from("convites")
         .select("*")
         .eq("email", user.email)
-        .eq("status", "pendente");
+        .in("status", ["pendente", "aceito"]);
 
       if (convitesError) {
         console.error("Erro ao buscar convites:", convitesError);
@@ -53,7 +53,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
         allNotificacoes.push(...convitesComPerfil);
       }
 
-      // 🔸 Notificações de menção
+      // 🔸 TODAS as notificações de menção (lidas e não lidas)
       const { data: mencoes, error: mencaoError } = await supabase
         .from("notificacoes")
         .select(`
@@ -70,8 +70,8 @@ export default function Collab({ onClose, user, onOpenTask }) {
           nota:notas(id, nome),
           projeto:projects(id, name)
         `)
-        .eq("user_id", user.id)
-        .eq("lido", false);
+        .eq("user_id", user.id);
+      // ⚠️ REMOVIDO: .eq("lido", false)
 
       if (mencaoError) {
         console.error("Erro ao buscar menções:", mencaoError);
@@ -81,10 +81,10 @@ export default function Collab({ onClose, user, onOpenTask }) {
           tipo: m.tipo || "menção"
         }));
         allNotificacoes.push(...mencoesFormatadas);
-        console.log("✅ Menções encontradas:", mencoesFormatadas);
-      } else {
-        console.log("ℹ️ Nenhuma menção encontrada para user.id:", user.id);
       }
+
+      // Ordenar por data (mais recente primeiro)
+      allNotificacoes.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
       setNotificacoes(allNotificacoes);
     } catch (err) {
@@ -197,7 +197,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
     try {
       await supabase.from("convites").update({ status: "aceito" }).eq("id", convite.id);
       alert("Convite aceito!");
-      fetchNotificacoes();
+      fetchNotificacoes(); // Recarrega para atualizar o status
     } catch (err) {
       console.error("Erro ao aceitar convite:", err);
       alert("Erro ao aceitar convite.");
@@ -208,12 +208,15 @@ export default function Collab({ onClose, user, onOpenTask }) {
   // 🔗 LER NOTIFICAÇÃO DE MENÇÃO
   // ==============================
   const lerMensagemMencoes = async (notificacao) => {
+    if (notificacao.lido) return; // Evita repetição
+
     try {
       await supabase.from("notificacoes").update({ lido: true }).eq("id", notificacao.id);
-      
+      fetchNotificacoes(); // Atualiza estado local
+
       // Fecha o Collab
       onClose();
-      
+
       // Notifica o componente pai para abrir a tarefa específica
       if (onOpenTask) {
         onOpenTask({
@@ -289,38 +292,48 @@ export default function Collab({ onClose, user, onOpenTask }) {
             <p className="empty">Nenhuma notificação no momento.</p>
           ) : (
             notificacoes.map((n) => {
-              if (n.tipo === "convite") {
-                return (
-                  <div className="notificacao-item" key={n.id}>
-                    <span>
-                      <strong>{n.remetente?.nome || "Usuário"}</strong> te convidou
-                    </span>
-                    <button
-                      className="btn-aceitar"
-                      onClick={() => aceitarConvite(n)}
-                    >
-                      Aceitar
-                    </button>
-                  </div>
-                );
-              } else if (n.tipo === "menção") {
-                return (
-                  <div className="notificacao-item" key={n.id}>
-                    <span>
-                      <strong>{n.remetente?.nome || "Alguém"}</strong> marcou você em um comentário na tarefa{" "}
-                      <strong>{n.nota?.nome || "Sem nome"}</strong> do projeto{" "}
-                      <strong>{n.projeto?.name || "Sem projeto"}</strong>
-                    </span>
-                    <button
-                      className="btn-ler"
-                      onClick={() => lerMensagemMencoes(n)}
-                    >
-                      Abrir
-                    </button>
-                  </div>
-                );
-              }
-              return null;
+              const isLido = n.tipo === "menção" ? n.lido : n.status === "aceito";
+              return (
+                <div
+                  key={n.id}
+                  className={`notificacao-item ${isLido ? "lida" : "nao-lida"}`}
+                >
+                  {n.tipo === "convite" && (
+                    <>
+                      <span>
+                        <strong>{n.remetente?.nome || "Usuário"}</strong> te convidou
+                        {n.status === "aceito" && " (aceito)"}
+                      </span>
+                      {n.status === "pendente" && (
+                        <button
+                          className="btn-aceitar"
+                          onClick={() => aceitarConvite(n)}
+                        >
+                          Aceitar
+                        </button>
+                      )}
+                    </>
+                  )}
+
+                  {n.tipo === "menção" && (
+                    <>
+                      <span>
+                        <strong>{n.remetente?.nome || "Alguém"}</strong> marcou você em um comentário na tarefa{" "}
+                        <strong>{n.nota?.nome || "Sem nome"}</strong> do projeto{" "}
+                        <strong>{n.projeto?.name || "Sem projeto"}</strong>
+                        {n.lido && " (lido)"}
+                      </span>
+                      <button
+                        className="btn-ler"
+                        onClick={() => lerMensagemMencoes(n)}
+                        disabled={n.lido}
+                      >
+                        {n.lido ? "Aberto" : "Abrir"}
+                      </button>
+                    </>
+                  )}
+                </div>
+              );
             })
           )}
         </div>
