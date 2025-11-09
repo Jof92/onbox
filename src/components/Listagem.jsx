@@ -17,7 +17,8 @@ export default function Listagem({ projetoAtual, notaAtual }) {
   const [textoAtual, setTextoAtual] = useState("");
   const [sugestoes, setSugestoes] = useState([]);
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
-  const [posicaoCaret, setPosicaoCaret] = useState(0);
+  // eslint-disable-next-line no-unused-vars
+  const [posicaoCaret, setPosicaoCaret] = useState(0);    
   const [userIdLogado, setUserIdLogado] = useState("");
 
   useEffect(() => {

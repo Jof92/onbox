@@ -33,7 +33,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
   const [profile, setProfile] = useState(null);
   const [initialFormData, setInitialFormData] = useState(null);
   const [error, setError] = useState(null);
-  const [setorEmEdicao, setSetorEmEdicao] = useState(null); // ✅ para edição de setor
+  const [setorEmEdicao, setSetorEmEdicao] = useState(null);
 
   // Carregar perfil
   useEffect(() => {
