@@ -12,25 +12,23 @@ export default function Collab({ onClose, user, onOpenTask }) {
   const [menuAberto, setMenuAberto] = useState(null);
   const [removendo, setRemovendo] = useState(null);
 
-  // 🔍 Depuração: verifique quem está logado
   useEffect(() => {
-    if (user?.id) {
-      console.log("✅ Collab: buscando notificações para user.id =", user.id);
-      fetchNotificacoes();
-      fetchIntegrantes();
-    } else {
-      console.warn("⚠️ Collab: user.id não disponível");
+    if (!user || !user.id) {
+      console.warn("⚠️ Collab: user ou user.id ausente");
+      return;
     }
-  }, [user?.id]);
+    fetchNotificacoes();
+    fetchIntegrantes();
+  }, [user]);
 
   // ==============================
-  // 🔔 BUSCAR TODAS AS NOTIFICAÇÕES (convites + menções)
+  // 🔔 BUSCAR TODAS AS NOTIFICAÇÕES
   // ==============================
   const fetchNotificacoes = async () => {
     try {
       const allNotificacoes = [];
 
-      // 🔸 TODOS os convites (pendentes e aceitos)
+      // 🔸 Convites (pendentes + aceitos)
       const { data: convites, error: convitesError } = await supabase
         .from("convites")
         .select("*")
@@ -39,7 +37,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
 
       if (convitesError) {
         console.error("Erro ao buscar convites:", convitesError);
-      } else if (convites?.length > 0) {
+      } else if (convites?.length) {
         const convitesComPerfil = await Promise.all(
           convites.map(async (c) => {
             const { data: remetente } = await supabase
@@ -53,7 +51,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
         allNotificacoes.push(...convitesComPerfil);
       }
 
-      // 🔸 TODAS as notificações de menção (lidas e não lidas)
+      // 🔸 Menções (lidas + não lidas)
       const { data: mencoes, error: mencaoError } = await supabase
         .from("notificacoes")
         .select(`
@@ -71,11 +69,10 @@ export default function Collab({ onClose, user, onOpenTask }) {
           projeto:projects(id, name)
         `)
         .eq("user_id", user.id);
-      // ⚠️ REMOVIDO: .eq("lido", false)
 
       if (mencaoError) {
         console.error("Erro ao buscar menções:", mencaoError);
-      } else if (mencoes?.length > 0) {
+      } else if (mencoes?.length) {
         const mencoesFormatadas = mencoes.map(m => ({
           ...m,
           tipo: m.tipo || "menção"
@@ -83,9 +80,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
         allNotificacoes.push(...mencoesFormatadas);
       }
 
-      // Ordenar por data (mais recente primeiro)
       allNotificacoes.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
       setNotificacoes(allNotificacoes);
     } catch (err) {
       console.error("Erro geral ao buscar notificações:", err);
@@ -98,14 +93,14 @@ export default function Collab({ onClose, user, onOpenTask }) {
   // ==============================
   const fetchIntegrantes = async () => {
     try {
-      const { data: convitesAceitos, error: convitesError } = await supabase
+      const { data: convitesAceitos, error } = await supabase
         .from("convites")
         .select("*")
         .eq("remetente_id", user.id)
         .eq("status", "aceito");
 
-      if (convitesError) {
-        console.error("Erro ao buscar integrantes:", convitesError);
+      if (error) {
+        console.error("Erro ao buscar integrantes:", error);
         setIntegrantes([]);
         return;
       }
@@ -169,7 +164,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
         return;
       }
 
-      const { error: insertError } = await supabase.from("convites").insert([
+      const { error } = await supabase.from("convites").insert([
         {
           email: profile.email,
           remetente_id: user.id,
@@ -177,7 +172,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
         },
       ]);
 
-      if (insertError) throw insertError;
+      if (error) throw error;
 
       alert(`Convite enviado para ${profile.nome}`);
       setEmailConvite("");
@@ -197,7 +192,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
     try {
       await supabase.from("convites").update({ status: "aceito" }).eq("id", convite.id);
       alert("Convite aceito!");
-      fetchNotificacoes(); // Recarrega para atualizar o status
+      fetchNotificacoes();
     } catch (err) {
       console.error("Erro ao aceitar convite:", err);
       alert("Erro ao aceitar convite.");
@@ -205,19 +200,15 @@ export default function Collab({ onClose, user, onOpenTask }) {
   };
 
   // ==============================
-  // 🔗 LER NOTIFICAÇÃO DE MENÇÃO
+  // 🔗 LER MENÇÃO
   // ==============================
   const lerMensagemMencoes = async (notificacao) => {
-    if (notificacao.lido) return; // Evita repetição
+    if (notificacao.lido) return;
 
     try {
       await supabase.from("notificacoes").update({ lido: true }).eq("id", notificacao.id);
-      fetchNotificacoes(); // Atualiza estado local
-
-      // Fecha o Collab
+      fetchNotificacoes();
       onClose();
-
-      // Notifica o componente pai para abrir a tarefa específica
       if (onOpenTask) {
         onOpenTask({
           nota_id: notificacao.nota_id,
@@ -227,7 +218,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
         });
       }
     } catch (err) {
-      console.error("Erro ao marcar notificação como lida:", err);
+      console.error("Erro ao marcar menção como lida:", err);
     }
   };
 
@@ -291,17 +282,23 @@ export default function Collab({ onClose, user, onOpenTask }) {
           {notificacoes.length === 0 ? (
             <p className="empty">Nenhuma notificação no momento.</p>
           ) : (
-            notificacoes.map((n) => {
-              const isLido = n.tipo === "menção" ? n.lido : n.status === "aceito";
-              return (
-                <div
-                  key={n.id}
-                  className={`notificacao-item ${isLido ? "lida" : "nao-lida"}`}
-                >
-                  {n.tipo === "convite" && (
+            <>
+              <div style={{ fontSize: '12px', color: '#888', marginBottom: '8px' }}>
+                {notificacoes.length} notificação(ões) carregada(s).
+              </div>
+              {notificacoes.map((n, index) => {
+                // 🔸 Inferir tipo com segurança
+                const tipo = n.tipo || (n.email ? "convite" : "menção");
+                const isLido = tipo === "menção" ? n.lido : n.status === "aceito";
+
+                let content = null;
+
+                if (tipo === "convite") {
+                  const remetenteNome = n.remetente?.nome || n.remetente_id?.substring(0, 8) || "Alguém";
+                  content = (
                     <>
                       <span>
-                        <strong>{n.remetente?.nome || "Usuário"}</strong> te convidou
+                        <strong>{remetenteNome}</strong> te convidou
                         {n.status === "aceito" && " (aceito)"}
                       </span>
                       {n.status === "pendente" && (
@@ -313,14 +310,17 @@ export default function Collab({ onClose, user, onOpenTask }) {
                         </button>
                       )}
                     </>
-                  )}
+                  );
+                } else if (tipo === "menção") {
+                  const remetenteNome = n.remetente?.nome || "Alguém";
+                  const notaNome = n.nota?.nome || "uma tarefa";
+                  const projetoNome = n.projeto?.name || "um projeto";
 
-                  {n.tipo === "menção" && (
+                  content = (
                     <>
                       <span>
-                        <strong>{n.remetente?.nome || "Alguém"}</strong> marcou você em um comentário na tarefa{" "}
-                        <strong>{n.nota?.nome || "Sem nome"}</strong> do projeto{" "}
-                        <strong>{n.projeto?.name || "Sem projeto"}</strong>
+                        <strong>{remetenteNome}</strong> marcou você na tarefa{" "}
+                        <strong>{notaNome}</strong> do projeto <strong>{projetoNome}</strong>
                         {n.lido && " (lido)"}
                       </span>
                       <button
@@ -331,10 +331,26 @@ export default function Collab({ onClose, user, onOpenTask }) {
                         {n.lido ? "Aberto" : "Abrir"}
                       </button>
                     </>
-                  )}
-                </div>
-              );
-            })
+                  );
+                } else {
+                  // Fallback de segurança
+                  content = (
+                    <span style={{ color: "#d9534f" }}>
+                      <em>Notificação inválida (tipo: {String(n.tipo)})</em>
+                    </span>
+                  );
+                }
+
+                return (
+                  <div
+                    key={n.id || `fallback-${index}`}
+                    className={`notificacao-item ${isLido ? "lida" : "nao-lida"}`}
+                  >
+                    {content}
+                  </div>
+                );
+              })}
+            </>
           )}
         </div>
 
