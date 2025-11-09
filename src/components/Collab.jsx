@@ -1,5 +1,5 @@
 // src/components/Collab.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import "./Collab.css";
 import { FaPaperPlane, FaUserPlus, FaEllipsisV } from "react-icons/fa";
 import { supabase } from "../supabaseClient";
@@ -12,23 +12,14 @@ export default function Collab({ onClose, user, onOpenTask }) {
   const [menuAberto, setMenuAberto] = useState(null);
   const [removendo, setRemovendo] = useState(null);
 
-  useEffect(() => {
-    if (!user || !user.id) {
-      console.warn("⚠️ Collab: user ou user.id ausente");
-      return;
-    }
-    fetchNotificacoes();
-    fetchIntegrantes();
-  }, [user]);
+  // 🔔 Buscar notificações com useCallback
+  const fetchNotificacoes = useCallback(async () => {
+    if (!user?.id || !user?.email) return;
 
-  // ==============================
-  // 🔔 BUSCAR TODAS AS NOTIFICAÇÕES
-  // ==============================
-  const fetchNotificacoes = async () => {
     try {
       const allNotificacoes = [];
 
-      // 🔸 Convites (pendentes + aceitos)
+      // Convites (pendentes + aceitos)
       const { data: convites, error: convitesError } = await supabase
         .from("convites")
         .select("*")
@@ -51,7 +42,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
         allNotificacoes.push(...convitesComPerfil);
       }
 
-      // 🔸 Menções (lidas + não lidas)
+      // Menções
       const { data: mencoes, error: mencaoError } = await supabase
         .from("notificacoes")
         .select(`
@@ -73,9 +64,9 @@ export default function Collab({ onClose, user, onOpenTask }) {
       if (mencaoError) {
         console.error("Erro ao buscar menções:", mencaoError);
       } else if (mencoes?.length) {
-        const mencoesFormatadas = mencoes.map(m => ({
+        const mencoesFormatadas = mencoes.map((m) => ({
           ...m,
-          tipo: m.tipo || "menção"
+          tipo: m.tipo || "menção",
         }));
         allNotificacoes.push(...mencoesFormatadas);
       }
@@ -86,12 +77,12 @@ export default function Collab({ onClose, user, onOpenTask }) {
       console.error("Erro geral ao buscar notificações:", err);
       setNotificacoes([]);
     }
-  };
+  }, [user?.id, user?.email]); // ✅ Dependências explícitas
 
-  // ==============================
-  // 👥 BUSCAR INTEGRANTES
-  // ==============================
-  const fetchIntegrantes = async () => {
+  // 👥 Buscar integrantes com useCallback
+  const fetchIntegrantes = useCallback(async () => {
+    if (!user?.id) return;
+
     try {
       const { data: convitesAceitos, error } = await supabase
         .from("convites")
@@ -129,7 +120,13 @@ export default function Collab({ onClose, user, onOpenTask }) {
       console.error("Erro ao buscar integrantes:", err);
       setIntegrantes([]);
     }
-  };
+  }, [user?.id]); // ✅ Dependência explícita
+
+  // ✅ Agora as funções estão estáveis e nas dependências corretas
+  useEffect(() => {
+    fetchNotificacoes();
+    fetchIntegrantes();
+  }, [fetchNotificacoes, fetchIntegrantes]); // ✅ Correto!
 
   // ==============================
   // ✉️ ENVIAR CONVITE
@@ -176,7 +173,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
 
       alert(`Convite enviado para ${profile.nome}`);
       setEmailConvite("");
-      fetchNotificacoes();
+      fetchNotificacoes(); // Atualiza as notificações
     } catch (err) {
       console.error("Erro ao enviar convite:", err);
       alert("Erro ao enviar convite.");
@@ -214,7 +211,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
           nota_id: notificacao.nota_id,
           projeto_id: notificacao.projeto_id,
           projeto_nome: notificacao.projeto?.name || "Projeto",
-          nota_nome: notificacao.nota?.nome || "Tarefa"
+          nota_nome: notificacao.nota?.nome || "Tarefa",
         });
       }
     } catch (err) {
@@ -231,9 +228,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
     try {
       setRemovendo(item.convite_id);
       await supabase.from("convites").delete().eq("id", item.convite_id);
-      setIntegrantes((prev) =>
-        prev.filter((i) => i.convite_id !== item.convite_id)
-      );
+      setIntegrantes((prev) => prev.filter((i) => i.convite_id !== item.convite_id));
       setMenuAberto(null);
       setRemovendo(null);
     } catch (err) {
@@ -283,11 +278,10 @@ export default function Collab({ onClose, user, onOpenTask }) {
             <p className="empty">Nenhuma notificação no momento.</p>
           ) : (
             <>
-              <div style={{ fontSize: '12px', color: '#888', marginBottom: '8px' }}>
+              <div style={{ fontSize: "12px", color: "#888", marginBottom: "8px" }}>
                 {notificacoes.length} notificação(ões) carregada(s).
               </div>
               {notificacoes.map((n, index) => {
-                // 🔸 Inferir tipo com segurança
                 const tipo = n.tipo || (n.email ? "convite" : "menção");
                 const isLido = tipo === "menção" ? n.lido : n.status === "aceito";
 
@@ -302,10 +296,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
                         {n.status === "aceito" && " (aceito)"}
                       </span>
                       {n.status === "pendente" && (
-                        <button
-                          className="btn-aceitar"
-                          onClick={() => aceitarConvite(n)}
-                        >
+                        <button className="btn-aceitar" onClick={() => aceitarConvite(n)}>
                           Aceitar
                         </button>
                       )}
@@ -333,7 +324,6 @@ export default function Collab({ onClose, user, onOpenTask }) {
                     </>
                   );
                 } else {
-                  // Fallback de segurança
                   content = (
                     <span style={{ color: "#d9534f" }}>
                       <em>Notificação inválida (tipo: {String(n.tipo)})</em>
@@ -365,17 +355,11 @@ export default function Collab({ onClose, user, onOpenTask }) {
               {integrantes.map((i) => (
                 <div
                   key={i.convite_id}
-                  className={`integrante-item ${
-                    removendo === i.convite_id ? "fade-out" : ""
-                  }`}
+                  className={`integrante-item ${removendo === i.convite_id ? "fade-out" : ""}`}
                 >
                   <div className="integrante-info">
                     {i.avatar_url ? (
-                      <img
-                        src={i.avatar_url}
-                        alt={i.nome}
-                        className="integrante-avatar"
-                      />
+                      <img src={i.avatar_url} alt={i.nome} className="integrante-avatar" />
                     ) : (
                       <div className="integrante-avatar placeholder">
                         {i.nome.charAt(0).toUpperCase()}
@@ -390,20 +374,14 @@ export default function Collab({ onClose, user, onOpenTask }) {
                   <div className="integrante-menu">
                     <button
                       className="menu-btn"
-                      onClick={() =>
-                        setMenuAberto(
-                          menuAberto === i.convite_id ? null : i.convite_id
-                        )
-                      }
+                      onClick={() => setMenuAberto(menuAberto === i.convite_id ? null : i.convite_id)}
                     >
                       <FaEllipsisV />
                     </button>
 
                     {menuAberto === i.convite_id && (
                       <div className="menu-opcoes">
-                        <button onClick={() => removerIntegrante(i)}>
-                          Remover
-                        </button>
+                        <button onClick={() => removerIntegrante(i)}>Remover</button>
                       </div>
                     )}
                   </div>

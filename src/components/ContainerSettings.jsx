@@ -15,74 +15,75 @@ export default function ContainerSettings({ onClose, containerId, user }) {
   const [emailsGerentesCaixa, setEmailsGerentesCaixa] = useState({});
 
   useEffect(() => {
-    if (containerId) fetchAll();
-  }, [containerId]);
+    if (!containerId) return;
 
-  const fetchAll = async () => {
-    setLoading(true);
-    try {
-      // 1. Dono + gerente_container_id (precisa existir no banco!)
-      const { data: perfil, error: donoError } = await supabase
-        .from("profiles")
-        .select("nome, gerente_container_id")
-        .eq("id", containerId)
-        .single();
-      if (donoError) throw donoError;
-      setDono(perfil?.nome || "Desconhecido");
+    const fetchAll = async () => {
+      setLoading(true);
+      try {
+        // 1. Dono + gerente_container_id
+        const { data: perfil, error: donoError } = await supabase
+          .from("profiles")
+          .select("nome, gerente_container_id")
+          .eq("id", containerId)
+          .single();
+        if (donoError) throw donoError;
+        setDono(perfil?.nome || "Desconhecido");
 
-      // 2. Colaboradores
-      const { data: convites, error: convitesError } = await supabase
-        .from("convites")
-        .select("email")
-        .eq("remetente_id", containerId)
-        .eq("status", "aceito");
-      if (convitesError) throw convitesError;
+        // 2. Colaboradores
+        const { data: convites, error: convitesError } = await supabase
+          .from("convites")
+          .select("email")
+          .eq("remetente_id", containerId)
+          .eq("status", "aceito");
+        if (convitesError) throw convitesError;
 
-      const emails = convites.map(c => c.email);
-      const { data: perfis, error: perfisError } = await supabase
-        .from("profiles")
-        .select("id, nome, email")
-        .in("email", emails);
-      if (perfisError) throw perfisError;
-      setColaboradores(perfis || []);
+        const emails = convites.map(c => c.email);
+        const { data: perfis, error: perfisError } = await supabase
+          .from("profiles")
+          .select("id, nome, email")
+          .in("email", emails);
+        if (perfisError) throw perfisError;
+        setColaboradores(perfis || []);
 
-      // 3. Projetos
-      const { data: proj, error: projError } = await supabase
-        .from("projects")
-        .select("id, name, gerente_caixa_id")
-        .eq("user_id", containerId);
-      if (projError) console.warn("Erro projetos:", projError);
-      setProjetos(proj || []);
+        // 3. Projetos
+        const { data: proj, error: projError } = await supabase
+          .from("projects")
+          .select("id, name, gerente_caixa_id")
+          .eq("user_id", containerId);
+        if (projError) console.warn("Erro projetos:", projError);
+        setProjetos(proj || []);
 
-      // 4. Setores
-      const { data: set, error: setError } = await supabase
-        .from("setores")
-        .select("id, name, gerente_caixa_id")
-        .eq("user_id", containerId);
-      if (setError) console.warn("Erro setores:", setError);
-      setSetores(set || []);
+        // 4. Setores
+        const { data: set, error: setError } = await supabase
+          .from("setores")
+          .select("id, name, gerente_caixa_id")
+          .eq("user_id", containerId);
+        if (setError) console.warn("Erro setores:", setError);
+        setSetores(set || []);
 
-      // 👇 PREENCHE OS ESTADOS COM OS VALORES SALVOS
-      if (perfil?.gerente_container_id) {
-        const gerente = perfis.find(p => p.id === perfil.gerente_container_id);
-        setEmailGerenteContainer(gerente?.email || "");
-      }
-
-      const initialEmails = {};
-      [...proj, ...set].forEach(item => {
-        if (item.gerente_caixa_id) {
-          const gerente = perfis.find(p => p.id === item.gerente_caixa_id);
-          initialEmails[item.id] = gerente?.email || "";
+        // Preenche os estados com os valores salvos
+        if (perfil?.gerente_container_id) {
+          const gerente = perfis.find(p => p.id === perfil.gerente_container_id);
+          setEmailGerenteContainer(gerente?.email || "");
         }
-      });
-      setEmailsGerentesCaixa(initialEmails);
 
-    } catch (err) {
-      console.error("Erro:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+        const initialEmails = {};
+        [...proj, ...set].forEach(item => {
+          if (item.gerente_caixa_id) {
+            const gerente = perfis.find(p => p.id === item.gerente_caixa_id);
+            initialEmails[item.id] = gerente?.email || "";
+          }
+        });
+        setEmailsGerentesCaixa(initialEmails);
+      } catch (err) {
+        console.error("Erro ao carregar configurações:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAll();
+  }, [containerId]);
 
   const adicionarGerenteContainer = async () => {
     const colab = colaboradores.find(c => c.email === emailGerenteContainer);
@@ -92,7 +93,6 @@ export default function ContainerSettings({ onClose, containerId, user }) {
       .update({ gerente_container_id: colab.id })
       .eq("id", containerId);
     alert("Gerente de container salvo!");
-    // Não limpa o estado — mantém a seleção visível
   };
 
   const adicionarGerenteCaixa = async (tabela, id, email) => {
@@ -102,7 +102,6 @@ export default function ContainerSettings({ onClose, containerId, user }) {
       .from(tabela)
       .update({ gerente_caixa_id: colab.id })
       .eq("id", id);
-    // Não limpa o estado — mantém a seleção visível
     setEmailsGerentesCaixa(prev => ({ ...prev, [id]: email }));
     alert("Gerente salvo!");
   };
