@@ -36,115 +36,279 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
   const [loading, setLoading] = useState(true);
   const [extIdCounter, setExtIdCounter] = useState(0);
 
-  // Projeto
+  // --- Fetch projeto ---
   const fetchProjeto = useCallback(async () => {
     if (!projetoAtual?.id) return;
     const { data } = await supabase.from("projects").select("name").eq("id", projetoAtual.id).single();
     setProjetoNome(data?.name || "Projeto sem nome");
   }, [projetoAtual?.id]);
 
-  // Autor
+  // --- Fetch autor ---
   const fetchAutor = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return setAutorNome("Usuário desconhecido");
     setUsuarioId(user.id);
-    const { data: perfil } = await supabase.from("profiles").select("nome").eq("id", user.id).single();
-    setAutorNome(perfil?.nome || user.email || "Usuário desconhecido");
+
+    let perfil = null;
+    const { data: p1 } = await supabase.from("profiles").select("nome").eq("id", user.id).single();
+    if (p1) perfil = p1;
+    else {
+      const { data: p2 } = await supabase.from("profiles").select("nome").eq("user_id", user.id).single();
+      perfil = p2;
+    }
+
+    setAutorNome(
+      perfil?.nome ||
+      user.user_metadata?.nome ||
+      user.user_metadata?.name ||
+      user.email ||
+      "Usuário desconhecido"
+    );
   }, []);
 
-  // Extrair objetivos
+  // --- Extrair objetivos automaticamente ---
   const extrairObjetivos = useCallback((txt) => {
     if (!criarObjetivos) return [];
     const objetivos = [];
     const regex = new RegExp(`\\b(${VERBOS.join("|")})\\b`, "gi");
+
     txt.split(/\n/).forEach((linha) => {
-      let match; const matches = [];
+      const matches = [];
+      let match;
       while ((match = regex.exec(linha)) !== null) matches.push({ index: match.index });
       matches.forEach((m, i) => {
         const start = m.index;
-        const end = matches[i + 1]?.index ?? linha.length;
+        const end = i + 1 < matches.length ? matches[i + 1].index : linha.length;
         const trecho = linha.slice(start, end).split(",")[0].trim();
         if (trecho && !objetivos.some((o) => o.texto === trecho)) {
           objetivos.push({ texto: trecho, responsavelId: null, responsavelNome: "", dataEntrega: "" });
         }
       });
     });
+
     return objetivos;
   }, [criarObjetivos]);
 
-  // Fetch Ata
+  // --- Fetch ata ---
   const fetchAta = useCallback(async () => {
     if (!notaAtual?.id) return setLoading(false);
 
-    const { data: ata } = await supabase.from("atas").select("*").eq("nota_id", notaAtual.id).single();
+    try {
+      const { data: ata } = await supabase.from("atas").select("*").eq("nota_id", notaAtual.id).single();
 
-    if (!ata) {
-      setAtaId(null);
-      setPauta(""); setLocal(""); setTexto(""); setProxima(""); setObjetivosList([]); setParticipantes([]); setDataLocal("");
-      setLoading(false); return;
+      if (!ata) {
+        setAtaId(null);
+        setPauta("");
+        setLocal("");
+        setTexto("");
+        setProxima("");
+        setObjetivosList([]);
+        setObjetivosConcluidos([]);
+        setParticipantes([]);
+        setCriarObjetivos(false);
+        setDataLocal("");
+        setLoading(false);
+        return;
+      }
+
+      setAtaId(ata.id);
+      setPauta(ata.pauta || "");
+      setLocal(ata.local || "");
+      setTexto(ata.texto || "");
+      setProxima(ata.proxima_reuniao || "");
+      setDataLocal(ata.data_local || "");
+
+      // Carregar participantes (internos + externos)
+      const { data: partData } = await supabase
+        .from("ata_participantes")
+        .select(`
+          id,
+          profile_id,
+          nome_externo,
+          funcao_externa,
+          profiles(id, nome, funcao)
+        `)
+        .eq("ata_id", ata.id);
+
+      const participantesCarregados = (partData || [])
+        .map(p => {
+          if (p.profile_id) {
+            // Interno: verifica se profiles existe e tem nome válido
+            const perfilValido = p.profiles && typeof p.profiles === 'object' && p.profiles.nome;
+
+            if (perfilValido) {
+              return {
+                id: p.profiles.id || p.profile_id,
+                nome: (p.profiles.nome?.trim() || "Usuário sem nome"),
+                funcao: (p.profiles.funcao?.trim() || "Membro")
+              };
+            } else {
+              // Perfil não encontrado ou excluído
+              return {
+                id: p.profile_id,
+                nome: "Usuário excluído",
+                funcao: "Membro"
+              };
+            }
+          } else {
+            // Externo
+            return {
+              id: `ext-${p.id}`,
+              nome: (p.nome_externo?.trim() || "Convidado"),
+              funcao: (p.funcao_externa?.trim() || "Externo")
+            };
+          }
+        })
+        .filter(p => p && p.id); // Remove entradas inválidas
+
+      setParticipantes(participantesCarregados);
+
+      // Carregar objetivos (com suporte a responsáveis externos)
+      const { data: objData } = await supabase
+        .from("ata_objetivos")
+        .select(`
+          *,
+          profiles(id, nome)
+        `)
+        .eq("ata_id", ata.id);
+
+      if (objData?.length > 0) {
+        const objetivos = objData.map((o) => ({
+          texto: o.texto,
+          responsavelId: o.responsavel_id,
+          responsavelNome: o.nome_responsavel_externo || o.profiles?.nome || "",
+          dataEntrega: o.data_entrega,
+        }));
+        setObjetivosList(objetivos);
+        setObjetivosConcluidos(objData.filter((o) => o.concluido).map((_, i) => i));
+        setCriarObjetivos(true);
+      } else {
+        setCriarObjetivos(false);
+        setObjetivosList([]);
+        setObjetivosConcluidos([]);
+      }
+
+      setLoading(false);
+    } catch (err) {
+      console.error("Erro ao carregar ata:", err);
+      setLoading(false);
     }
-
-    setAtaId(ata.id);
-    setPauta(ata.pauta || "");
-    setLocal(ata.local || "");
-    setTexto(ata.texto || "");
-    setProxima(ata.proxima_reuniao || "");
-    setDataLocal(ata.data_local || "");
-
-    // Carregar participantes (REESCRITO / CORRIGIDO)
-    const { data: partData } = await supabase
-      .from("ata_participantes")
-      .select(`id, profile_id, nome_externo, funcao_externa, profiles(id, nome, funcao)`)
-      .eq("ata_id", ata.id);
-
-    const participantesCarregados = (partData || [])
-      .map(p => {
-        if (!p) return null;
-        if (p.profile_id) {
-          return {
-            id: p.profile_id,
-            nome: p.profiles?.nome?.trim() || "Usuário não identificado",
-            funcao: p.profiles?.funcao?.trim() || "Membro"
-          };
-        }
-        return {
-          id: `ext-${p.id}`,
-          nome: p.nome_externo?.trim() || "Convidado",
-          funcao: p.funcao_externa?.trim() || "Externo"
-        };
-      })
-      .filter(p => p && p.id && p.nome);
-
-    setParticipantes(participantesCarregados);
-
-    // Objetivos
-    const { data: objData } = await supabase.from("ata_objetivos").select("*, profiles(id,nome)").eq("ata_id", ata.id);
-
-    if (objData?.length) {
-      setCriarObjetivos(true);
-      setObjetivosList(objData.map(o => ({
-        texto: o.texto,
-        responsavelId: o.responsavel_id,
-        responsavelNome: o.nome_responsavel_externo || o.profiles?.nome || "",
-        dataEntrega: o.data_entrega
-      })));
-      setObjetivosConcluidos(objData.filter(o => o.concluido).map((_, i) => i));
-    }
-
-    setLoading(false);
   }, [notaAtual?.id]);
 
-  useEffect(() => { fetchProjeto(); fetchAutor(); }, [fetchProjeto, fetchAutor]);
-  useEffect(() => { if (projetoAtual?.id && notaAtual?.id) fetchAta(); }, [projetoAtual?.id, notaAtual?.id, fetchAta]);
-  useEffect(() => { if (criarObjetivos) { setObjetivosList(extrairObjetivos(texto)); setObjetivosConcluidos([]); } }, [texto, criarObjetivos, extrairObjetivos]);
+  useEffect(() => {
+    fetchProjeto();
+    fetchAutor();
+  }, [fetchProjeto, fetchAutor]);
 
-  const progressoPercent = objetivosList.length ? Math.round((objetivosConcluidos.length / objetivosList.length) * 100) : 0;
-  useEffect(() => { onProgressoChange?.(progressoPercent); }, [progressoPercent, onProgressoChange]);
+  useEffect(() => {
+    if (projetoAtual?.id && notaAtual?.id) fetchAta();
+  }, [projetoAtual?.id, notaAtual?.id, fetchAta]);
 
-  // Toggle objetivo
-  const toggleObjetivo = (i) => setObjetivosConcluidos(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i]);
+  useEffect(() => {
+    if (criarObjetivos) {
+      setObjetivosList(extrairObjetivos(texto));
+      setObjetivosConcluidos([]);
+    }
+  }, [texto, criarObjetivos, extrairObjetivos]);
 
-  // Participantes input & sugestão
+  const progressoPercent = objetivosList.length
+    ? Math.round((objetivosConcluidos.length / objetivosList.length) * 100)
+    : 0;
+
+  useEffect(() => {
+    if (typeof onProgressoChange === "function") onProgressoChange(progressoPercent);
+  }, [progressoPercent, onProgressoChange]);
+
+  // --- Salvar ata ---
+  const salvarAta = useCallback(async () => {
+    if (!usuarioId || !notaAtual?.id || !projetoAtual?.id) return alert("Dados insuficientes para salvar.");
+
+    try {
+      let savedAta;
+      if (ataId) {
+        const { data, error } = await supabase
+          .from("atas")
+          .update({
+            pauta,
+            local,
+            texto,
+            proxima_reuniao: proxima || null,
+            data_local: dataLocal
+          })
+          .eq("id", ataId)
+          .select()
+          .single();
+        if (error) throw error;
+        savedAta = data;
+      } else {
+        const { data, error } = await supabase
+          .from("atas")
+          .insert([{
+            projeto_id: projetoAtual.id,
+            nota_id: notaAtual.id,
+            pauta,
+            local,
+            texto,
+            proxima_reuniao: proxima || null,
+            data_local: dataLocal,
+            redigido_por: usuarioId,
+            criado_em: new Date().toISOString(),
+          }])
+          .select()
+          .single();
+        if (error) throw error;
+        savedAta = data;
+        setAtaId(savedAta.id);
+      }
+
+      // Salvar participantes (internos + externos)
+      await supabase.from("ata_participantes").delete().eq("ata_id", savedAta.id);
+
+      for (const p of participantes) {
+        if (p.id.toString().startsWith("ext")) {
+          // Externo
+          await supabase.from("ata_participantes").insert({
+            ata_id: savedAta.id,
+            nome_externo: p.nome.trim(),
+            funcao_externa: p.funcao
+          });
+        } else {
+          // Interno (do container/profiles)
+          await supabase.from("ata_participantes").insert({
+            ata_id: savedAta.id,
+            profile_id: p.id
+          });
+        }
+      }
+
+      // Salvar objetivos (com suporte a responsáveis externos)
+      await supabase.from("ata_objetivos").delete().eq("ata_id", savedAta.id);
+      for (const [i, o] of objetivosList.entries()) {
+        const ehExterno = !o.responsavelId;
+
+        await supabase.from("ata_objetivos").insert({
+          ata_id: savedAta.id,
+          texto: o.texto,
+          responsavel_id: ehExterno ? null : o.responsavelId,
+          nome_responsavel_externo: ehExterno ? (o.responsavelNome.trim() || null) : null,
+          data_entrega: o.dataEntrega || null,
+          concluido: objetivosConcluidos.includes(i),
+        });
+      }
+
+      await supabase.from("notas").update({ progresso: progressoPercent }).eq("id", notaAtual.id);
+      alert("✅ Ata salva com sucesso!");
+    } catch (e) {
+      console.error(e);
+      alert(`❌ Erro ao salvar ata: ${e.message}`);
+    }
+  }, [ataId, usuarioId, notaAtual?.id, projetoAtual?.id, pauta, local, texto, proxima, dataLocal, participantes, objetivosList, objetivosConcluidos, progressoPercent]);
+
+  // --- Handlers ---
+  const toggleObjetivo = (i) => {
+    setObjetivosConcluidos(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i]);
+  };
+
   const handleParticipanteChange = (e) => {
     const v = e.target.value;
     setParticipanteInput(v);
@@ -156,106 +320,59 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
 
   const selecionarSugestao = (item) => {
     if (!participantes.some(p => p.id === item.id)) {
-      setParticipantes([...participantes, { id: item.id, nome: item.nome, funcao: item.funcao || "Membro" }]);
+      setParticipantes([...participantes, {
+        id: item.id,
+        nome: item.nome,
+        funcao: item.funcao || "Membro"
+      }]);
     }
-    setParticipanteInput(""); setSugestoesParticipantes([]);
+    setParticipanteInput("");
+    setSugestoesParticipantes([]);
   };
 
   const removerParticipante = (id) => setParticipantes(participantes.filter(p => p.id !== id));
 
-  // Responsáveis
   const handleResponsavelChange = (e, i) => {
     const v = e.target.value;
     const novos = [...objetivosList];
-    novos[i].responsavelNome = v; novos[i].responsavelId = null;
+    novos[i].responsavelNome = v;
+    novos[i].responsavelId = null; // ao digitar livremente, assume-se externo
     setObjetivosList(novos);
+
     if (v.startsWith("@") && v.length > 1) {
       supabase.from("profiles").select("id,nome,funcao").ilike("nome", `%${v.slice(1)}%`).limit(10)
         .then(({ data }) => setSugestoesResponsavel(prev => ({ ...prev, [i]: data || [] })));
-    } else setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
+    } else {
+      setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
+    }
   };
 
   const selecionarResponsavel = (item, i) => {
     const novos = [...objetivosList];
-    novos[i].responsavelId = item.id; novos[i].responsavelNome = item.nome;
+    novos[i].responsavelId = item.id;
+    novos[i].responsavelNome = item.nome;
     setObjetivosList(novos);
     setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
   };
-
-  // Salvar ata
-  const salvarAta = useCallback(async () => {
-    if (!usuarioId || !notaAtual?.id || !projetoAtual?.id) return alert("Dados insuficientes para salvar.");
-
-    try {
-      let savedAta;
-
-      if (ataId) {
-        const { data, error } = await supabase
-          .from("atas").update({
-            pauta, local, texto,
-            proxima_reuniao: proxima || null,
-            data_local: dataLocal
-          })
-          .eq("id", ataId).select().single();
-        if (error) throw error; savedAta = data;
-      } else {
-        const { data, error } = await supabase
-          .from("atas").insert([{
-            projeto_id: projetoAtual.id,
-            nota_id: notaAtual.id,
-            pauta, local, texto,
-            proxima_reuniao: proxima || null,
-            data_local: dataLocal,
-            redigido_por: usuarioId,
-            criado_em: new Date().toISOString(),
-          }]).select().single();
-        if (error) throw error;
-        savedAta = data; setAtaId(data.id);
-      }
-
-      await supabase.from("ata_participantes").delete().eq("ata_id", savedAta.id);
-      for (const p of participantes) {
-        if (p.id.toString().startsWith("ext"))
-          await supabase.from("ata_participantes").insert({ ata_id: savedAta.id, nome_externo: p.nome.trim(), funcao_externa: p.funcao });
-        else
-          await supabase.from("ata_participantes").insert({ ata_id: savedAta.id, profile_id: p.id });
-      }
-
-      await supabase.from("ata_objetivos").delete().eq("ata_id", savedAta.id);
-      objetivosList.forEach(async (o, i) => {
-        const ehExterno = !o.responsavelId;
-        await supabase.from("ata_objetivos").insert({
-          ata_id: savedAta.id,
-          texto: o.texto,
-          responsavel_id: ehExterno ? null : o.responsavelId,
-          nome_responsavel_externo: ehExterno ? (o.responsavelNome.trim() || null) : null,
-          data_entrega: o.dataEntrega || null,
-          concluido: objetivosConcluidos.includes(i),
-        });
-      });
-
-      await supabase.from("notas").update({ progresso: progressoPercent }).eq("id", notaAtual.id);
-      alert("✅ Ata salva com sucesso!");
-    } catch (e) {
-      console.error(e);
-      alert(`❌ Erro ao salvar ata: ${e.message}`);
-    }
-  }, [ataId, usuarioId, notaAtual?.id, projetoAtual?.id, pauta, local, texto, proxima, dataLocal, participantes, objetivosList, objetivosConcluidos, progressoPercent]);
 
   if (loading) return <div className="ata-card-loading"><Loading size={200} /></div>;
 
   return (
     <div className="ata-card">
+      {/* Header */}
       <div className="listagem-card">
         <div className="listagem-header-container">
           <div className="listagem-header-titles">
             <span className="project-name">{projetoNome}</span>
-            <div className="sub-info"><span className="nota-name">{notaAtual?.nome || "Sem nota"}</span></div>
+            <div className="sub-info">
+              <span className="nota-name">{notaAtual?.nome || "Sem nota"}</span>
+            </div>
           </div>
           <div className="alteracao-info">{ultimaAlteracao}</div>
         </div>
       </div>
 
+      {/* Body */}
       <div className="ata-body">
 
         {/* Pauta e Local */}
@@ -296,43 +413,55 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
                 if (sugestoesParticipantes.length > 0) {
                   selecionarSugestao(sugestoesParticipantes[0]);
                 } else if (participanteInput.trim()) {
-                  setParticipantes([...participantes, { id: `ext-${extIdCounter}`, nome: participanteInput.trim(), funcao: "Externo" }]);
-                  setParticipanteInput(""); setExtIdCounter(prev => prev + 1);
+                  setParticipantes(prev => [...prev, {
+                    id: `ext-${extIdCounter}`,
+                    nome: participanteInput.trim(),
+                    funcao: "Externo"
+                  }]);
+                  setParticipanteInput("");
+                  setExtIdCounter(prev => prev + 1);
                 }
               }
             }}
           />
-
           {sugestoesParticipantes.length > 0 && (
             <div className="sugestoes-list">
               {sugestoesParticipantes.map(item => (
                 <div key={item.id} className="sugestao-item" onClick={() => selecionarSugestao(item)}>
-                  <span>@{item.nome}</span><span className="sugestao-funcao">{item.funcao}</span>
+                  <span>@{item.nome}</span>
+                  <span className="sugestao-funcao">{item.funcao}</span>
                 </div>
               ))}
             </div>
           )}
-
           <div className="participantes-list">
-            {participantes.map(p => (
-              <div key={p.id} className="participante-item">
-                <span>{p.nome} ({p.funcao})</span>
-                <span className="remover-participante" onClick={() => removerParticipante(p.id)}>×</span>
-              </div>
-            ))}
+            {participantes
+              .filter(p => p && typeof p === 'object')
+              .map(p => (
+                <div key={p.id} className="participante-item">
+                  <span>
+                    {p.nome || "Nome não informado"} ({p.funcao || "Função não informada"})
+                  </span>
+                  <span className="remover-participante" onClick={() => removerParticipante(p.id)}>×</span>
+                </div>
+              ))}
           </div>
         </div>
 
-        {/* Texto */}
+        {/* Texto e objetivos */}
         <div className="ata-section">
-          <textarea value={texto} onChange={e => setTexto(e.target.value)} rows={6} placeholder="Digite o texto da ata..." />
+          <textarea
+            value={texto}
+            onChange={e => setTexto(e.target.value)}
+            rows={6}
+            placeholder="Digite o texto da ata..."
+          />
           <label className="checkbox-objetivos">
             <input type="checkbox" checked={criarObjetivos} onChange={() => setCriarObjetivos(!criarObjetivos)} />
             Criar objetivos a partir da ata?
           </label>
         </div>
 
-        {/* Objetivos */}
         {criarObjetivos && (
           <div className="ata-section">
             <div className="ata-objectives">
@@ -341,39 +470,56 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
                   <input type="checkbox" checked={objetivosConcluidos.includes(i)} onChange={() => toggleObjetivo(i)} />
                   <span>{o.texto}</span>
                   <div style={{ position: "relative" }}>
-                    <input type="text" placeholder="@Responsável" value={o.responsavelNome || ""} onChange={e => handleResponsavelChange(e, i)} />
+                    <input
+                      type="text"
+                      placeholder="@Responsável"
+                      value={o.responsavelNome || ""}
+                      onChange={e => handleResponsavelChange(e, i)}
+                    />
                     {sugestoesResponsavel[i]?.length > 0 && (
                       <div className="sugestoes-list" style={{ position: "absolute", zIndex: 10 }}>
                         {sugestoesResponsavel[i].map(item => (
                           <div key={item.id} className="sugestao-item" onClick={() => selecionarResponsavel(item, i)}>
-                            <span>@{item.nome}</span><span className="sugestao-funcao">{item.funcao}</span>
+                            <span>@{item.nome}</span>
+                            <span className="sugestao-funcao">{item.funcao}</span>
                           </div>
                         ))}
                       </div>
                     )}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                    <input type="date" value={o.dataEntrega || ""} onChange={e => {
-                      const novos = [...objetivosList];
-                      novos[i].dataEntrega = e.target.value;
-                      setObjetivosList(novos);
-                    }} />
-                    <span style={{ cursor: "pointer", color: "red", fontWeight: "bold" }}
+                    <input
+                      type="date"
+                      value={o.dataEntrega || ""}
+                      onChange={e => {
+                        const novos = [...objetivosList];
+                        novos[i].dataEntrega = e.target.value;
+                        setObjetivosList(novos);
+                      }}
+                    />
+                    <span
+                      style={{ cursor: "pointer", color: "red", fontWeight: "bold" }}
                       onClick={() => {
                         const novos = [...objetivosList];
                         novos.splice(i, 1);
                         setObjetivosList(novos);
                         setObjetivosConcluidos(prev => prev.filter(idx => idx !== i));
-                      }}>×</span>
+                      }}
+                    >
+                      ×
+                    </span>
                   </div>
                 </div>
               ))}
             </div>
-            <div className="progress-container"><div className="progress-bar" style={{ width: `${progressoPercent}%` }}></div><span className="progress-percent">{progressoPercent}%</span></div>
+            <div className="progress-container">
+              <div className="progress-bar" style={{ width: `${progressoPercent}%` }}></div>
+              <span className="progress-percent">{progressoPercent}%</span>
+            </div>
           </div>
         )}
 
-        {/* Próxima reunião + salvar */}
+        {/* Próxima reunião e salvar */}
         <div className="ata-section proxima-reuniao-container">
           <div className="proxima-reuniao-linha">
             <label>Próxima reunião em:</label>
@@ -394,13 +540,19 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
                 autoFocus
               />
             ) : (
-              <span className="data-local-text" onDoubleClick={() => setEditingDataLocal(true)} style={{ cursor: "pointer" }}>
+              <span
+                className="data-local-text"
+                onDoubleClick={() => setEditingDataLocal(true)}
+                style={{ cursor: "pointer" }}
+              >
                 {dataLocal || "Clique duas vezes para inserir cidade e data"}
               </span>
             )}
           </div>
 
-          <div className="ata-autor"><p>Ata redigida por <strong>{autorNome || "Usuário desconhecido"}</strong></p></div>
+          <div className="ata-autor">
+            <p>Ata redigida por <strong>{autorNome || "Usuário desconhecido"}</strong></p>
+          </div>
         </div>
 
       </div>
