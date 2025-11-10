@@ -5,9 +5,14 @@ import Loading from "./Loading";
 import "./AtaCard.css";
 
 const VERBOS = [
-  "verificar", "reduzir", "alcançar" , "acompanhar", "implementar", "analisar", "finalizar", "revisar", "enviar", "agendar", "checar", "executar", "conferir", "monitorar", "organizar", "planejar", "solicitar", "providenciar", "designar", "repassar", "avaliar", "confirmar", "documentar", "registrar", "controlar", "inspecionar", "medir", "orçar", "nivelar", "concretar", "dimensionar", "instalar", "regularizar", "liberar", "aprovar", "adequar", "corrigir", "homologar", "cotar", "negociar", "comprar", "requisitar", "receber", "armazenar",  "devolver", "auditar", "contratar", "renovar", "pesquisar", "padronizar", "conferir",  "emitir", "acompanhar", "rastrear", "autorizar",  "validar", "orientar", "supervisionar", "delegar", "capacitar", "reportar",  "alocar", "resolver", "alinhar"
+  "verificar", "viabilizar", "cobrar", "Fechar", "Definir", "reduzir", "alcançar", "acompanhar", "implementar", "analisar",
+  "finalizar", "revisar", "enviar", "agendar", "checar", "executar", "conferir", "monitorar", "organizar", "planejar",
+  "solicitar", "providenciar", "designar", "repassar", "avaliar", "confirmar", "documentar", "registrar", "controlar",
+  "inspecionar", "medir", "orçar", "nivelar", "concretar", "dimensionar", "instalar", "regularizar", "liberar", "aprovar",
+  "adequar", "corrigir", "homologar", "cotar", "negociar", "comprar", "requisitar", "receber", "armazenar", "devolver",
+  "auditar", "contratar", "renovar", "pesquisar", "padronizar", "conferir", "emitir", "acompanhar", "rastrear", "autorizar",
+  "validar", "orientar", "supervisionar", "delegar", "capacitar", "reportar", "alocar", "resolver", "alinhar"
 ];
-
 
 export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onProgressoChange }) {
   const [projetoNome, setProjetoNome] = useState("");
@@ -112,22 +117,50 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
       setProxima(ata.proxima_reuniao || "");
       setDataLocal(ata.data_local || "");
 
+      // Carregar participantes (internos + externos)
       const { data: partData } = await supabase
         .from("ata_participantes")
-        .select("profiles(id,nome,funcao)")
+        .select(`
+          id,
+          profile_id,
+          nome_externo,
+          funcao_externa,
+          profiles(id, nome, funcao)
+        `)
         .eq("ata_id", ata.id);
-      setParticipantes(partData?.map((p) => p.profiles) || []);
 
+      const participantesCarregados = (partData || []).map(p => {
+        if (p.profile_id) {
+          return {
+            id: p.profiles?.id || p.profile_id,
+            nome: p.profiles?.nome || "Usuário sem nome",
+            funcao: p.profiles?.funcao || "Membro"
+          };
+        } else {
+          return {
+            id: `ext-${p.id}`,
+            nome: p.nome_externo || "Convidado",
+            funcao: p.funcao_externa || "Externo"
+          };
+        }
+      });
+
+      setParticipantes(participantesCarregados);
+
+      // Carregar objetivos (com suporte a responsáveis externos)
       const { data: objData } = await supabase
         .from("ata_objetivos")
-        .select("*, profiles(id,nome)")
+        .select(`
+          *,
+          profiles(id, nome)
+        `)
         .eq("ata_id", ata.id);
 
       if (objData?.length > 0) {
         const objetivos = objData.map((o) => ({
           texto: o.texto,
           responsavelId: o.responsavel_id,
-          responsavelNome: o.profiles?.nome || "",
+          responsavelNome: o.nome_responsavel_externo || o.profiles?.nome || "",
           dataEntrega: o.data_entrega,
         }));
         setObjetivosList(objetivos);
@@ -212,22 +245,39 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
         setAtaId(savedAta.id);
       }
 
+      // Salvar participantes (internos + externos)
       await supabase.from("ata_participantes").delete().eq("ata_id", savedAta.id);
+
       for (const p of participantes) {
-        if (!p.id.toString().startsWith("ext")) {
-          await supabase.from("ata_participantes").insert([{ ata_id: savedAta.id, profile_id: p.id }]);
+        if (p.id.toString().startsWith("ext")) {
+          // Externo
+          await supabase.from("ata_participantes").insert({
+            ata_id: savedAta.id,
+            nome_externo: p.nome.trim(),
+            funcao_externa: p.funcao
+          });
+        } else {
+          // Interno (do container/profiles)
+          await supabase.from("ata_participantes").insert({
+            ata_id: savedAta.id,
+            profile_id: p.id
+          });
         }
       }
 
+      // Salvar objetivos (com suporte a responsáveis externos)
       await supabase.from("ata_objetivos").delete().eq("ata_id", savedAta.id);
       for (const [i, o] of objetivosList.entries()) {
-        await supabase.from("ata_objetivos").insert([{
+        const ehExterno = !o.responsavelId;
+
+        await supabase.from("ata_objetivos").insert({
           ata_id: savedAta.id,
           texto: o.texto,
-          responsavel_id: o.responsavelId || null,
+          responsavel_id: ehExterno ? null : o.responsavelId,
+          nome_responsavel_externo: ehExterno ? (o.responsavelNome.trim() || null) : null,
           data_entrega: o.dataEntrega || null,
           concluido: objetivosConcluidos.includes(i),
-        }]);
+        });
       }
 
       await supabase.from("notas").update({ progresso: progressoPercent }).eq("id", notaAtual.id);
@@ -253,7 +303,13 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
   };
 
   const selecionarSugestao = (item) => {
-    if (!participantes.some(p => p.id === item.id)) setParticipantes([...participantes, item]);
+    if (!participantes.some(p => p.id === item.id)) {
+      setParticipantes([...participantes, {
+        id: item.id,
+        nome: item.nome,
+        funcao: item.funcao || "Membro"
+      }]);
+    }
     setParticipanteInput("");
     setSugestoesParticipantes([]);
   };
@@ -264,13 +320,15 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     const v = e.target.value;
     const novos = [...objetivosList];
     novos[i].responsavelNome = v;
-    novos[i].responsavelId = null;
+    novos[i].responsavelId = null; // ao digitar livremente, assume-se externo
     setObjetivosList(novos);
 
     if (v.startsWith("@") && v.length > 1) {
       supabase.from("profiles").select("id,nome,funcao").ilike("nome", `%${v.slice(1)}%`).limit(10)
         .then(({ data }) => setSugestoesResponsavel(prev => ({ ...prev, [i]: data || [] })));
-    } else setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
+    } else {
+      setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
+    }
   };
 
   const selecionarResponsavel = (item, i) => {
@@ -331,14 +389,19 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
             type="text"
             value={participanteInput}
             onChange={handleParticipanteChange}
-            placeholder="Digite @Nome ou Enter para externo"
+            placeholder="Digite @Nome (interno) ou Nome (externo) + Enter"
             className="participante-input"
             onKeyDown={e => {
               if (e.key === "Enter") {
                 e.preventDefault();
-                if (sugestoesParticipantes.length > 0) selecionarSugestao(sugestoesParticipantes[0]);
-                else if (participanteInput.trim()) {
-                  setParticipantes(prev => [...prev, { id: `ext-${Date.now()}`, nome: participanteInput.trim(), funcao: "Externo" }]);
+                if (sugestoesParticipantes.length > 0) {
+                  selecionarSugestao(sugestoesParticipantes[0]);
+                } else if (participanteInput.trim()) {
+                  setParticipantes(prev => [...prev, {
+                    id: `ext-${Date.now()}`,
+                    nome: participanteInput.trim(),
+                    funcao: "Externo"
+                  }]);
                   setParticipanteInput("");
                 }
               }
@@ -444,7 +507,6 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
 
           <button className="btn-salvar-ata" onClick={salvarAta}>Salvar</button>
 
-          {/* Cidade e data (editable com duplo clique) */}
           <div className="ata-data-local">
             {editingDataLocal ? (
               <input
@@ -467,7 +529,6 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
             )}
           </div>
 
-          {/* Autor */}
           <div className="ata-autor">
             <p>Ata redigida por <strong>{autorNome || "Usuário desconhecido"}</strong></p>
           </div>

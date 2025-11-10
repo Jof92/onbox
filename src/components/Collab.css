@@ -62,7 +62,14 @@
 
 .collab-section {
   margin-bottom: 20px;
+  height: 10em;
+  overflow: auto;
   
+}
+
+.collab-section-convite {
+  margin-bottom: 20px;
+   
 }
 
 .collab-section h3 {
@@ -207,7 +214,6 @@
   
 .integrantes-list {
   max-height: 200px;
-  overflow-y: auto;
   padding-right: 4px;
 }
 

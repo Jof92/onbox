@@ -2,25 +2,26 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
 import "./Listagem.css";
+import "./loader.css";
 import { FaPlus, FaTimes, FaPaperPlane } from "react-icons/fa";
-import Loading from "./Loading";
+import Check from "./Check";
+import Loading from "./Loading"; // Apenas para carregamento inicial
 
 export default function Listagem({ projetoAtual, notaAtual }) {
   const [rows, setRows] = useState([]);
-  // eslint-disable-next-line no-unused-vars
   const [ultimaAlteracao, setUltimaAlteracao] = useState("");
   const [locacoes, setLocacoes] = useState([]);
   const [eaps, setEaps] = useState([]);
   const [unidadesDisponiveis, setUnidadesDisponiveis] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [nomeUsuarioLogado, setNomeUsuarioLogado] = useState("Usuário");
   const [codigoErro, setCodigoErro] = useState(new Set());
   const [textoAtual, setTextoAtual] = useState("");
   const [sugestoes, setSugestoes] = useState([]);
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
-  // eslint-disable-next-line no-unused-vars
-  const [posicaoCaret, setPosicaoCaret] = useState(0);    
+  const [posicaoCaret, setPosicaoCaret] = useState(0);
   const [userIdLogado, setUserIdLogado] = useState("");
+  const [statusEnvio, setStatusEnvio] = useState(null); // 'enviando', 'sucesso'
+  const [loading, setLoading] = useState(true); // Apenas para carregamento inicial
 
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -280,7 +281,7 @@ export default function Listagem({ projetoAtual, notaAtual }) {
       return;
     }
 
-    setLoading(true);
+    setStatusEnvio("enviando");
     try {
       const grupoEnvio = `envio_${Date.now()}`;
       const dataEnvio = new Date().toISOString();
@@ -366,25 +367,28 @@ export default function Listagem({ projetoAtual, notaAtual }) {
       if (notificacoesParaInserir.length > 0) {
         const { error: notifError } = await supabase.from("notificacoes").insert(notificacoesParaInserir);
         if (notifError) {
-          // opcional: logar erro silenciosamente
+          console.warn("Erro ao enviar notificações:", notifError);
         }
       }
 
       setCodigoErro(new Set());
-      setTextoAtual(""); // ✅ Limpa o campo após o envio
+      setTextoAtual("");
       await carregarDados();
-      alert("Lista salva com sucesso!");
+
+      setStatusEnvio("sucesso");
+      setTimeout(() => setStatusEnvio(null), 2000);
+
       registrarAlteracao();
     } catch (err) {
       alert("Erro ao salvar lista.");
-    } finally {
-      setLoading(false);
+      setStatusEnvio(null);
     }
   };
 
+  // ✅ Exibe Loading apenas no carregamento inicial
   if (loading) {
     return (
-      <div className="loading-container">
+      <div className="listagem-card">
         <Loading />
       </div>
     );
@@ -435,9 +439,19 @@ export default function Listagem({ projetoAtual, notaAtual }) {
           )}
         </div>
 
-        <button className="send-btn" onClick={handleSave}>
-          <FaPaperPlane style={{ marginRight: 6 }} /> Enviar
-        </button>
+        <div className="send-action-wrapper">
+          <button
+            className="send-btn"
+            onClick={handleSave}
+            disabled={statusEnvio === "enviando"}
+          >
+            <FaPaperPlane style={{ marginRight: 6 }} /> Enviar
+          </button>
+          {statusEnvio === "enviando" && (
+            <span className="loader-inline"></span>
+          )}
+          {statusEnvio === "sucesso" && <Check />}
+        </div>
       </div>
 
       <div className="listagem-table-wrapper">

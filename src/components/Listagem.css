@@ -347,3 +347,9 @@ select {
 .sugestao-item:hover {
   background-color: #f0f0f0;
 }
+
+.send-action-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}

@@ -1,6 +1,7 @@
 // src/components/Collab.jsx
 import React, { useState, useEffect, useCallback } from "react";
 import "./Collab.css";
+import "./loader.css"; // 👈 Importa o CSS do loader
 import { FaPaperPlane, FaUserPlus, FaEllipsisV } from "react-icons/fa";
 import { supabase } from "../supabaseClient";
 
@@ -11,11 +12,18 @@ export default function Collab({ onClose, user, onOpenTask }) {
   const [enviando, setEnviando] = useState(false);
   const [menuAberto, setMenuAberto] = useState(null);
   const [removendo, setRemovendo] = useState(null);
+  const [loadingNotificacoes, setLoadingNotificacoes] = useState(true); // 👈 Novo
+  const [loadingIntegrantes, setLoadingIntegrantes] = useState(true);   // 👈 Novo
 
   // 🔔 Buscar notificações com useCallback
   const fetchNotificacoes = useCallback(async () => {
-    if (!user?.id || !user?.email) return;
+    if (!user?.id || !user?.email) {
+      setNotificacoes([]);
+      setLoadingNotificacoes(false);
+      return;
+    }
 
+    setLoadingNotificacoes(true);
     try {
       const allNotificacoes = [];
 
@@ -76,13 +84,20 @@ export default function Collab({ onClose, user, onOpenTask }) {
     } catch (err) {
       console.error("Erro geral ao buscar notificações:", err);
       setNotificacoes([]);
+    } finally {
+      setLoadingNotificacoes(false);
     }
-  }, [user?.id, user?.email]); // ✅ Dependências explícitas
+  }, [user?.id, user?.email]);
 
   // 👥 Buscar integrantes com useCallback
   const fetchIntegrantes = useCallback(async () => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      setIntegrantes([]);
+      setLoadingIntegrantes(false);
+      return;
+    }
 
+    setLoadingIntegrantes(true);
     try {
       const { data: convitesAceitos, error } = await supabase
         .from("convites")
@@ -119,14 +134,15 @@ export default function Collab({ onClose, user, onOpenTask }) {
     } catch (err) {
       console.error("Erro ao buscar integrantes:", err);
       setIntegrantes([]);
+    } finally {
+      setLoadingIntegrantes(false);
     }
-  }, [user?.id]); // ✅ Dependência explícita
+  }, [user?.id]);
 
-  // ✅ Agora as funções estão estáveis e nas dependências corretas
   useEffect(() => {
     fetchNotificacoes();
     fetchIntegrantes();
-  }, [fetchNotificacoes, fetchIntegrantes]); // ✅ Correto!
+  }, [fetchNotificacoes, fetchIntegrantes]);
 
   // ==============================
   // ✉️ ENVIAR CONVITE
@@ -173,7 +189,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
 
       alert(`Convite enviado para ${profile.nome}`);
       setEmailConvite("");
-      fetchNotificacoes(); // Atualiza as notificações
+      fetchNotificacoes();
     } catch (err) {
       console.error("Erro ao enviar convite:", err);
       alert("Erro ao enviar convite.");
@@ -248,7 +264,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
           <h2>Colaborações</h2>
         </div>
 
-        <div className="collab-section">
+        <div className="collab-section-convite">
           <h3>
             <FaUserPlus className="icon" /> Enviar Convite
           </h3>
@@ -274,56 +290,54 @@ export default function Collab({ onClose, user, onOpenTask }) {
 
         <div className="collab-section">
           <h3>Notificações</h3>
-          {notificacoes.length === 0 ? (
+          {loadingNotificacoes ? (
+            <div className="loader-container">
+              <div className="loader"></div>
+            </div>
+          ) : notificacoes.length === 0 ? (
             <p className="empty">Nenhuma notificação no momento.</p>
           ) : (
             <>
               {notificacoes.map((n, index) => {
-                const tipo = n.tipo || (n.email ? "convite" : "menção");
-                const isLido = tipo === "menção" ? n.lido : n.status === "aceito";
+                const isConvite = n.hasOwnProperty('email') && n.hasOwnProperty('status');
+                const isMencao = n.hasOwnProperty('mensagem') && (n.tipo === 'menção' || !n.email);
+                const tipo = isConvite ? 'convite' : isMencao ? 'menção' : 'desconhecido';
+                const isLido = tipo === 'menção' ? n.lido : tipo === 'convite' ? n.status === 'aceito' : true;
 
                 let content = null;
 
-                if (tipo === "convite") {
-                  const remetenteNome = n.remetente?.nome || n.remetente_id?.substring(0, 8) || "Alguém";
+                if (tipo === 'convite') {
+                  const remetenteNome = n.remetente?.nome || n.remetente_id?.substring(0, 8) || 'Alguém';
                   content = (
                     <>
                       <span>
                         <strong>{remetenteNome}</strong> te convidou
-                        {n.status === "aceito" && " (aceito)"}
+                        {n.status === 'aceito' && ' (aceito)'}
                       </span>
-                      {n.status === "pendente" && (
+                      {n.status === 'pendente' && (
                         <button className="btn-aceitar" onClick={() => aceitarConvite(n)}>
                           Aceitar
                         </button>
                       )}
                     </>
                   );
-                } else if (tipo === "menção") {
-                  const remetenteNome = n.remetente?.nome || "Alguém";
-                  const notaNome = n.nota?.nome || "uma tarefa";
-                  const projetoNome = n.projeto?.name || "um projeto";
-
+                } else if (tipo === 'menção') {
                   content = (
                     <>
-                      <span>
-                        <strong>{remetenteNome}</strong> marcou você na tarefa{" "}
-                        <strong>{notaNome}</strong> do projeto <strong>{projetoNome}</strong>
-                        {n.lido && " (lido)"}
-                      </span>
+                      <span>{n.mensagem || 'Você foi mencionado em uma tarefa.'}</span>
                       <button
                         className="btn-ler"
                         onClick={() => lerMensagemMencoes(n)}
                         disabled={n.lido}
                       >
-                        {n.lido ? "Aberto" : "Abrir"}
+                        {n.lido ? 'Aberto' : 'Abrir'}
                       </button>
                     </>
                   );
                 } else {
                   content = (
-                    <span style={{ color: "#d9534f" }}>
-                      <em>Notificação inválida (tipo: {String(n.tipo)})</em>
+                    <span style={{ color: '#d9534f' }}>
+                      <em>Notificação inválida</em>
                     </span>
                   );
                 }
@@ -331,7 +345,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
                 return (
                   <div
                     key={n.id || `fallback-${index}`}
-                    className={`notificacao-item ${isLido ? "lida" : "nao-lida"}`}
+                    className={`notificacao-item ${isLido ? 'lida' : 'nao-lida'}`}
                   >
                     {content}
                   </div>
@@ -345,7 +359,11 @@ export default function Collab({ onClose, user, onOpenTask }) {
 
         <div className="collab-section">
           <h3>Integrantes</h3>
-          {integrantes.length === 0 ? (
+          {loadingIntegrantes ? (
+            <div className="loader-container">
+              <div className="loader"></div>
+            </div>
+          ) : integrantes.length === 0 ? (
             <p className="empty">Nenhum integrante ainda.</p>
           ) : (
             <div className="integrantes-list">
