@@ -9,6 +9,7 @@ import Loading from "./Loading"; // Apenas para carregamento inicial
 
 export default function Listagem({ projetoAtual, notaAtual }) {
   const [rows, setRows] = useState([]);
+  // eslint-disable-next-line no-unused-vars
   const [ultimaAlteracao, setUltimaAlteracao] = useState("");
   const [locacoes, setLocacoes] = useState([]);
   const [eaps, setEaps] = useState([]);
