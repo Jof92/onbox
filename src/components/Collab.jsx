@@ -278,9 +278,6 @@ export default function Collab({ onClose, user, onOpenTask }) {
             <p className="empty">Nenhuma notificação no momento.</p>
           ) : (
             <>
-              <div style={{ fontSize: "12px", color: "#888", marginBottom: "8px" }}>
-                {notificacoes.length} notificação(ões) carregada(s).
-              </div>
               {notificacoes.map((n, index) => {
                 const tipo = n.tipo || (n.email ? "convite" : "menção");
                 const isLido = tipo === "menção" ? n.lido : n.status === "aceito";

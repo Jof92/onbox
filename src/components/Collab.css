@@ -234,10 +234,9 @@
 }
 
 .integrante-avatar {
-  width: 2em;
-  height: 2em;
-  border-radius: 50%;
-  object-fit: cover;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
 }
 
 .integrante-avatar.placeholder {
