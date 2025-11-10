@@ -418,12 +418,19 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
             </div>
           )}
           <div className="participantes-list">
-            {participantes.map(p => (
+            {participantes
+            .filter(p => p && typeof p === 'object') // Garante que não é null/undefined
+            .map(p => (
               <div key={p.id} className="participante-item">
-                <span>{p.nome} ({p.funcao})</span>
-                <span className="remover-participante" onClick={() => removerParticipante(p.id)}>×</span>
+                <span>
+                  {p.nome || "Nome não informado"} ({p.funcao || "Função não informada"})
+                </span>
+                <span className="remover-participante" onClick={() => removerParticipante(p.id)}>
+                  ×
+                </span>
               </div>
-            ))}
+            ))
+          }
           </div>
         </div>
 
