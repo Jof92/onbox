@@ -34,6 +34,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
   const [editingDataLocal, setEditingDataLocal] = useState(false);
   const [dataLocal, setDataLocal] = useState("");
   const [loading, setLoading] = useState(true);
+  const [extIdCounter, setExtIdCounter] = useState(0);
 
   // --- Fetch projeto ---
   const fetchProjeto = useCallback(async () => {
@@ -129,21 +130,34 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
         `)
         .eq("ata_id", ata.id);
 
-      const participantesCarregados = (partData || []).map(p => {
-        if (p.profile_id) {
-          return {
-            id: p.profiles?.id || p.profile_id,
-            nome: p.profiles?.nome || "Usuário sem nome",
-            funcao: p.profiles?.funcao || "Membro"
-          };
-        } else {
-          return {
-            id: `ext-${p.id}`,
-            nome: p.nome_externo || "Convidado",
-            funcao: p.funcao_externa || "Externo"
-          };
-        }
-      });
+      const participantesCarregados = (partData || [])
+        .map(p => {
+          if (p.profile_id) {
+            // Interno
+            if (p.profiles) {
+              return {
+                id: p.profiles.id || p.profile_id,
+                nome: p.profiles.nome || "Usuário sem nome",
+                funcao: p.profiles.funcao || "Membro"
+              };
+            } else {
+              // Perfil foi excluído, mas ainda há referência
+              return {
+                id: p.profile_id,
+                nome: "Usuário excluído",
+                funcao: "Membro"
+              };
+            }
+          } else {
+            // Externo
+            return {
+              id: `ext-${p.id}`,
+              nome: (p.nome_externo?.trim() || "Convidado"),
+              funcao: (p.funcao_externa?.trim() || "Externo")
+            };
+          }
+        })
+        .filter(p => p && p.id); // Remove entradas inválidas
 
       setParticipantes(participantesCarregados);
 
@@ -398,11 +412,12 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
                   selecionarSugestao(sugestoesParticipantes[0]);
                 } else if (participanteInput.trim()) {
                   setParticipantes(prev => [...prev, {
-                    id: `ext-${Date.now()}`,
+                    id: `ext-${extIdCounter}`,
                     nome: participanteInput.trim(),
                     funcao: "Externo"
                   }]);
                   setParticipanteInput("");
+                  setExtIdCounter(prev => prev + 1);
                 }
               }
             }}
@@ -419,18 +434,15 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
           )}
           <div className="participantes-list">
             {participantes
-            .filter(p => p && typeof p === 'object') // Garante que não é null/undefined
-            .map(p => (
-              <div key={p.id} className="participante-item">
-                <span>
-                  {p.nome || "Nome não informado"} ({p.funcao || "Função não informada"})
-                </span>
-                <span className="remover-participante" onClick={() => removerParticipante(p.id)}>
-                  ×
-                </span>
-              </div>
-            ))
-          }
+              .filter(p => p && typeof p === 'object')
+              .map(p => (
+                <div key={p.id} className="participante-item">
+                  <span>
+                    {p.nome || "Nome não informado"} ({p.funcao || "Função não informada"})
+                  </span>
+                  <span className="remover-participante" onClick={() => removerParticipante(p.id)}>×</span>
+                </div>
+              ))}
           </div>
         </div>
 
