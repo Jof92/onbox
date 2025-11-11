@@ -4,15 +4,16 @@ import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
 import "./AtaCard.css";
 
+// ✅ Todos os verbos em minúsculas para consistência
 const VERBOS = [
-  "verificar", "viabilizar", "cobrar", "Fechar", "Definir", "reduzir", "alcançar", "acompanhar", "implementar", "analisar",
+  "verificar", "viabilizar", "cobrar", "fechar", "definir", "reduzir", "alcançar", "acompanhar", "implementar", "analisar",
   "finalizar", "revisar", "enviar", "agendar", "checar", "executar", "conferir", "monitorar", "organizar", "planejar",
   "solicitar", "providenciar", "designar", "repassar", "avaliar", "confirmar", "documentar", "registrar", "controlar",
   "inspecionar", "medir", "orçar", "nivelar", "concretar", "dimensionar", "instalar", "regularizar", "liberar", "aprovar",
   "adequar", "corrigir", "homologar", "cotar", "negociar", "comprar", "requisitar", "receber", "armazenar", "devolver",
-  "auditar", "contratar", "renovar", "pesquisar", "padronizar", "conferir", "emitir", "acompanhar", "rastrear", "autorizar",
+  "auditar", "contratar", "renovar", "pesquisar", "padronizar", "emitir", "rastrear", "autorizar",
   "validar", "orientar", "supervisionar", "delegar", "capacitar", "reportar", "alocar", "resolver", "alinhar"
-];
+].map(v => v.toLowerCase());
 
 export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onProgressoChange }) {
   const [projetoNome, setProjetoNome] = useState("");
@@ -68,23 +69,24 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     );
   }, []);
 
-  // --- Extrair objetivos automaticamente (com preservação de responsáveis) ---
-  const extrairObjetivos = useCallback((txt) => {
-    if (!criarObjetivos) return [];
+  // ✅ Função de extração que recebe objetivos anteriores como argumento
+  const extrairObjetivos = useCallback((txt, objetivosAnteriores = []) => {
+    if (!criarObjetivos || !txt) return [];
     const novosObjetivos = [];
     const regex = new RegExp(`\\b(${VERBOS.join("|")})\\b`, "gi");
 
     txt.split(/\n/).forEach((linha) => {
       const matches = [];
       let match;
-      while ((match = regex.exec(linha)) !== null) matches.push({ index: match.index });
+      while ((match = regex.exec(linha)) !== null) {
+        matches.push({ index: match.index, word: match[0] });
+      }
       matches.forEach((m, i) => {
         const start = m.index;
         const end = i + 1 < matches.length ? matches[i + 1].index : linha.length;
         const trecho = linha.slice(start, end).split(",")[0].trim();
         if (trecho && !novosObjetivos.some((o) => o.texto === trecho)) {
-          // ✅ Preserva responsável e data se o objetivo já existir
-          const objetivoExistente = objetivosList.find(o => o.texto === trecho);
+          const objetivoExistente = objetivosAnteriores.find(o => o.texto === trecho);
           novosObjetivos.push({
             texto: trecho,
             responsavelId: objetivoExistente?.responsavelId || null,
@@ -96,7 +98,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     });
 
     return novosObjetivos;
-  }, [criarObjetivos, objetivosList]);
+  }, [criarObjetivos]); // ✅ depende apenas de criarObjetivos
 
   // --- Fetch ata ---
   const fetchAta = useCallback(async () => {
@@ -127,7 +129,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
       setProxima(ata.proxima_reuniao || "");
       setDataLocal(ata.data_local || "");
 
-      // ✅ Carregar participantes em ORDEM DE INSERÇÃO
+      // Carregar participantes
       const { data: partData } = await supabase
         .from("ata_participantes")
         .select(`
@@ -169,7 +171,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
 
       setParticipantes(participantesCarregados);
 
-      // ✅ Carregar objetivos em ORDEM DE INSERÇÃO
+      // Carregar objetivos
       const { data: objData } = await supabase
         .from("ata_objetivos")
         .select(`
@@ -186,8 +188,6 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
             responsavelNome = o.nome_responsavel_externo;
           } else if (o.responsavel_id && o.profiles?.nome) {
             responsavelNome = o.profiles.nome;
-          } else {
-            responsavelNome = "";
           }
           return {
             texto: o.texto,
@@ -221,7 +221,14 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     if (projetoAtual?.id && notaAtual?.id) fetchAta();
   }, [projetoAtual?.id, notaAtual?.id, fetchAta]);
 
-  // ✅ REMOVIDO: useEffect que causava loop infinito
+  // ✅ useEffect seguro: atualiza objetivos em tempo real sem loop
+  useEffect(() => {
+    if (criarObjetivos) {
+      const novos = extrairObjetivos(texto, objetivosList);
+      setObjetivosList(novos);
+      setObjetivosConcluidos(prev => prev.filter(i => i < novos.length));
+    }
+  }, [texto, criarObjetivos, extrairObjetivos, objetivosList]);
 
   const progressoPercent = objetivosList.length
     ? Math.round((objetivosConcluidos.length / objetivosList.length) * 100)
@@ -297,7 +304,6 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
           ata_id: savedAta.id,
           texto: o.texto,
           responsavel_id: ehExterno ? null : o.responsavelId,
-          // ✅ SEMPRE salvar o nome visível como fallback
           nome_responsavel_externo: o.responsavelNome || null,
           data_entrega: o.dataEntrega || null,
           concluido: objetivosConcluidos.includes(i),
@@ -482,9 +488,8 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
             value={texto}
             onChange={e => setTexto(e.target.value)}
             rows={6}
-            placeholder="Digite o texto da ata..."
+            placeholder="Digite o texto da ata (use verbos no infinitivo: 'definir', 'acompanhar', etc.)"
           />
-          {/* ✅ Checkbox atualizada para evitar loop e preservar responsáveis */}
           <label className="checkbox-objetivos">
             <input
               type="checkbox"
@@ -493,7 +498,12 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
                 const ativar = e.target.checked;
                 setCriarObjetivos(ativar);
                 if (ativar) {
-                  setObjetivosList(extrairObjetivos(texto));
+                  const novos = extrairObjetivos(texto, objetivosList);
+                  setObjetivosList(novos);
+                  setObjetivosConcluidos(prev => prev.filter(i => i < novos.length));
+                } else {
+                  setObjetivosList([]);
+                  setObjetivosConcluidos([]);
                 }
               }}
             />
