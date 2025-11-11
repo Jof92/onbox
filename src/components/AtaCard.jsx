@@ -175,11 +175,20 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
       if (objData?.length > 0) {
         const objetivos = objData.map((o) => {
           let responsavelNome = "";
-          if (o.responsavel_id === null || o.responsavel_id === undefined) {
-            responsavelNome = o.nome_responsavel_externo || "";
-          } else {
-            responsavelNome = o.profiles?.nome || "";
+
+          // ✅ PRIORIDADE 1: usar nome_responsavel_externo se existir
+          if (o.nome_responsavel_externo) {
+            responsavelNome = o.nome_responsavel_externo;
           }
+          // ✅ PRIORIDADE 2: usar nome do perfil se responsavel_id for válido
+          else if (o.responsavel_id && o.profiles?.nome) {
+            responsavelNome = o.profiles.nome;
+          }
+          // Caso nenhum dos dois exista, deixa vazio (raro)
+          else {
+            responsavelNome = "";
+          }
+
           return {
             texto: o.texto,
             responsavelId: o.responsavel_id,
@@ -293,7 +302,8 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
           ata_id: savedAta.id,
           texto: o.texto,
           responsavel_id: ehExterno ? null : o.responsavelId,
-          nome_responsavel_externo: ehExterno ? o.responsavelNome : null,
+          // ✅ SEMPRE salvar o nome em nome_responsavel_externo, mesmo para internos
+          nome_responsavel_externo: o.responsavelNome || null,
           data_entrega: o.dataEntrega || null,
           concluido: objetivosConcluidos.includes(i),
         });
