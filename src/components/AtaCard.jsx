@@ -99,6 +99,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
       const { data: ata } = await supabase.from("atas").select("*").eq("nota_id", notaAtual.id).single();
 
       if (!ata) {
+        console.log("⚠️ Nenhuma ata encontrada para nota_id:", notaAtual.id);
         setAtaId(null);
         setPauta("");
         setLocal("");
@@ -120,7 +121,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
       setProxima(ata.proxima_reuniao || "");
       setDataLocal(ata.data_local || "");
 
-      // ✅ Carregar participantes em ORDEM DE INSERÇÃO
+      // ✅ Carregar participantes
       const { data: partData } = await supabase
         .from("ata_participantes")
         .select(`
@@ -162,7 +163,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
 
       setParticipantes(participantesCarregados);
 
-      // ✅ Carregar objetivos em ORDEM DE INSERÇÃO
+      // ✅ Carregar objetivos
       const { data: objData } = await supabase
         .from("ata_objetivos")
         .select(`
@@ -172,22 +173,21 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
         .eq("ata_id", ata.id)
         .order("id", { ascending: true });
 
+      console.log("🔍 Dados brutos dos objetivos recebidos do Supabase:", objData);
+
       if (objData?.length > 0) {
-        const objetivos = objData.map((o) => {
+        const objetivos = objData.map((o, idx) => {
           let responsavelNome = "";
 
-          // ✅ PRIORIDADE 1: usar nome_responsavel_externo se existir
           if (o.nome_responsavel_externo) {
             responsavelNome = o.nome_responsavel_externo;
-          }
-          // ✅ PRIORIDADE 2: usar nome do perfil se responsavel_id for válido
-          else if (o.responsavel_id && o.profiles?.nome) {
+          } else if (o.responsavel_id && o.profiles?.nome) {
             responsavelNome = o.profiles.nome;
-          }
-          // Caso nenhum dos dois exista, deixa vazio (raro)
-          else {
+          } else {
             responsavelNome = "";
           }
+
+          console.log(`🎯 Objetivo ${idx}: texto="${o.texto}", responsavel_id="${o.responsavel_id}", nome_externo="${o.nome_responsavel_externo}", nome_perfil="${o.profiles?.nome}" → nome final="${responsavelNome}"`);
 
           return {
             texto: o.texto,
@@ -196,10 +196,12 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
             dataEntrega: o.data_entrega,
           };
         });
+
         setObjetivosList(objetivos);
         setObjetivosConcluidos(objData.filter((o) => o.concluido).map((_, i) => i));
         setCriarObjetivos(true);
       } else {
+        console.log("ℹ️ Nenhum objetivo encontrado para esta ata.");
         setCriarObjetivos(false);
         setObjetivosList([]);
         setObjetivosConcluidos([]);
@@ -207,7 +209,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
 
       setLoading(false);
     } catch (err) {
-      console.error("Erro ao carregar ata:", err);
+      console.error("❌ Erro ao carregar ata:", err);
       setLoading(false);
     }
   }, [notaAtual?.id]);
@@ -241,6 +243,8 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     if (!usuarioId || !notaAtual?.id || !projetoAtual?.id) return alert("Dados insuficientes para salvar.");
 
     try {
+      console.log("💾 Iniciando salvamento da ata...");
+
       let savedAta;
       if (ataId) {
         const { data, error } = await supabase
@@ -297,22 +301,24 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
 
       await supabase.from("ata_objetivos").delete().eq("ata_id", savedAta.id);
       for (const [i, o] of objetivosList.entries()) {
-        const ehExterno = o.responsavelId == null;
-        await supabase.from("ata_objetivos").insert({
+        const payload = {
           ata_id: savedAta.id,
           texto: o.texto,
-          responsavel_id: ehExterno ? null : o.responsavelId,
-          // ✅ SEMPRE salvar o nome em nome_responsavel_externo, mesmo para internos
+          responsavel_id: o.responsavelId == null ? null : o.responsavelId,
+          // ✅ SEMPRE salvar o nome visível como fallback
           nome_responsavel_externo: o.responsavelNome || null,
           data_entrega: o.dataEntrega || null,
           concluido: objetivosConcluidos.includes(i),
-        });
+        };
+        console.log(`📤 Salvando objetivo ${i}:`, payload);
+        await supabase.from("ata_objetivos").insert(payload);
       }
 
       await supabase.from("notas").update({ progresso: progressoPercent }).eq("id", notaAtual.id);
       alert("✅ Ata salva com sucesso!");
+      console.log("✅ Ata salva com sucesso no banco.");
     } catch (e) {
-      console.error(e);
+      console.error("❌ Erro ao salvar ata:", e);
       alert(`❌ Erro ao salvar ata: ${e.message}`);
     }
   }, [
