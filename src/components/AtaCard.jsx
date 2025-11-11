@@ -45,14 +45,16 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
 
   // --- Fetch autor ---
   const fetchAutor = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data } = await supabase.auth.getUser();
+    const user = data?.user;
     if (!user) return setAutorNome("Usuário desconhecido");
     setUsuarioId(user.id);
 
     let perfil = null;
     const { data: p1 } = await supabase.from("profiles").select("nome").eq("id", user.id).single();
-    if (p1) perfil = p1;
-    else {
+    if (p1) {
+      perfil = p1;
+    } else {
       const { data: p2 } = await supabase.from("profiles").select("nome").eq("user_id", user.id).single();
       perfil = p2;
     }
@@ -118,7 +120,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
       setProxima(ata.proxima_reuniao || "");
       setDataLocal(ata.data_local || "");
 
-      // Carregar participantes (internos + externos)
+      // ✅ Carregar participantes em ORDEM DE INSERÇÃO
       const { data: partData } = await supabase
         .from("ata_participantes")
         .select(`
@@ -128,14 +130,13 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
           funcao_externa,
           profiles(id, nome, funcao)
         `)
-        .eq("ata_id", ata.id);
+        .eq("ata_id", ata.id)
+        .order("id", { ascending: true });
 
       const participantesCarregados = (partData || [])
         .map(p => {
           if (p.profile_id) {
-            // Interno: verifica se profiles existe e tem nome válido
             const perfilValido = p.profiles && typeof p.profiles === 'object' && p.profiles.nome;
-
             if (perfilValido) {
               return {
                 id: p.profiles.id || p.profile_id,
@@ -143,7 +144,6 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
                 funcao: (p.profiles.funcao?.trim() || "Membro")
               };
             } else {
-              // Perfil não encontrado ou excluído
               return {
                 id: p.profile_id,
                 nome: "Usuário excluído",
@@ -151,7 +151,6 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
               };
             }
           } else {
-            // Externo
             return {
               id: `ext-${p.id}`,
               nome: (p.nome_externo?.trim() || "Convidado"),
@@ -159,26 +158,35 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
             };
           }
         })
-        .filter(p => p && p.id); // Remove entradas inválidas
+        .filter(p => p && p.id);
 
       setParticipantes(participantesCarregados);
 
-      // Carregar objetivos (com suporte a responsáveis externos)
+      // ✅ Carregar objetivos em ORDEM DE INSERÇÃO
       const { data: objData } = await supabase
         .from("ata_objetivos")
         .select(`
           *,
           profiles(id, nome)
         `)
-        .eq("ata_id", ata.id);
+        .eq("ata_id", ata.id)
+        .order("id", { ascending: true });
 
       if (objData?.length > 0) {
-        const objetivos = objData.map((o) => ({
-          texto: o.texto,
-          responsavelId: o.responsavel_id,
-          responsavelNome: o.nome_responsavel_externo || o.profiles?.nome || "",
-          dataEntrega: o.data_entrega,
-        }));
+        const objetivos = objData.map((o) => {
+          let responsavelNome = "";
+          if (o.responsavel_id === null || o.responsavel_id === undefined) {
+            responsavelNome = o.nome_responsavel_externo || "";
+          } else {
+            responsavelNome = o.profiles?.nome || "";
+          }
+          return {
+            texto: o.texto,
+            responsavelId: o.responsavel_id,
+            responsavelNome,
+            dataEntrega: o.data_entrega,
+          };
+        });
         setObjetivosList(objetivos);
         setObjetivosConcluidos(objData.filter((o) => o.concluido).map((_, i) => i));
         setCriarObjetivos(true);
@@ -261,19 +269,16 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
         setAtaId(savedAta.id);
       }
 
-      // Salvar participantes (internos + externos)
       await supabase.from("ata_participantes").delete().eq("ata_id", savedAta.id);
 
       for (const p of participantes) {
         if (p.id.toString().startsWith("ext")) {
-          // Externo
           await supabase.from("ata_participantes").insert({
             ata_id: savedAta.id,
-            nome_externo: p.nome.trim(),
+            nome_externo: p.nome,
             funcao_externa: p.funcao
           });
         } else {
-          // Interno (do container/profiles)
           await supabase.from("ata_participantes").insert({
             ata_id: savedAta.id,
             profile_id: p.id
@@ -281,16 +286,14 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
         }
       }
 
-      // Salvar objetivos (com suporte a responsáveis externos)
       await supabase.from("ata_objetivos").delete().eq("ata_id", savedAta.id);
       for (const [i, o] of objetivosList.entries()) {
-        const ehExterno = !o.responsavelId;
-
+        const ehExterno = o.responsavelId == null;
         await supabase.from("ata_objetivos").insert({
           ata_id: savedAta.id,
           texto: o.texto,
           responsavel_id: ehExterno ? null : o.responsavelId,
-          nome_responsavel_externo: ehExterno ? (o.responsavelNome.trim() || null) : null,
+          nome_responsavel_externo: ehExterno ? o.responsavelNome : null,
           data_entrega: o.dataEntrega || null,
           concluido: objetivosConcluidos.includes(i),
         });
@@ -302,7 +305,21 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
       console.error(e);
       alert(`❌ Erro ao salvar ata: ${e.message}`);
     }
-  }, [ataId, usuarioId, notaAtual?.id, projetoAtual?.id, pauta, local, texto, proxima, dataLocal, participantes, objetivosList, objetivosConcluidos, progressoPercent]);
+  }, [
+    ataId,
+    usuarioId,
+    notaAtual?.id,
+    projetoAtual?.id,
+    pauta,
+    local,
+    texto,
+    proxima,
+    dataLocal,
+    participantes,
+    objetivosList,
+    objetivosConcluidos,
+    progressoPercent,
+  ]);
 
   // --- Handlers ---
   const toggleObjetivo = (i) => {
@@ -313,9 +330,15 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     const v = e.target.value;
     setParticipanteInput(v);
     if (v.startsWith("@") && v.length > 1) {
-      supabase.from("profiles").select("id,nome,funcao").ilike("nome", `%${v.slice(1)}%`).limit(10)
+      supabase
+        .from("profiles")
+        .select("id,nome,funcao")
+        .ilike("nome", `%${v.slice(1)}%`)
+        .limit(10)
         .then(({ data }) => setSugestoesParticipantes(data || []));
-    } else setSugestoesParticipantes([]);
+    } else {
+      setSugestoesParticipantes([]);
+    }
   };
 
   const selecionarSugestao = (item) => {
@@ -336,11 +359,15 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     const v = e.target.value;
     const novos = [...objetivosList];
     novos[i].responsavelNome = v;
-    novos[i].responsavelId = null; // ao digitar livremente, assume-se externo
+    novos[i].responsavelId = null;
     setObjetivosList(novos);
 
     if (v.startsWith("@") && v.length > 1) {
-      supabase.from("profiles").select("id,nome,funcao").ilike("nome", `%${v.slice(1)}%`).limit(10)
+      supabase
+        .from("profiles")
+        .select("id,nome,funcao")
+        .ilike("nome", `%${v.slice(1)}%`)
+        .limit(10)
         .then(({ data }) => setSugestoesResponsavel(prev => ({ ...prev, [i]: data || [] })));
     } else {
       setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
@@ -374,8 +401,6 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
 
       {/* Body */}
       <div className="ata-body">
-
-        {/* Pauta e Local */}
         {["pauta", "local"].map(campo => (
           <div key={campo} className="ata-section">
             {editing[campo] ? (
@@ -439,9 +464,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
               .filter(p => p && typeof p === 'object')
               .map(p => (
                 <div key={p.id} className="participante-item">
-                  <span>
-                    {p.nome || "Nome não informado"} ({p.funcao || "Função não informada"})
-                  </span>
+                  <span>{p.nome || "Nome não informado"} ({p.funcao || "Função não informada"})</span>
                   <span className="remover-participante" onClick={() => removerParticipante(p.id)}>×</span>
                 </div>
               ))}
@@ -473,7 +496,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
                     <input
                       type="text"
                       placeholder="@Responsável"
-                      value={o.responsavelNome || ""}
+                      value={o.responsavelNome}
                       onChange={e => handleResponsavelChange(e, i)}
                     />
                     {sugestoesResponsavel[i]?.length > 0 && (
@@ -554,7 +577,6 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
             <p>Ata redigida por <strong>{autorNome || "Usuário desconhecido"}</strong></p>
           </div>
         </div>
-
       </div>
     </div>
   );
