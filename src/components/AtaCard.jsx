@@ -221,13 +221,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     if (projetoAtual?.id && notaAtual?.id) fetchAta();
   }, [projetoAtual?.id, notaAtual?.id, fetchAta]);
 
-  // ✅ Atualiza objetivos apenas se criarObjetivos estiver ativo, SEM resetar concluídos
-  useEffect(() => {
-    if (criarObjetivos) {
-      setObjetivosList(extrairObjetivos(texto));
-      // ⚠️ NÃO zere os concluídos aqui — eles já foram carregados do banco
-    }
-  }, [texto, criarObjetivos, extrairObjetivos]);
+  // ✅ REMOVIDO: useEffect que causava loop infinito
 
   const progressoPercent = objetivosList.length
     ? Math.round((objetivosConcluidos.length / objetivosList.length) * 100)
@@ -490,8 +484,19 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
             rows={6}
             placeholder="Digite o texto da ata..."
           />
+          {/* ✅ Checkbox atualizada para evitar loop e preservar responsáveis */}
           <label className="checkbox-objetivos">
-            <input type="checkbox" checked={criarObjetivos} onChange={() => setCriarObjetivos(!criarObjetivos)} />
+            <input
+              type="checkbox"
+              checked={criarObjetivos}
+              onChange={(e) => {
+                const ativar = e.target.checked;
+                setCriarObjetivos(ativar);
+                if (ativar) {
+                  setObjetivosList(extrairObjetivos(texto));
+                }
+              }}
+            />
             Criar objetivos a partir da ata?
           </label>
         </div>
