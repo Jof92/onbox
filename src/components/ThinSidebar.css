@@ -34,17 +34,7 @@
   background: #e1ac22;
   transform: scale(1.05);
 }
-/* Badge de notificação */
-.thin-btn .badge {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 10px;
-  height: 10px;
-  background: red;
-  border-radius: 50%;
-  border: 1px solid #fff; /* opcional para destaque */
-}
+
 
 .thin-btn-avatar {
   width: 30px;
@@ -63,3 +53,23 @@
   width: 100%;
   object-fit: cover;
 }
+
+.thin-btn-collab {
+  position: relative;
+}
+
+.badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background-color: #ff4d4d;
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;}

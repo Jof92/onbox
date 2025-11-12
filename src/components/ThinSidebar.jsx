@@ -1,5 +1,5 @@
 // src/components/ThinSidebar.jsx
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { FaCog, FaUpload, FaUserFriends, FaHome } from "react-icons/fa";
 import "./ThinSidebar.css";
 import Collab from "./Collab";
@@ -9,35 +9,50 @@ import { supabase } from "../supabaseClient";
 export default function ThinSidebar({ containerAtual, setContainerAtual, user }) {
   const [showCollab, setShowCollab] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [notificacoesPendentes, setNotificacoesPendentes] = useState(0);
+  const [notificacoesNaoLidas, setNotificacoesNaoLidas] = useState(0);
   const [colaboradores, setColaboradores] = useState([]);
+  const realtimeRef = useRef(null);
 
-  // ✅ Envolver fetchNotificacoes com useCallback
-  const fetchNotificacoes = useCallback(async () => {
-    if (!user?.email) return;
+  // ✅ Busca total de notificações não lidas (convites pendentes + menções não lidas)
+  const fetchNotificacoesNaoLidas = useCallback(async () => {
+    if (!user?.id || !user?.email) {
+      setNotificacoesNaoLidas(0);
+      return;
+    }
+
     try {
-      const { data: convites, error } = await supabase
+      // Convites pendentes
+      const { data: convitesPendentes } = await supabase
         .from("convites")
-        .select("*")
+        .select("id", { count: "exact" })
         .eq("email", user.email)
         .eq("status", "pendente");
-      if (error) throw error;
-      setNotificacoesPendentes(convites.length);
-    } catch {
-      setNotificacoesPendentes(0);
-    }
-  }, [user?.email]);
 
-  // ✅ Envolver fetchColaboradores com useCallback
+      // Menções não lidas
+      const { data: mencoesNaoLidas } = await supabase
+        .from("notificacoes")
+        .select("id", { count: "exact" })
+        .eq("user_id", user.id)
+        .eq("lido", false)
+        .eq("tipo", "menção");
+
+      const totalConvites = convitesPendentes?.length || 0;
+      const totalMencoes = mencoesNaoLidas?.length || 0;
+      setNotificacoesNaoLidas(totalConvites + totalMencoes);
+    } catch (err) {
+      console.error("Erro ao buscar notificações não lidas:", err);
+      setNotificacoesNaoLidas(0);
+    }
+  }, [user?.id, user?.email]);
+
   const fetchColaboradores = useCallback(async () => {
-    if (!user?.email) return;
+    if (!user?.id) return;
     try {
-      const { data: convitesAceitos, error } = await supabase
+      const { data: convitesAceitos } = await supabase
         .from("convites")
         .select("*")
         .eq("email", user.email)
         .eq("status", "aceito");
-      if (error) throw error;
 
       const colaboradoresComPerfil = await Promise.all(
         (convitesAceitos || []).map(async (c) => {
@@ -49,22 +64,92 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
           return { ...c, remetente };
         })
       );
-
       setColaboradores(colaboradoresComPerfil);
-    } catch {
+    } catch (err) {
+      console.error("Erro ao buscar colaboradores:", err);
       setColaboradores([]);
     }
-  }, [user?.email]);
+  }, [user?.id]);
 
-  // ✅ Agora as funções estão nas dependências
+  // ✅ Configurar Realtime
   useEffect(() => {
-    fetchNotificacoes();
+    if (!user?.id || !user?.email) return;
+
+    fetchNotificacoesNaoLidas();
     fetchColaboradores();
-  }, [user?.email, fetchNotificacoes, fetchColaboradores]);
+
+    // Canal para convites (quando alguém te convida)
+    const convitesChannel = supabase
+      .channel("convites-pendentes")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "convites",
+          filter: `email=eq.${user.email},status=eq.pendente`
+        },
+        () => fetchNotificacoesNaoLidas()
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "convites",
+          filter: `email=eq.${user.email}`
+        },
+        (payload) => {
+          // Atualiza se o status mudar (ex: aceito ou rejeitado)
+          if (payload.new.status === "pendente" || payload.old?.status === "pendente") {
+            fetchNotificacoesNaoLidas();
+          }
+        }
+      )
+      .subscribe();
+
+    // Canal para menções
+    const mencaoChannel = supabase
+      .channel("mencoes-nao-lidas")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notificacoes",
+          filter: `user_id=eq.${user.id},tipo=eq.menção`
+        },
+        () => fetchNotificacoesNaoLidas()
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "notificacoes",
+          filter: `user_id=eq.${user.id},tipo=eq.menção`
+        },
+        (payload) => {
+          if (payload.old?.lido !== payload.new.lido) {
+            fetchNotificacoesNaoLidas();
+          }
+        }
+      )
+      .subscribe();
+
+    realtimeRef.current = { convitesChannel, mencaoChannel };
+
+    return () => {
+      if (realtimeRef.current) {
+        supabase.removeChannel(realtimeRef.current.convitesChannel);
+        supabase.removeChannel(realtimeRef.current.mencaoChannel);
+      }
+    };
+  }, [user?.id, user?.email, fetchNotificacoesNaoLidas, fetchColaboradores]);
 
   const handleOpenCollab = () => {
     setShowCollab(true);
-    setNotificacoesPendentes(0);
+    // O Collab vai marcar menções como lidas e aceitar convites
   };
 
   const handleTrocarContainer = (colaborador) => {
@@ -107,7 +192,11 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
           onClick={handleOpenCollab}
         >
           <FaUserFriends />
-          {notificacoesPendentes > 0 && <span className="badge"></span>}
+          {notificacoesNaoLidas > 0 && (
+            <span className="badge">
+              {notificacoesNaoLidas > 9 ? "9+" : notificacoesNaoLidas}
+            </span>
+          )}
         </button>
 
         <div className="thin-collab-group">
@@ -141,9 +230,12 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
           onClose={() => {
             setShowCollab(false);
             fetchColaboradores();
+            fetchNotificacoesNaoLidas(); // Para atualizar se algo foi lido/removido
           }}
           user={user}
-          onOpenTask={() => {}}
+          onOpenTask={() => {
+            fetchNotificacoesNaoLidas(); // Atualiza ao abrir uma tarefa
+          }}
         />
       )}
 

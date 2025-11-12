@@ -10,24 +10,24 @@ export default function Sidebar({
   onProjectSelect,
   onDeleteProject,
   onOpenSetoresManager,
+  currentUserId,
+  containerOwnerId,
 }) {
-  const handleNewProjectClick = () => {
-    onCreateProject();
-  };
-
-  const handleOpenSetoresClick = () => {
-    onOpenSetoresManager();
-  };
+  const isOwner = currentUserId && containerOwnerId && currentUserId === containerOwnerId;
 
   return (
     <aside className="containers-sidebar">
-      <button className="sidebar-btn" onClick={handleNewProjectClick}>
-        <FaPlus className="icon" /> Projeto
-      </button>
+      {isOwner && (
+        <button className="sidebar-btn" onClick={onCreateProject}>
+          <FaPlus className="icon" /> Projeto
+        </button>
+      )}
 
-      <button className="sidebar-btn" onClick={handleOpenSetoresClick}>
-        <FaPlus className="icon" /> Setores
-      </button>
+      {isOwner && (
+        <button className="sidebar-btn" onClick={onOpenSetoresManager}>
+          <FaPlus className="icon" /> Setores
+        </button>
+      )}
 
       <div className="sidebar-projects">
         {projects.map((proj) => (
@@ -37,13 +37,15 @@ export default function Sidebar({
             onClick={() => onProjectSelect(proj)}
           >
             <span className="project-name">{proj.name || "Projeto"}</span>
-            <FaTrash
-              className="delete-icon"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDeleteProject(proj.id);
-              }}
-            />
+            {isOwner && (
+              <FaTrash
+                className="delete-icon"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteProject(proj.id);
+                }}
+              />
+            )}
           </div>
         ))}
       </div>

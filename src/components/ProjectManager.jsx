@@ -34,6 +34,16 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
   const [initialFormData, setInitialFormData] = useState(null);
   const [error, setError] = useState(null);
   const [setorEmEdicao, setSetorEmEdicao] = useState(null);
+  const [currentUserId, setCurrentUserId] = useState(null); // ← Adicionado
+
+  // 🔹 Obter o ID do usuário logado
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUserId(user?.id);
+    };
+    fetchCurrentUser();
+  }, []);
 
   // Carregar perfil
   useEffect(() => {
@@ -505,6 +515,8 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
         }}
         onDeleteProject={handleDeleteProject}
         onOpenSetoresManager={handleOpenSetoresManager}
+        currentUserId={currentUserId}      // ✅ Passando
+        containerOwnerId={containerAtual} // ✅ Passando
       />
 
       <main
