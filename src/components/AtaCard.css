@@ -118,7 +118,7 @@
 }
 
 .ata-section textarea {
-  height: 10em;
+  height: 15em;
   overflow-y: auto
 }
 
@@ -144,7 +144,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 200px; 
+  max-height: 150px; 
   overflow-y: auto
    
 }
@@ -269,5 +269,15 @@
   color: #555;
   text-align: center;
   width: 100%;
+}
+
+.item-number {
+  font-weight: bold;
+  color: #555;
+  min-width: 24px;
+  text-align: right;
+  margin-right: 8px;
+  font-size: 0.95em;
+  width: 10px;
 }
 
