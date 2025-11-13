@@ -34,7 +34,6 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
         .select("id", { count: "exact" })
         .eq("user_id", user.id)
         .eq("lido", false)
-        .eq("tipo", "menção");
 
       const totalConvites = convitesPendentes?.length || 0;
       const totalMencoes = mencoesNaoLidas?.length || 0;

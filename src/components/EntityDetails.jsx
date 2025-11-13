@@ -9,11 +9,12 @@ const getRandomColor = () => {
 };
 
 export default function EntityDetails({
-  entityType, // 'project' ou 'setor'
-  entity,     // dados (name, photo_url, membros, ...)
+  entityType,
+  entity,
   onBack,
   onEdit,
-  children,   // opcional: conteúdo extra (ex: seções de projeto)
+  children,
+  canEdit = false, // ← nova prop
 }) {
   const name = entity.name || (entityType === "project" ? "Projeto" : "Setor");
   const membros = Array.isArray(entity.membros) ? entity.membros : [];
@@ -40,7 +41,6 @@ export default function EntityDetails({
 
       <h2>{name}</h2>
 
-      {/* Membros (comum a ambos) */}
       {membros.length > 0 && (
         <div
           style={{
@@ -103,12 +103,13 @@ export default function EntityDetails({
         </div>
       )}
 
-      {/* Conteúdo específico injetado via children */}
       {children}
 
-      <button className="edit-btn" onClick={onEdit}>
-        Editar
-      </button>
+      {canEdit && (
+        <button className="edit-btn" onClick={onEdit}>
+          Editar
+        </button>
+      )}
     </div>
   );
 }

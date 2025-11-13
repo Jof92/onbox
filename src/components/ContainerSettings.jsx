@@ -7,6 +7,7 @@ import "./ContainerSettings.css";
 
 export default function ContainerSettings({ onClose, containerId, user }) {
   const [dono, setDono] = useState("");
+  const [nomeContainer, setNomeContainer] = useState(""); // ← nome do container = nome do dono
   const [projetos, setProjetos] = useState([]);
   const [setores, setSetores] = useState([]);
   const [colaboradores, setColaboradores] = useState([]);
@@ -27,9 +28,12 @@ export default function ContainerSettings({ onClose, containerId, user }) {
           .eq("id", containerId)
           .single();
         if (donoError) throw donoError;
-        setDono(perfil?.nome || "Desconhecido");
 
-        // 2. Colaboradores
+        const nomeDono = perfil?.nome || "Desconhecido";
+        setDono(nomeDono);
+        setNomeContainer(nomeDono); // o "nome do container" é o nome do dono
+
+        // 2. Colaboradores (convites aceitos)
         const { data: convites, error: convitesError } = await supabase
           .from("convites")
           .select("email")
@@ -61,12 +65,13 @@ export default function ContainerSettings({ onClose, containerId, user }) {
         if (setError) console.warn("Erro setores:", setError);
         setSetores(set || []);
 
-        // Preenche os estados com os valores salvos
+        // Preenche gerente de container
         if (perfil?.gerente_container_id) {
           const gerente = perfis.find(p => p.id === perfil.gerente_container_id);
           setEmailGerenteContainer(gerente?.email || "");
         }
 
+        // Preenche gerentes de caixa (projetos + setores)
         const initialEmails = {};
         [...proj, ...set].forEach(item => {
           if (item.gerente_caixa_id) {
@@ -77,6 +82,7 @@ export default function ContainerSettings({ onClose, containerId, user }) {
         setEmailsGerentesCaixa(initialEmails);
       } catch (err) {
         console.error("Erro ao carregar configurações:", err);
+        alert("Erro ao carregar configurações do container.");
       } finally {
         setLoading(false);
       }
@@ -87,21 +93,57 @@ export default function ContainerSettings({ onClose, containerId, user }) {
 
   const adicionarGerenteContainer = async () => {
     const colab = colaboradores.find(c => c.email === emailGerenteContainer);
-    if (!colab) return alert("E-mail não é de um colaborador.");
-    await supabase
+    if (!colab) return alert("E-mail não é de um colaborador aceito.");
+
+    // Atualiza o gerente_container_id
+    const { error: updateError } = await supabase
       .from("profiles")
       .update({ gerente_container_id: colab.id })
       .eq("id", containerId);
+
+    if (updateError) {
+      console.error("Erro ao atualizar gerente de container:", updateError);
+      return alert("Erro ao salvar gerente de container.");
+    }
+
+    // Cria notificação
+    const mensagem = `${dono} nomeou você gerente do container ${nomeContainer}.`;
+
+    const { error: notifError } = await supabase
+      .from("notificacoes")
+      .insert([
+        {
+          user_id: colab.id,
+          remetente_id: containerId,
+          mensagem: mensagem,
+          lido: false,
+          created_at: new Date().toISOString(),
+          tipo: "gerente_container",
+        }
+      ]);
+
+    if (notifError) {
+      console.warn("Notificação não enviada:", notifError);
+      // Mesmo sem notificação, o gerente foi salvo
+    }
+
     alert("Gerente de container salvo!");
   };
 
   const adicionarGerenteCaixa = async (tabela, id, email) => {
     const colab = colaboradores.find(c => c.email === email);
-    if (!colab) return alert("E-mail não é de um colaborador.");
-    await supabase
+    if (!colab) return alert("E-mail não é de um colaborador aceito.");
+
+    const { error } = await supabase
       .from(tabela)
       .update({ gerente_caixa_id: colab.id })
       .eq("id", id);
+
+    if (error) {
+      console.error("Erro ao salvar gerente de caixa:", error);
+      return alert("Erro ao salvar gerente.");
+    }
+
     setEmailsGerentesCaixa(prev => ({ ...prev, [id]: email }));
     alert("Gerente salvo!");
   };

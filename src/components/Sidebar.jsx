@@ -12,18 +12,22 @@ export default function Sidebar({
   onOpenSetoresManager,
   currentUserId,
   containerOwnerId,
+  gerenteContainerId,
 }) {
-  const isOwner = currentUserId && containerOwnerId && currentUserId === containerOwnerId;
+  const hasEditPermissions = currentUserId && (
+    currentUserId === containerOwnerId || 
+    currentUserId === gerenteContainerId
+  );
 
   return (
     <aside className="containers-sidebar">
-      {isOwner && (
+      {hasEditPermissions && (
         <button className="sidebar-btn" onClick={onCreateProject}>
           <FaPlus className="icon" /> Projeto
         </button>
       )}
 
-      {isOwner && (
+      {hasEditPermissions && (
         <button className="sidebar-btn" onClick={onOpenSetoresManager}>
           <FaPlus className="icon" /> Setores
         </button>
@@ -37,7 +41,7 @@ export default function Sidebar({
             onClick={() => onProjectSelect(proj)}
           >
             <span className="project-name">{proj.name || "Projeto"}</span>
-            {isOwner && (
+            {hasEditPermissions && (
               <FaTrash
                 className="delete-icon"
                 onClick={(e) => {

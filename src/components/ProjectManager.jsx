@@ -34,7 +34,8 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
   const [initialFormData, setInitialFormData] = useState(null);
   const [error, setError] = useState(null);
   const [setorEmEdicao, setSetorEmEdicao] = useState(null);
-  const [currentUserId, setCurrentUserId] = useState(null); // ← Adicionado
+  const [currentUserId, setCurrentUserId] = useState(null);
+  const [gerenteContainerId, setGerenteContainerId] = useState(null);
 
   // 🔹 Obter o ID do usuário logado
   useEffect(() => {
@@ -45,7 +46,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
     fetchCurrentUser();
   }, []);
 
-  // Carregar perfil
+  // Carregar perfil (nome do container)
   useEffect(() => {
     const loadProfile = async () => {
       if (!containerAtual) return;
@@ -57,6 +58,13 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
       if (!error) setProfile(data);
     };
     loadProfile();
+  }, [containerAtual]);
+
+  // 🔹 RESETAR SELEÇÃO AO MUDAR DE CONTAINER
+  useEffect(() => {
+    setSelectedProject(null);
+    setSelectedSetor(null);
+    setSetorDetalhado(null);
   }, [containerAtual]);
 
   const handleSetBackground = async (value) => {
@@ -78,6 +86,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
     }
 
     try {
+      // Incluímos explicitamente gerente_caixa_id
       const { data: projectsData, error: projectsError } = await supabase
         .from("projects")
         .select(`*, pavimentos(*), eap(*)`)
@@ -128,6 +137,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
             eap: sortedEap,
             photo_url: photoData?.photo_url || null,
             membros: membrosDetalhados,
+            // gerente_caixa_id já vem do select
           });
         } catch (err) {
           enhancedProjects.push({
@@ -154,6 +164,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
     }
 
     try {
+      // Incluímos gerente_caixa_id
       const { data: setoresData, error } = await supabase
         .from("setores")
         .select("*")
@@ -224,12 +235,16 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
 
     const loadAll = async () => {
       try {
-        const { data: profileData } = await supabase
+        const { data: profileData, error } = await supabase
           .from("profiles")
-          .select("background")
+          .select("background, gerente_container_id")
           .eq("id", containerAtual)
           .single();
+
+        if (error) throw error;
+
         setBackground(profileData?.background || "#f1f1f1ff");
+        setGerenteContainerId(profileData?.gerente_container_id);
 
         await Promise.all([
           fetchProjects(containerAtual),
@@ -244,6 +259,23 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
 
     loadAll();
   }, [containerAtual]);
+
+  // === LÓGICA DE PERMISSÃO ===
+
+  // Permissão de container (criar, apagar, gerenciar todos os itens)
+  const hasContainerEditPermissions = currentUserId && (
+    currentUserId === containerAtual || 
+    currentUserId === gerenteContainerId
+  );
+
+  // Permissão por entidade (editar um projeto/setor específico)
+  const canEditEntity = (entity) => {
+    if (!currentUserId || !entity) return false;
+    // Dono ou gerente de container sempre pode
+    if (hasContainerEditPermissions) return true;
+    // Ou é gerente da caixa específica
+    return currentUserId === entity.gerente_caixa_id;
+  };
 
   // === Projetos ===
 
@@ -515,8 +547,9 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
         }}
         onDeleteProject={handleDeleteProject}
         onOpenSetoresManager={handleOpenSetoresManager}
-        currentUserId={currentUserId}      // ✅ Passando
-        containerOwnerId={containerAtual} // ✅ Passando
+        currentUserId={currentUserId}
+        containerOwnerId={containerAtual}
+        gerenteContainerId={gerenteContainerId}
       />
 
       <main
@@ -585,6 +618,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
               setSetorEmEdicao(setorDetalhado.id);
               setShowSetoresModal(true);
             }}
+            canEdit={canEditEntity(setorDetalhado)} // ✅ Permissão por caixa
           />
         ) : selectedProject ? (
           <EntityDetails
@@ -592,6 +626,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
             entity={selectedProject}
             onBack={() => setSelectedProject(null)}
             onEdit={() => handleEditProject(selectedProject)}
+            canEdit={canEditEntity(selectedProject)} // ✅ Permissão por caixa
           >
             {(selectedProject.pavimentos?.length > 0 || selectedProject.eap?.length > 0) && (
               <div className="project-sections">
