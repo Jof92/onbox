@@ -1,6 +1,6 @@
 // src/components/ThinSidebar.jsx
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { FaCog, FaUpload, FaUserFriends, FaHome } from "react-icons/fa";
+import { FaCog, FaUserFriends, FaHome } from "react-icons/fa"; // ✅ Removido FaUpload
 import "./ThinSidebar.css";
 import Collab from "./Collab";
 import ContainerSettings from "./ContainerSettings";
@@ -33,7 +33,7 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
         .from("notificacoes")
         .select("id", { count: "exact" })
         .eq("user_id", user.id)
-        .eq("lido", false)
+        .eq("lido", false);
 
       const totalConvites = convitesPendentes?.length || 0;
       const totalMencoes = mencoesNaoLidas?.length || 0;
@@ -181,9 +181,7 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
           <FaCog />
         </button>
 
-        <button className="thin-btn" title="Enviar / Carregar XML">
-          <FaUpload />
-        </button>
+        {/* ✅ Botão de "Enviar / Carregar XML" REMOVIDO */}
 
         <button
           className="thin-btn thin-btn-collab"
