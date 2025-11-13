@@ -45,7 +45,7 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
   }, [user?.id, user?.email]);
 
   const fetchColaboradores = useCallback(async () => {
-    if (!user?.id) return;
+    if (!user?.id || !user?.email) return;
     try {
       const { data: convitesAceitos } = await supabase
         .from("convites")
@@ -68,7 +68,7 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
       console.error("Erro ao buscar colaboradores:", err);
       setColaboradores([]);
     }
-  }, [user?.id]);
+  }, [user?.id, user?.email]);
 
   // ✅ Configurar Realtime
   useEffect(() => {

@@ -82,7 +82,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
   const [sugestoesParticipantes, setSugestoesParticipantes] = useState([]);
   const [sugestoesResponsavel, setSugestoesResponsavel] = useState({});
   const [autorNome, setAutorNome] = useState("Carregando...");
-  const [usuarioId, setUsuarioId] = useState(null); // usuário logado (para alterações)
+  const [usuarioId, setUsuarioId] = useState(null);
   const [ataId, setAtaId] = useState(null);
   const [editing, setEditing] = useState({ pauta: false, local: false });
   const [editingDataLocal, setEditingDataLocal] = useState(false);
@@ -100,20 +100,18 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     objetivosListRef.current = objetivosList;
   }, [objetivosList]);
 
-  // Busca nome do projeto
+  // ✅ Corrigido: remove 'projetoAtual?.id' do array de dependências
   const fetchProjeto = useCallback(async () => {
     if (!projetoAtual?.id) return;
     const { data } = await supabase.from("projects").select("name").eq("id", projetoAtual.id).single();
     setProjetoNome(data?.name || "Projeto sem nome");
-  }, [projetoAtual?.id]);
+  }, [projetoAtual]); // ← apenas 'projetoAtual', não 'projetoAtual.id'
 
-  // Busca apenas o ID do usuário logado (não o nome!)
   const fetchUsuarioLogado = useCallback(async () => {
     const { data } = await supabase.auth.getUser();
     setUsuarioId(data?.user?.id || null);
   }, []);
 
-  // Carrega toda a ata (incluindo autor original)
   const fetchAta = useCallback(async () => {
     if (!notaAtual?.id) {
       setLoading(false);
@@ -124,7 +122,6 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
       const { data: ata } = await supabase.from("atas").select("*").eq("nota_id", notaAtual.id).single();
 
       if (!ata) {
-        // Nova ata
         setAtaId(null);
         setPauta("");
         setLocal("");
@@ -149,7 +146,6 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
       setProxima(ata.proxima_reuniao || "");
       setDataLocal(ata.data_local || "");
 
-      // Carregar participantes
       const { data: partData } = await supabase
         .from("ata_participantes")
         .select(`
@@ -191,7 +187,6 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
 
       setParticipantes(participantesCarregados);
 
-      // Carregar objetivos
       const { data: objData } = await supabase
         .from("ata_objetivos")
         .select(`
@@ -225,7 +220,6 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
         setObjetivosConcluidos([]);
       }
 
-      // 🔑 CORREÇÃO PRINCIPAL: carregar o AUTOR ORIGINAL da ata
       if (ata.redigido_por) {
         let nomeAutor = "Usuário desconhecido";
         const { data: perfil1 } = await supabase.from("profiles").select("nome").eq("id", ata.redigido_por).single();
@@ -240,7 +234,6 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
         setAutorNome("Autor não registrado");
       }
 
-      // Carregar quem alterou por último
       if (ata.alterado_por) {
         const { data: perfilAlterador } = await supabase
           .from("profiles")
@@ -270,9 +263,8 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
       console.error("Erro ao carregar ata:", err);
       setLoading(false);
     }
-  }, [notaAtual?.id, projetoAtual?.id]);
+  }, [notaAtual?.id, projetoAtual?.id]); // mantém os IDs aqui porque são usados em select()
 
-  // Efeitos iniciais
   useEffect(() => {
     fetchProjeto();
     fetchUsuarioLogado();
@@ -282,7 +274,6 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     if (projetoAtual?.id && notaAtual?.id) fetchAta();
   }, [projetoAtual?.id, notaAtual?.id, fetchAta]);
 
-  // Atualiza objetivos quando o texto muda
   useEffect(() => {
     if (criarObjetivos) {
       const novos = extrairObjetivos(texto, objetivosListRef.current, verbosSet);
@@ -291,7 +282,6 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     }
   }, [texto, criarObjetivos, verbosSet]);
 
-  // Atualiza progresso
   const progressoPercent = objetivosList.length
     ? Math.round((objetivosConcluidos.length / objetivosList.length) * 100)
     : 0;
@@ -300,7 +290,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     if (typeof onProgressoChange === "function") onProgressoChange(progressoPercent);
   }, [progressoPercent, onProgressoChange]);
 
-  // Função de salvamento
+  // ✅ Corrigido: adicionado 'autorNome' às dependências
   const salvarAta = useCallback(async () => {
     if (!usuarioId || !notaAtual?.id || !projetoAtual?.id) {
       alert("Usuário não autenticado ou dados incompletos.");
@@ -342,7 +332,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
             texto,
             proxima_reuniao: proxima || null,
             data_local: dataLocal,
-            redigido_por: usuarioId, // 👈 só na criação!
+            redigido_por: usuarioId,
             criado_em: agora,
           }])
           .select()
@@ -350,11 +340,9 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
         if (error) throw error;
         savedAta = data;
         setAtaId(savedAta.id);
-        // Após criação, o autor está fixado → recarregar para exibir corretamente
         setAutorNome("Carregando...");
       }
 
-      // Atualizar participantes
       await supabase.from("ata_participantes").delete().eq("ata_id", savedAta.id);
       const participantesInternos = [];
       for (const p of participantes) {
@@ -375,7 +363,6 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
         }
       }
 
-      // Atualizar objetivos
       await supabase.from("ata_objetivos").delete().eq("ata_id", savedAta.id);
       const responsaveisInternos = new Set();
       for (const [i, o] of objetivosList.entries()) {
@@ -394,7 +381,6 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
         }
       }
 
-      // Notificações
       const notificacoes = [];
       for (const userId of participantesInternos) {
         notificacoes.push({
@@ -450,15 +436,14 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
   }, [
     ataId, usuarioId, notaAtual, projetoAtual, projetoNome,
     pauta, local, texto, proxima, dataLocal,
-    participantes, objetivosList, objetivosConcluidos, progressoPercent
+    participantes, objetivosList, objetivosConcluidos, progressoPercent,
+    autorNome // ✅ adicionado aqui
   ]);
 
-  // Toggle objetivo concluído
   const toggleObjetivo = (i) => {
     setObjetivosConcluidos(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i]);
   };
 
-  // Participantes - input e sugestões
   const handleParticipanteChange = (e) => {
     const v = e.target.value;
     setParticipanteInput(v);
@@ -488,7 +473,6 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
 
   const removerParticipante = (id) => setParticipantes(participantes.filter(p => p.id !== id));
 
-  // Responsáveis por objetivo
   const handleResponsavelChange = (e, i) => {
     const v = e.target.value;
     const novos = [...objetivosList];
@@ -516,7 +500,6 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
   };
 
-  // Renderização
   if (loading) return <div className="ata-card-loading"><Loading size={200} /></div>;
 
   return (
