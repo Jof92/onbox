@@ -100,12 +100,12 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     objetivosListRef.current = objetivosList;
   }, [objetivosList]);
 
-  // ✅ Corrigido: remove 'projetoAtual?.id' do array de dependências
+  // ✅ Corrigido: dependência é o objeto completo 'projetoAtual', não 'projetoAtual.id'
   const fetchProjeto = useCallback(async () => {
     if (!projetoAtual?.id) return;
     const { data } = await supabase.from("projects").select("name").eq("id", projetoAtual.id).single();
     setProjetoNome(data?.name || "Projeto sem nome");
-  }, [projetoAtual]); // ← apenas 'projetoAtual', não 'projetoAtual.id'
+  }, [projetoAtual]); // ← dependência correta
 
   const fetchUsuarioLogado = useCallback(async () => {
     const { data } = await supabase.auth.getUser();
@@ -263,7 +263,8 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
       console.error("Erro ao carregar ata:", err);
       setLoading(false);
     }
-  }, [notaAtual?.id, projetoAtual?.id]); // mantém os IDs aqui porque são usados em select()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notaAtual, projetoAtual]);
 
   useEffect(() => {
     fetchProjeto();
@@ -290,7 +291,6 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     if (typeof onProgressoChange === "function") onProgressoChange(progressoPercent);
   }, [progressoPercent, onProgressoChange]);
 
-  // ✅ Corrigido: adicionado 'autorNome' às dependências
   const salvarAta = useCallback(async () => {
     if (!usuarioId || !notaAtual?.id || !projetoAtual?.id) {
       alert("Usuário não autenticado ou dados incompletos.");
@@ -437,7 +437,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     ataId, usuarioId, notaAtual, projetoAtual, projetoNome,
     pauta, local, texto, proxima, dataLocal,
     participantes, objetivosList, objetivosConcluidos, progressoPercent,
-    autorNome // ✅ adicionado aqui
+    autorNome
   ]);
 
   const toggleObjetivo = (i) => {
