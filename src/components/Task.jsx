@@ -6,6 +6,233 @@ import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
 import "./loader.css";
 
+// ✅ Componente Tooltip para menções — totalmente seguro contra null
+const MencoesTooltip = ({ children, userId, projetoAtual, containerId, supabaseClient }) => {
+  const [showTooltip, setShowTooltip] = useState(false);
+  const [tooltipData, setTooltipData] = useState(null);
+  const [loadingTooltip, setLoadingTooltip] = useState(false);
+
+  // ✅ useEffect SEMPRE é chamado — a lógica condicional fica DENTRO
+  useEffect(() => {
+    if (!showTooltip || tooltipData || loadingTooltip || !userId) {
+      return;
+    }
+
+    const fetchTooltipData = async () => {
+      setLoadingTooltip(true);
+      try {
+        const { data: profile, error: profileError } = await supabaseClient
+          .from("profiles")
+          .select("nome, nickname, funcao, container, avatar_url")
+          .eq("id", userId)
+          .single();
+
+        if (profileError || !profile) {
+          console.warn("Perfil não encontrado para ID:", userId);
+          setTooltipData({ error: true });
+          return;
+        }
+
+        let pertenceA = "Não pertence a nenhuma entidade";
+
+        // Projetos
+        const { data: projectMembers } = await supabaseClient
+          .from("project_members")
+          .select("project_id")
+          .eq("user_id", userId);
+
+        if (Array.isArray(projectMembers) && projectMembers.length > 0) {
+          const projectIds = projectMembers.map(pm => pm.project_id);
+          const { data: projectNames } = await supabaseClient
+            .from("projects")
+            .select("name")
+            .in("id", projectIds)
+            .limit(1);
+          if (Array.isArray(projectNames) && projectNames[0]?.name) {
+            pertenceA = `Membro do Projeto "${projectNames[0].name}"`;
+          }
+        } else {
+          // Setores
+          const { data: setorMembers } = await supabaseClient
+            .from("setor_members")
+            .select("setor_id")
+            .eq("user_id", userId);
+
+          if (Array.isArray(setorMembers) && setorMembers.length > 0) {
+            const setorIds = setorMembers.map(sm => sm.setor_id);
+            const { data: setorNames } = await supabaseClient
+              .from("setores")
+              .select("name")
+              .in("id", setorIds)
+              .limit(1);
+            if (Array.isArray(setorNames) && setorNames[0]?.name) {
+              pertenceA = `Membro do Setor "${setorNames[0].name}"`;
+            }
+          }
+        }
+
+        setTooltipData({
+          nome: profile.nickname || profile.nome || "Usuário",
+          funcao: profile.funcao || "Função não informada",
+          container_id: profile.container || "—",
+          pertenceA,
+          avatar_url: profile.avatar_url,
+        });
+      } catch (err) {
+        console.error("Erro ao carregar tooltip de menção:", err);
+        setTooltipData({ error: true });
+      } finally {
+        setLoadingTooltip(false);
+      }
+    };
+
+    fetchTooltipData();
+  }, [showTooltip, userId, tooltipData, loadingTooltip, supabaseClient]);
+
+  // ✅ Renderização condicional APÓS todos os hooks
+  if (!userId) {
+    return (
+      <span
+        style={{
+          color: "#1E88E5",
+          textDecoration: "underline",
+          cursor: "default",
+        }}
+      >
+        {children}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      style={{
+        position: "relative",
+        color: "#1E88E5",
+        textDecoration: "underline",
+        cursor: "pointer",
+      }}
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
+    >
+      {children}
+      {showTooltip && (
+        <div
+          className="mencoes-tooltip"
+          style={{
+            position: "absolute",
+            bottom: "100%",
+            left: "50%",
+            transform: "translateX(-50%)",
+            marginBottom: "8px",
+            backgroundColor: "white",
+            border: "1px solid #ccc",
+            borderRadius: "6px",
+            padding: "10px",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
+            zIndex: 1000,
+            width: "220px",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            fontSize: "14px",
+          }}
+        >
+          {loadingTooltip ? (
+            <span>Carregando...</span>
+          ) : tooltipData?.error ? (
+            <span>Usuário não encontrado</span>
+          ) : tooltipData ? (
+            <>
+              {tooltipData.avatar_url ? (
+                <img
+                  src={tooltipData.avatar_url}
+                  alt={tooltipData.nome}
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "50%",
+                    marginBottom: "6px",
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "50%",
+                    backgroundColor: "#e0e0e0",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginBottom: "6px",
+                    fontWeight: "bold",
+                    color: "#555",
+                  }}
+                >
+                  {(tooltipData.nome || "?").charAt(0).toUpperCase()}
+                </div>
+              )}
+              <strong>{tooltipData.nome}</strong>
+              <div>{tooltipData.funcao}</div>
+              <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+                Container ID: {tooltipData.container_id}
+              </div>
+              <div style={{ fontSize: "12px", color: "#555", marginTop: "4px", textAlign: "center" }}>
+                {tooltipData.pertenceA}
+              </div>
+            </>
+          ) : null}
+        </div>
+      )}
+    </span>
+  );
+};
+
+// ✅ Função para renderizar menções com segurança
+const renderMencoes = (conteudo, perfilesPorId, projetoAtual, containerId, supabaseClient) => {
+  if (!conteudo) return conteudo;
+
+  const regex = /@([\p{L}\p{N}_-]+)/gu;
+  let match;
+  const partes = [];
+  let lastIndex = 0;
+
+  while ((match = regex.exec(conteudo)) !== null) {
+    const textoAntes = conteudo.slice(lastIndex, match.index);
+    if (textoAntes) partes.push(textoAntes);
+
+    const nickname = match[1];
+    const usuario = Object.values(perfilesPorId).find(
+      (p) => p && p.id && (p.nickname === nickname || p.nome === nickname)
+    );
+
+    if (usuario && usuario.id) {
+      partes.push(
+        <MencoesTooltip
+          key={match.index}
+          userId={usuario.id}
+          projetoAtual={projetoAtual}
+          containerId={containerId}
+          supabaseClient={supabaseClient}
+        >
+          <span className="mencoes">@{nickname}</span>
+        </MencoesTooltip>
+      );
+    } else {
+      partes.push(match[0]); // mantém como texto plano
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < conteudo.length) {
+    partes.push(conteudo.slice(lastIndex));
+  }
+
+  return partes;
+};
+
 export default function Task({ onClose, projetoAtual, notaAtual, containerId }) {
   const [descricao, setDescricao] = useState("");
   const [comentario, setComentario] = useState("");
@@ -38,7 +265,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     fetchUser();
   }, []);
 
-  // Atualiza sugestões de menção
   const handleComentarioChange = (e) => {
     const valor = e.target.value;
     setComentario(valor);
@@ -59,7 +285,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     } else setSugestoesMencoes([]);
   };
 
-  // Inserir menção
   const inserirMencoes = (usuario) => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -106,7 +331,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     return diffMin < 60;
   };
 
-  // Carregar nota, anexos e comentários
   useEffect(() => {
     if (!notaAtual?.id) {
       setDescricao("");
@@ -143,7 +367,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
             ...c,
             profiles: profileMap[c.user_id] || { nome: "Usuário", nickname: null, avatar_url: null },
             formattedDate: formatarDataComentario(c.created_at),
-            // campo para controle local de edição inline
             isEditing: false,
             editValue: undefined,
           }));
@@ -168,7 +391,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     };
   }, [notaAtual?.id, userId]);
 
-  // Salvar descrição
   const handleSaveDescricao = async () => {
     if (!notaAtual?.id) return;
     setLoading(true);
@@ -185,7 +407,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     }
   };
 
-  // Adicionar comentário (sem usar loading global)
   const handleAddComentario = async () => {
     if (!notaAtual?.id || !userId || !comentario.trim()) return;
     setComentando(true);
@@ -214,7 +435,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
       setComentario("");
       setSugestoesMencoes([]);
 
-      // menções (mantive igual)
       const mencionados = comentario.match(/@(\S+)/g);
       if (mencionados?.length > 0) {
         const nomesMencionados = mencionados.map((m) => m.slice(1));
@@ -250,7 +470,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     }
   };
 
-  // Editar comentário (salvar)
   const handleSaveEdit = async (comentarioId) => {
     const alvo = comentarios.find((c) => c.id === comentarioId);
     const novoConteudo = (alvo && (alvo.editValue !== undefined ? alvo.editValue : alvo.conteudo)) || "";
@@ -279,7 +498,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     }
   };
 
-  // Iniciar edição localmente
   const handleStartEdit = (comentarioId) => {
     setComentarios((prev) =>
       prev.map((c) =>
@@ -289,7 +507,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     setMenuAberto(null);
   };
 
-  // Cancelar edição localmente
   const handleCancelEdit = (comentarioId) => {
     setComentarios((prev) =>
       prev.map((c) =>
@@ -299,7 +516,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     setMenuAberto(null);
   };
 
-  // Excluir comentário (sem confirmação)
   const handleExcluirComentario = async (comentarioId) => {
     setLoadingExcluir(true);
     try {
@@ -318,7 +534,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     }
   };
 
-  // Anexos (mantive como estava)
   const handleAddAnexos = async (e) => {
     const files = Array.from(e.target.files || []);
     if (!notaAtual?.id || !userId || files.length === 0) return;
@@ -369,6 +584,14 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
 
   const getNomeProjeto = () => projetoAtual?.nome || projetoAtual?.name || "Sem projeto";
   const getNomeNota = () => notaAtual?.nome || notaAtual?.name || "Sem nota";
+
+  // ✅ Mapa de perfis por ID para uso nas menções
+  const perfilesPorId = {};
+  comentarios.forEach(c => {
+    if (c.profiles?.id) {
+      perfilesPorId[c.profiles.id] = c.profiles;
+    }
+  });
 
   if (loading) {
     return (
@@ -494,7 +717,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
           </div>
         )}
 
-        {/* 🔹 Área do botão + loader lateral */}
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <button
             type="button"
@@ -504,8 +726,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
           >
             Comentar
           </button>
-
-          {/* Loader lateral aparece ao comentar OU ao excluir comentário */}
           {(comentando || loadingExcluir) && <span className="loader"></span>}
         </div>
 
@@ -554,7 +774,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
                     )}
                   </div>
 
-                  {/* === EDIÇÃO INLINE: se isEditing === true mostra textarea + Salvar/Cancelar === */}
                   {c.isEditing ? (
                     <div>
                       <textarea
@@ -587,7 +806,15 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
                       </div>
                     </div>
                   ) : (
-                    <p>{c.conteudo}</p>
+                    <div className="comentario-texto">
+                      {renderMencoes(
+                        c.conteudo,
+                        perfilesPorId,
+                        projetoAtual,
+                        containerId,
+                        supabase
+                      )}
+                    </div>
                   )}
 
                   {menuAberto === c.id && editavel && !c.isEditing && (

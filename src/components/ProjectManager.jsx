@@ -518,9 +518,9 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
 
   // === Renderização ===
 
-  if (loading && !projects.length && !setores.length && !selectedSetor) {
-    return <Loading />;
-  }
+  if (loading) {
+  return <Loading />;
+}
 
   if (error) {
     return (
