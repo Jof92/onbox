@@ -56,10 +56,12 @@ const extrairObjetivos = (txt, objetivosAnteriores = [], verbosSet) => {
       if (!novosObjetivos.some(o => o.texto === segLimpo)) {
         const objetivoExistente = objetivosAnteriores.find(o => o.texto === segLimpo);
         novosObjetivos.push({
+          id: objetivoExistente?.id || null,
           texto: segLimpo,
           responsavelId: objetivoExistente?.responsavelId || null,
           responsavelNome: objetivoExistente?.responsavelNome || "",
           dataEntrega: objetivoExistente?.dataEntrega || "",
+          concluido: objetivoExistente?.concluido || false,
         });
       }
     }
@@ -75,8 +77,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
   const [texto, setTexto] = useState("");
   const [proxima, setProxima] = useState("");
   const [criarObjetivos, setCriarObjetivos] = useState(false);
-  const [objetivosList, setObjetivosList] = useState([]);
-  const [objetivosConcluidos, setObjetivosConcluidos] = useState([]);
+  const [objetivosList, setObjetivosList] = useState([]); // cada item: { id, texto, responsavelId, responsavelNome, dataEntrega, concluido }
   const [participantes, setParticipantes] = useState([]);
   const [participanteInput, setParticipanteInput] = useState("");
   const [sugestoesParticipantes, setSugestoesParticipantes] = useState([]);
@@ -127,7 +128,6 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
         setTexto("");
         setProxima("");
         setObjetivosList([]);
-        setObjetivosConcluidos([]);
         setParticipantes([]);
         setCriarObjetivos(false);
         setDataLocal("");
@@ -204,19 +204,19 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
             responsavelNome = o.profiles.nome;
           }
           return {
+            id: o.id,
             texto: o.texto,
             responsavelId: o.responsavel_id,
             responsavelNome,
             dataEntrega: o.data_entrega,
+            concluido: o.concluido || false,
           };
         });
         setObjetivosList(objetivos);
-        setObjetivosConcluidos(objData.filter((o) => o.concluido).map((_, i) => i));
         setCriarObjetivos(true);
       } else {
         setCriarObjetivos(false);
         setObjetivosList([]);
-        setObjetivosConcluidos([]);
       }
 
       if (ata.redigido_por) {
@@ -262,8 +262,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
       console.error("Erro ao carregar ata:", err);
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [notaAtual, projetoAtual]);
+  }, [notaAtual]);
 
   useEffect(() => {
     fetchProjeto();
@@ -278,17 +277,52 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     if (criarObjetivos) {
       const novos = extrairObjetivos(texto, objetivosListRef.current, verbosSet);
       setObjetivosList(novos);
-      setObjetivosConcluidos(prev => prev.filter(i => i < novos.length));
     }
   }, [texto, criarObjetivos, verbosSet]);
 
+  // ✅ Cálculo de progresso baseado no campo `concluido`
   const progressoPercent = objetivosList.length
-    ? Math.round((objetivosConcluidos.length / objetivosList.length) * 100)
+    ? Math.round((objetivosList.filter(o => o.concluido).length / objetivosList.length) * 100)
     : 0;
 
   useEffect(() => {
     if (typeof onProgressoChange === "function") onProgressoChange(progressoPercent);
   }, [progressoPercent, onProgressoChange]);
+
+  // ✅ Nova função: marca/desmarca e salva imediatamente
+  const toggleObjetivo = async (i) => {
+    const objetivo = objetivosList[i];
+    if (!objetivo || !ataId) return;
+
+    const novoConcluido = !objetivo.concluido;
+    const novosObjetivos = [...objetivosList];
+    novosObjetivos[i] = { ...objetivo, concluido: novoConcluido };
+    setObjetivosList(novosObjetivos);
+
+    try {
+      const { error } = await supabase
+        .from("ata_objetivos")
+        .update({ concluido: novoConcluido })
+        .eq("id", objetivo.id);
+
+      if (error) throw error;
+
+      const novoProgresso = Math.round((novosObjetivos.filter(o => o.concluido).length / novosObjetivos.length) * 100);
+      if (typeof onProgressoChange === "function") {
+        onProgressoChange(novoProgresso);
+      }
+      if (notaAtual?.id) {
+        await supabase.from("notas").update({ progresso: novoProgresso }).eq("id", notaAtual.id);
+      }
+    } catch (err) {
+      console.error("Erro ao salvar conclusão do objetivo:", err);
+      // Reverter visualmente
+      const revertidos = [...objetivosList];
+      revertidos[i] = { ...objetivo, concluido: !novoConcluido };
+      setObjetivosList(revertidos);
+      alert("Erro ao salvar estado do objetivo. Verifique sua conexão.");
+    }
+  };
 
   const salvarAta = useCallback(async () => {
     if (!usuarioId || !notaAtual?.id || !projetoAtual?.id || !projetoAtual?.tipo) {
@@ -371,7 +405,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
 
       await supabase.from("ata_objetivos").delete().eq("ata_id", savedAta.id);
       const responsaveisInternos = new Set();
-      for (const [i, o] of objetivosList.entries()) {
+      for (const o of objetivosList) {
         const ehExterno = o.responsavelId == null;
         await supabase.from("ata_objetivos").insert({
           ata_id: savedAta.id,
@@ -379,7 +413,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
           responsavel_id: ehExterno ? null : o.responsavelId,
           nome_responsavel_externo: o.responsavelNome || null,
           data_entrega: o.dataEntrega || null,
-          concluido: objetivosConcluidos.includes(i),
+          concluido: o.concluido, // ✅ agora vem do estado
         });
 
         if (!ehExterno && o.responsavelId && o.responsavelId !== usuarioId) {
@@ -442,73 +476,66 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
   }, [
     ataId, usuarioId, notaAtual, projetoAtual, projetoNome,
     pauta, local, texto, proxima, dataLocal,
-    participantes, objetivosList, objetivosConcluidos, progressoPercent,
-    autorNome
+    participantes, objetivosList, progressoPercent, autorNome
   ]);
 
-  const toggleObjetivo = (i) => {
-    setObjetivosConcluidos(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i]);
-  };
-
   // 🔍 FUNÇÃO ATUALIZADA COM DEBUG
-const handleParticipanteChange = (e) => {
-  const v = e.target.value;
-  setParticipanteInput(v);
+  const handleParticipanteChange = (e) => {
+    const v = e.target.value;
+    setParticipanteInput(v);
 
-  // Seu container_id é seu próprio user_id (como visto no log)
-  const containerId = usuarioId;
+    const containerId = usuarioId;
 
-  if (v.startsWith("@") && v.length > 1 && containerId) {
-    const termo = v.slice(1).toLowerCase();
+    if (v.startsWith("@") && v.length > 1 && containerId) {
+      const termo = v.slice(1).toLowerCase();
 
-    supabase
-      .from("convites")
-      .select("user_id")
-      .eq("container_id", containerId)
-      .eq("status", "aceito")
-      .then(async ({ data: convites, error }) => {
-        if (error) {
-          console.error("Erro ao buscar convites:", error);
+      supabase
+        .from("convites")
+        .select("user_id")
+        .eq("container_id", containerId)
+        .eq("status", "aceito")
+        .then(async ({ data: convites, error }) => {
+          if (error) {
+            console.error("Erro ao buscar convites:", error);
+            setSugestoesParticipantes([]);
+            return;
+          }
+
+          if (!convites?.length) {
+            setSugestoesParticipantes([]);
+            return;
+          }
+
+          const userIds = convites.map(c => c.user_id);
+
+          const { data: profiles, error: profilesError } = await supabase
+            .from("profiles")
+            .select("id, nickname, nome, funcao")
+            .in("id", userIds);
+
+          if (profilesError) {
+            console.error("Erro ao buscar profiles:", profilesError);
+            setSugestoesParticipantes([]);
+            return;
+          }
+
+          const filtrados = (profiles || [])
+            .filter(p =>
+              (p.nickname?.toLowerCase().includes(termo)) ||
+              (p.nome?.toLowerCase().includes(termo))
+            )
+            .slice(0, 10);
+
+          setSugestoesParticipantes(filtrados);
+        })
+        .catch(err => {
+          console.error("Erro na cadeia de busca:", err);
           setSugestoesParticipantes([]);
-          return;
-        }
-
-        if (!convites?.length) {
-          setSugestoesParticipantes([]);
-          return;
-        }
-
-        const userIds = convites.map(c => c.user_id);
-
-        // ✅ CORREÇÃO AQUI: usar "id", não "user_id"
-        const { data: profiles, error: profilesError } = await supabase
-          .from("profiles")
-          .select("id, nickname, nome, funcao")
-          .in("id", userIds); // ← essa é a mudança
-
-        if (profilesError) {
-          console.error("Erro ao buscar profiles:", profilesError);
-          setSugestoesParticipantes([]);
-          return;
-        }
-
-        const filtrados = (profiles || [])
-          .filter(p =>
-            (p.nickname?.toLowerCase().includes(termo)) ||
-            (p.nome?.toLowerCase().includes(termo))
-          )
-          .slice(0, 10);
-
-        setSugestoesParticipantes(filtrados);
-      })
-      .catch(err => {
-        console.error("Erro na cadeia de busca:", err);
-        setSugestoesParticipantes([]);
-      });
-  } else {
-    setSugestoesParticipantes([]);
-  }
-};
+        });
+    } else {
+      setSugestoesParticipantes([]);
+    }
+  };
 
   const selecionarSugestao = (item) => {
     if (!participantes.some(p => p.id === item.id)) {
@@ -525,66 +552,66 @@ const handleParticipanteChange = (e) => {
   const removerParticipante = (id) => setParticipantes(participantes.filter(p => p.id !== id));
 
   const handleResponsavelChange = (e, i) => {
-  const v = e.target.value;
-  const novos = [...objetivosList];
-  novos[i].responsavelNome = v;
-  novos[i].responsavelId = null;
-  setObjetivosList(novos);
+    const v = e.target.value;
+    const novos = [...objetivosList];
+    novos[i].responsavelNome = v;
+    novos[i].responsavelId = null;
+    setObjetivosList(novos);
 
-  const containerId = usuarioId;
+    const containerId = usuarioId;
 
-  if (v.startsWith("@") && v.length > 1 && containerId) {
-    const termo = v.slice(1).toLowerCase();
+    if (v.startsWith("@") && v.length > 1 && containerId) {
+      const termo = v.slice(1).toLowerCase();
 
-    supabase
-      .from("convites")
-      .select("user_id")
-      .eq("container_id", containerId)
-      .eq("status", "aceito")
-      .then(async ({ data: convites, error }) => {
-        if (error || !convites?.length) {
+      supabase
+        .from("convites")
+        .select("user_id")
+        .eq("container_id", containerId)
+        .eq("status", "aceito")
+        .then(async ({ data: convites, error }) => {
+          if (error || !convites?.length) {
+            setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
+            return;
+          }
+
+          const userIds = convites.map(c => c.user_id);
+
+          const { data: profiles, error: profilesError } = await supabase
+            .from("profiles")
+            .select("id, nickname, nome, funcao")
+            .in("id", userIds);
+
+          if (profilesError) {
+            console.error("Erro ao buscar responsáveis:", profilesError);
+            setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
+            return;
+          }
+
+          const filtrados = (profiles || [])
+            .filter(p =>
+              (p.nickname?.toLowerCase().includes(termo)) ||
+              (p.nome?.toLowerCase().includes(termo))
+            )
+            .slice(0, 10);
+
+          setSugestoesResponsavel(prev => ({ ...prev, [i]: filtrados }));
+        })
+        .catch(err => {
+          console.error("Erro na busca de responsáveis:", err);
           setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
-          return;
-        }
+        });
+    } else {
+      setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
+    }
+  };
 
-        const userIds = convites.map(c => c.user_id);
-
-        const { data: profiles, error: profilesError } = await supabase
-          .from("profiles")
-          .select("id, nickname, nome, funcao")
-          .in("id", userIds); // ← usa "id", não "user_id"
-
-        if (profilesError) {
-          console.error("Erro ao buscar responsáveis:", profilesError);
-          setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
-          return;
-        }
-
-        const filtrados = (profiles || [])
-          .filter(p =>
-            (p.nickname?.toLowerCase().includes(termo)) ||
-            (p.nome?.toLowerCase().includes(termo))
-          )
-          .slice(0, 10);
-
-        setSugestoesResponsavel(prev => ({ ...prev, [i]: filtrados }));
-      })
-      .catch(err => {
-        console.error("Erro na busca de responsáveis:", err);
-        setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
-      });
-  } else {
+  const selecionarResponsavel = (item, i) => {
+    const novos = [...objetivosList];
+    novos[i].responsavelId = item.id;
+    novos[i].responsavelNome = item.nickname || item.nome;
+    setObjetivosList(novos);
     setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
-  }
-};
-
-const selecionarResponsavel = (item, i) => {
-  const novos = [...objetivosList];
-  novos[i].responsavelId = item.id;
-  novos[i].responsavelNome = item.nickname || item.nome;
-  setObjetivosList(novos);
-  setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
-};
+  };
 
   if (loading) return <div className="ata-card-loading"><Loading size={200} /></div>;
 
@@ -689,10 +716,8 @@ const selecionarResponsavel = (item, i) => {
                 if (ativar) {
                   const novos = extrairObjetivos(texto, objetivosListRef.current, verbosSet);
                   setObjetivosList(novos);
-                  setObjetivosConcluidos(prev => prev.filter(i => i < novos.length));
                 } else {
                   setObjetivosList([]);
-                  setObjetivosConcluidos([]);
                 }
               }}
             />
@@ -707,8 +732,12 @@ const selecionarResponsavel = (item, i) => {
                 const textoCapitalizado = o.texto.charAt(0).toUpperCase() + o.texto.slice(1);
                 const numeroObjetivo = `${i + 1}.`;
                 return (
-                  <div key={i} className="objetivo-item">
-                    <input type="checkbox" checked={objetivosConcluidos.includes(i)} onChange={() => toggleObjetivo(i)} />
+                  <div key={o.id || i} className="objetivo-item">
+                    <input
+                      type="checkbox"
+                      checked={o.concluido} // ✅ usa o campo direto
+                      onChange={() => toggleObjetivo(i)} // ✅ salva imediatamente
+                    />
                     <span><strong>{numeroObjetivo}</strong> {textoCapitalizado}</span>
                     <div style={{ position: "relative" }}>
                       <input
@@ -743,7 +772,6 @@ const selecionarResponsavel = (item, i) => {
                           const novos = [...objetivosList];
                           novos.splice(i, 1);
                           setObjetivosList(novos);
-                          setObjetivosConcluidos(prev => prev.filter(idx => idx !== i));
                         }}
                       >
                         ×
