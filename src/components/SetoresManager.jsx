@@ -292,6 +292,7 @@ export default function SetoresManager({ userId, setorId = null, onClose }) {
             onChange={handleMembrosChange}
             placeholder="Ex: @joao, @maria"
             style={{ width: "100%", padding: "8px" }}
+            autoComplete="off"
             onBlur={() => setTimeout(() => setMostrarSugestoesMembros(false), 200)}
             onKeyPress={(e) => {
               if (e.key === "Enter" && mostrarSugestoesMembros && sugestoesMembros.length > 0) {

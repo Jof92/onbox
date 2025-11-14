@@ -373,7 +373,10 @@ export default function Cards() {
         setNotaEditData={setNotaEditData}
         saveEditedNota={saveEditedNota}
         notaSelecionada={notaSelecionada}
-        project={entity}
+        project={{
+          ...entity,
+          tipo: entity.type === "project" ? "projeto" : "setor"
+        }}
         usuarioAtual={usuarioAtual}
         notaProgresso={notaProgresso}
         setNotaProgresso={setNotaProgresso}

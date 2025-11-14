@@ -100,12 +100,11 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     objetivosListRef.current = objetivosList;
   }, [objetivosList]);
 
-  // ✅ Corrigido: dependência é o objeto completo 'projetoAtual', não 'projetoAtual.id'
   const fetchProjeto = useCallback(async () => {
     if (!projetoAtual?.id) return;
     const { data } = await supabase.from("projects").select("name").eq("id", projetoAtual.id).single();
     setProjetoNome(data?.name || "Projeto sem nome");
-  }, [projetoAtual]); // ← dependência correta
+  }, [projetoAtual]);
 
   const fetchUsuarioLogado = useCallback(async () => {
     const { data } = await supabase.auth.getUser();
@@ -292,8 +291,13 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
   }, [progressoPercent, onProgressoChange]);
 
   const salvarAta = useCallback(async () => {
-    if (!usuarioId || !notaAtual?.id || !projetoAtual?.id) {
-      alert("Usuário não autenticado ou dados incompletos.");
+    if (!usuarioId || !notaAtual?.id || !projetoAtual?.id || !projetoAtual?.tipo) {
+      alert("Dados insuficientes: verifique se 'projetoAtual' tem 'id' e 'tipo' válido ('projeto' ou 'setor').");
+      return;
+    }
+
+    if (projetoAtual.tipo !== 'projeto' && projetoAtual.tipo !== 'setor') {
+      alert("Tipo inválido. 'projetoAtual.tipo' deve ser 'projeto' ou 'setor'.");
       return;
     }
 
@@ -304,37 +308,39 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
       let savedAta;
       const agora = new Date().toISOString();
 
+      const payloadBase = {
+        nota_id: notaAtual.id,
+        pauta,
+        local,
+        texto,
+        proxima_reuniao: proxima || null,
+        data_local: dataLocal,
+        alterado_por: usuarioId,
+        alterado_em: agora,
+      };
+
+      const payload = projetoAtual.tipo === 'projeto'
+        ? { ...payloadBase, projeto_id: projetoAtual.id, setor_id: null }
+        : { ...payloadBase, projeto_id: null, setor_id: projetoAtual.id };
+
       if (ataId) {
         const { data, error } = await supabase
           .from("atas")
-          .update({
-            pauta,
-            local,
-            texto,
-            proxima_reuniao: proxima || null,
-            data_local: dataLocal,
-            alterado_por: usuarioId,
-            alterado_em: agora
-          })
+          .update(payload)
           .eq("id", ataId)
           .select()
           .single();
         if (error) throw error;
         savedAta = data;
       } else {
+        const payloadInserir = {
+          ...payload,
+          redigido_por: usuarioId,
+          criado_em: agora,
+        };
         const { data, error } = await supabase
           .from("atas")
-          .insert([{
-            projeto_id: projetoAtual.id,
-            nota_id: notaAtual.id,
-            pauta,
-            local,
-            texto,
-            proxima_reuniao: proxima || null,
-            data_local: dataLocal,
-            redigido_por: usuarioId,
-            criado_em: agora,
-          }])
+          .insert([payloadInserir])
           .select()
           .single();
         if (error) throw error;
@@ -386,9 +392,9 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
         notificacoes.push({
           user_id: userId,
           remetente_id: usuarioId,
-          projeto_id: projetoAtual.id,
+          projeto_id: projetoAtual.tipo === 'projeto' ? projetoAtual.id : null,
           nota_id: notaAtual.id,
-          mensagem: `${autorNome} marcou você como participante da ata ${notaAtual.nome || 'sem nome'} no projeto ${projetoNome}`,
+          mensagem: `${autorNome} marcou você como participante da ata ${notaAtual.nome || 'sem nome'} ${projetoAtual.tipo === 'projeto' ? 'no projeto' : 'no setor'} ${projetoNome}`,
           tipo: 'menção',
           lido: false,
         });
@@ -398,9 +404,9 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
         notificacoes.push({
           user_id: userId,
           remetente_id: usuarioId,
-          projeto_id: projetoAtual.id,
+          projeto_id: projetoAtual.tipo === 'projeto' ? projetoAtual.id : null,
           nota_id: notaAtual.id,
-          mensagem: `Você tem objetivos a serem resolvidos na ata ${notaAtual.nome || 'sem nome'} do projeto ${projetoNome}`,
+          mensagem: `Você tem objetivos a serem resolvidos na ata ${notaAtual.nome || 'sem nome'} ${projetoAtual.tipo === 'projeto' ? 'do projeto' : 'do setor'} ${projetoNome}`,
           tipo: 'menção',
           lido: false,
         });
@@ -444,26 +450,71 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     setObjetivosConcluidos(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i]);
   };
 
-  const handleParticipanteChange = (e) => {
-    const v = e.target.value;
-    setParticipanteInput(v);
-    if (v.startsWith("@") && v.length > 1) {
-      supabase
-        .from("profiles")
-        .select("id,nome,funcao")
-        .ilike("nome", `%${v.slice(1)}%`)
-        .limit(10)
-        .then(({ data }) => setSugestoesParticipantes(data || []));
-    } else {
-      setSugestoesParticipantes([]);
-    }
-  };
+  // 🔍 FUNÇÃO ATUALIZADA COM DEBUG
+const handleParticipanteChange = (e) => {
+  const v = e.target.value;
+  setParticipanteInput(v);
+
+  // Seu container_id é seu próprio user_id (como visto no log)
+  const containerId = usuarioId;
+
+  if (v.startsWith("@") && v.length > 1 && containerId) {
+    const termo = v.slice(1).toLowerCase();
+
+    supabase
+      .from("convites")
+      .select("user_id")
+      .eq("container_id", containerId)
+      .eq("status", "aceito")
+      .then(async ({ data: convites, error }) => {
+        if (error) {
+          console.error("Erro ao buscar convites:", error);
+          setSugestoesParticipantes([]);
+          return;
+        }
+
+        if (!convites?.length) {
+          setSugestoesParticipantes([]);
+          return;
+        }
+
+        const userIds = convites.map(c => c.user_id);
+
+        // ✅ CORREÇÃO AQUI: usar "id", não "user_id"
+        const { data: profiles, error: profilesError } = await supabase
+          .from("profiles")
+          .select("id, nickname, nome, funcao")
+          .in("id", userIds); // ← essa é a mudança
+
+        if (profilesError) {
+          console.error("Erro ao buscar profiles:", profilesError);
+          setSugestoesParticipantes([]);
+          return;
+        }
+
+        const filtrados = (profiles || [])
+          .filter(p =>
+            (p.nickname?.toLowerCase().includes(termo)) ||
+            (p.nome?.toLowerCase().includes(termo))
+          )
+          .slice(0, 10);
+
+        setSugestoesParticipantes(filtrados);
+      })
+      .catch(err => {
+        console.error("Erro na cadeia de busca:", err);
+        setSugestoesParticipantes([]);
+      });
+  } else {
+    setSugestoesParticipantes([]);
+  }
+};
 
   const selecionarSugestao = (item) => {
     if (!participantes.some(p => p.id === item.id)) {
       setParticipantes([...participantes, {
         id: item.id,
-        nome: item.nome,
+        nome: item.nickname || item.nome,
         funcao: item.funcao || "Membro"
       }]);
     }
@@ -474,31 +525,66 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
   const removerParticipante = (id) => setParticipantes(participantes.filter(p => p.id !== id));
 
   const handleResponsavelChange = (e, i) => {
-    const v = e.target.value;
-    const novos = [...objetivosList];
-    novos[i].responsavelNome = v;
-    novos[i].responsavelId = null;
-    setObjetivosList(novos);
+  const v = e.target.value;
+  const novos = [...objetivosList];
+  novos[i].responsavelNome = v;
+  novos[i].responsavelId = null;
+  setObjetivosList(novos);
 
-    if (v.startsWith("@") && v.length > 1) {
-      supabase
-        .from("profiles")
-        .select("id,nome,funcao")
-        .ilike("nome", `%${v.slice(1)}%`)
-        .limit(10)
-        .then(({ data }) => setSugestoesResponsavel(prev => ({ ...prev, [i]: data || [] })));
-    } else {
-      setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
-    }
-  };
+  const containerId = usuarioId;
 
-  const selecionarResponsavel = (item, i) => {
-    const novos = [...objetivosList];
-    novos[i].responsavelId = item.id;
-    novos[i].responsavelNome = item.nome;
-    setObjetivosList(novos);
+  if (v.startsWith("@") && v.length > 1 && containerId) {
+    const termo = v.slice(1).toLowerCase();
+
+    supabase
+      .from("convites")
+      .select("user_id")
+      .eq("container_id", containerId)
+      .eq("status", "aceito")
+      .then(async ({ data: convites, error }) => {
+        if (error || !convites?.length) {
+          setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
+          return;
+        }
+
+        const userIds = convites.map(c => c.user_id);
+
+        const { data: profiles, error: profilesError } = await supabase
+          .from("profiles")
+          .select("id, nickname, nome, funcao")
+          .in("id", userIds); // ← usa "id", não "user_id"
+
+        if (profilesError) {
+          console.error("Erro ao buscar responsáveis:", profilesError);
+          setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
+          return;
+        }
+
+        const filtrados = (profiles || [])
+          .filter(p =>
+            (p.nickname?.toLowerCase().includes(termo)) ||
+            (p.nome?.toLowerCase().includes(termo))
+          )
+          .slice(0, 10);
+
+        setSugestoesResponsavel(prev => ({ ...prev, [i]: filtrados }));
+      })
+      .catch(err => {
+        console.error("Erro na busca de responsáveis:", err);
+        setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
+      });
+  } else {
     setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
-  };
+  }
+};
+
+const selecionarResponsavel = (item, i) => {
+  const novos = [...objetivosList];
+  novos[i].responsavelId = item.id;
+  novos[i].responsavelNome = item.nickname || item.nome;
+  setObjetivosList(novos);
+  setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
+};
 
   if (loading) return <div className="ata-card-loading"><Loading size={200} /></div>;
 
@@ -545,7 +631,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
             type="text"
             value={participanteInput}
             onChange={handleParticipanteChange}
-            placeholder="Digite @Nome (interno) ou Nome (externo) + Enter"
+            placeholder="Digite @nickname (membros do seu container) ou Nome (externo) + Enter"
             className="participante-input"
             onKeyDown={e => {
               if (e.key === "Enter") {
@@ -568,7 +654,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
             <div className="sugestoes-list">
               {sugestoesParticipantes.map(item => (
                 <div key={item.id} className="sugestao-item" onClick={() => selecionarSugestao(item)}>
-                  <span>@{item.nome}</span>
+                  <span>@{item.nickname || item.nome}</span>
                   <span className="sugestao-funcao">{item.funcao}</span>
                 </div>
               ))}
@@ -636,7 +722,6 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
                           {sugestoesResponsavel[i].map(item => (
                             <div key={item.id} className="sugestao-item" onClick={() => selecionarResponsavel(item, i)}>
                               <span>@{item.nome}</span>
-                              <span className="sugestao-funcao">{item.funcao}</span>
                             </div>
                           ))}
                         </div>

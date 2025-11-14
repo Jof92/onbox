@@ -144,59 +144,62 @@ export default function Collab({ onClose, user, onOpenTask }) {
     fetchIntegrantes();
   }, [fetchNotificacoes, fetchIntegrantes]);
 
-  // ==============================
-  // ✉️ ENVIAR CONVITE
-  // ==============================
-  const enviarConvite = async () => {
-    if (!emailConvite.trim()) return alert("Digite um e-mail válido.");
-    setEnviando(true);
+ // ==============================
+// ✉️ ENVIAR CONVITE
+// ==============================
+const enviarConvite = async () => {
+  if (!emailConvite.trim()) return alert("Digite um e-mail válido.");
+  setEnviando(true);
 
-    try {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("id, nome, email")
-        .ilike("email", emailConvite)
-        .maybeSingle();
+  try {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("id, nome, email, nickname") // 👈 Adicionado 'nickname'
+      .ilike("email", emailConvite)
+      .maybeSingle();
 
-      if (!profile) {
-        alert("Usuário não encontrado no OnBox.");
-        setEnviando(false);
-        return;
-      }
-
-      const { data: existingInvite } = await supabase
-        .from("convites")
-        .select("*")
-        .eq("email", profile.email)
-        .eq("status", "pendente")
-        .maybeSingle();
-
-      if (existingInvite) {
-        alert("Convite já enviado.");
-        setEnviando(false);
-        return;
-      }
-
-      const { error } = await supabase.from("convites").insert([
-        {
-          email: profile.email,
-          remetente_id: user.id,
-          status: "pendente",
-        },
-      ]);
-
-      if (error) throw error;
-
-      alert(`Convite enviado para ${profile.nome}`);
-      setEmailConvite("");
-      fetchNotificacoes();
-    } catch (err) {
-      console.error("Erro ao enviar convite:", err);
-      alert("Erro ao enviar convite.");
-    } finally {
+    if (!profile) {
+      alert("Usuário não encontrado no OnBox.");
       setEnviando(false);
+      return;
     }
-  };
+
+    const { data: existingInvite } = await supabase
+      .from("convites")
+      .select("*")
+      .eq("email", profile.email)
+      .eq("status", "pendente")
+      .maybeSingle();
+
+    if (existingInvite) {
+      alert("Convite já enviado.");
+      setEnviando(false);
+      return;
+    }
+
+    const { error } = await supabase.from("convites").insert([
+      {
+        email: profile.email,
+        remetente_id: user.id,
+        user_id: profile.id,          // 👈 Preenchido
+        nickname: profile.nickname,   // 👈 Preenchido
+        container_id: user.id,        // 👈 Preenchido
+        status: "pendente",
+      },
+    ]);
+
+    if (error) throw error;
+
+    alert(`Convite enviado para ${profile.nome}`);
+    setEmailConvite("");
+    fetchNotificacoes();
+  } catch (err) {
+    console.error("Erro ao enviar convite:", err);
+    alert("Erro ao enviar convite.");
+  } finally {
+    setEnviando(false);
+  }
+};
 
   // ==============================
   // ✅ ACEITAR CONVITE

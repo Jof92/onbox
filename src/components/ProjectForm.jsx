@@ -79,39 +79,46 @@ export default function ProjectForm({
     setLista(novaLista);
   };
 
-  // === Funções de menção de membros ===
   const buscarSugestoesMembros = async (termo) => {
-    if (!termo.trim() || !containerAtual) {
+  if (!termo.trim() || !containerAtual) {
+    setSugestoesMembros([]);
+    return;
+  }
+
+  try {
+    // Busca convites ACEITOS enviados PELO containerAtual (remetente_id = containerAtual)
+    const { data: convites } = await supabase
+      .from("convites")
+      .select("user_id") // 👈 Queremos os IDs dos membros (user_id)
+      .eq("remetente_id", containerAtual) // 👈 Quem enviou é o dono do container
+      .eq("status", "aceito");
+
+    if (!convites?.length) {
       setSugestoesMembros([]);
       return;
     }
 
-    try {
-      const { data: convites } = await supabase
-        .from("convites")
-        .select("remetente_id")
-        .eq("user_id", containerAtual)
-        .eq("status", "aceito");
+    const userIds = convites.map((c) => c.user_id).filter(Boolean); // remove nulls
 
-      if (!convites?.length) {
-        setSugestoesMembros([]);
-        return;
-      }
-
-      const remetenteIds = convites.map((c) => c.remetente_id);
-      const { data: perfis } = await supabase
-        .from("profiles")
-        .select("id, nickname, avatar_url")
-        .in("id", remetenteIds)
-        .ilike("nickname", `%${termo}%`)
-        .limit(5);
-
-      setSugestoesMembros(perfis || []);
-    } catch (err) {
-      console.error("Erro ao buscar sugestões:", err);
+    if (userIds.length === 0) {
       setSugestoesMembros([]);
+      return;
     }
-  };
+
+    // Busca perfis desses membros
+    const { data: perfis } = await supabase
+      .from("profiles")
+      .select("id, nickname, avatar_url")
+      .in("id", userIds)
+      .ilike("nickname", `%${termo}%`)
+      .limit(5);
+
+    setSugestoesMembros(perfis || []);
+  } catch (err) {
+    console.error("Erro ao buscar sugestões:", err);
+    setSugestoesMembros([]);
+  }
+};
 
   const handleMembrosChange = (e) => {
     const valor = e.target.value;
@@ -235,6 +242,7 @@ export default function ProjectForm({
             onChange={handleMembrosChange}
             placeholder="Ex: @joao, @maria"
             style={{ width: "100%", padding: "8px", marginTop: "4px" }}
+            autoComplete="off"
             onBlur={() => setTimeout(() => setMostrarSugestoesMembros(false), 200)}
             onKeyPress={(e) => {
               if (e.key === "Enter" && mostrarSugestoesMembros && sugestoesMembros.length > 0) {
