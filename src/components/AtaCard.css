@@ -144,9 +144,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 150px; 
-  overflow-y: auto
-   
+  max-height: auto;
 }
 
 .objetivo-item {
@@ -209,6 +207,104 @@
   position: absolute; right: 10px; top: 50%;
   transform: translateY(-50%); font-size: 12px; font-weight: 600;
   color: #000;
+}
+
+/* Destaque para objetivos concluídos */
+.objetivo-concluido {
+  background-color: #ecfdf5;
+  border-radius: 6px;
+  padding: 6px;
+}
+
+/* Botão de exclusão */
+.botao-excluir {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  font-size: 16px;
+  font-weight: bold;
+  color: #dc2626;
+  cursor: pointer;
+  border: 1px solid #fecaca;
+  border-radius: 4px;
+  background: #fef2f2;
+}
+
+.botao-excluir:hover {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+/* Editor de comentário */
+.comentario-editor {
+  position: absolute;
+  top: 15px;
+  right: 40%;
+  z-index: 1000;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 12px;
+  margin-top: 4px;
+  box-sizing: border-box;
+}
+
+.ata-section .comentario-textarea {
+  all: unset;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 14px;
+  resize: vertical;
+  min-height: 100px;
+  box-sizing: border-box;
+  overflow-wrap: break-word;   /* padrão moderno */
+  white-space: normal; 
+}
+
+.comentario-textarea:focus {
+  outline: none;
+  border-color: #1d4ed8;
+  box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.25);
+}
+
+.comentario-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.btn-comentario-salvar,
+.btn-comentario-cancelar {
+  padding: 4px 12px;
+  font-size: 14px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-comentario-salvar {
+  background-color: #10b981;
+  color: white;
+}
+
+.btn-comentario-salvar:hover {
+  background-color: #059669;
+}
+
+.btn-comentario-cancelar {
+  background-color: #6b7280;
+  color: white;
+}
+
+.btn-comentario-cancelar:hover {
+  background-color: #4b5563;
 }
 
 /* CONTAINER DE PRÓXIMA REUNIÃO, SALVAR E AUTOR */
@@ -281,3 +377,44 @@
   width: 10px;
 }
 
+
+.comentario-balao-container {
+  position: relative;
+  display: inline-block;
+}
+
+.balao-tooltip {
+  visibility: hidden;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  color: #333;
+  z-index: 1001;
+  max-width: 280px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  white-space: pre-wrap;
+  pointer-events: none;
+  margin-bottom: 6px;
+}
+
+.comentario-balao-container:hover .balao-tooltip {
+  visibility: visible;
+}
+
+.balao-conteudo {
+  line-height: 1.4;
+}
+
+.autor-no-balao {
+  display: block;
+  font-style: italic;
+  color: #555;
+  margin-top: 4px;
+  font-size: 0.9em;
+}

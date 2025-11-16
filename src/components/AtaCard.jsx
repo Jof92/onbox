@@ -1,74 +1,10 @@
 // AtaCard.jsx
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
-import Check from "./Check";
 import "./loader.css";
 import "./AtaCard.css";
-
-const VERBOS = [
-  "verificar", "quantificar", "viabilizar", "cobrar", "fechar", "iniciar", "definir", "reduzir", "alcançar", "acompanhar", "implementar", "analisar",
-  "finalizar", "revisar", "enviar", "agendar", "checar", "executar", "conferir", "monitorar", "organizar", "planejar",
-  "solicitar", "providenciar", "designar", "repassar", "avaliar", "confirmar", "documentar", "registrar", "controlar",
-  "inspecionar", "medir", "orçar", "nivelar", "concretar", "dimensionar", "instalar", "regularizar", "liberar", "aprovar",
-  "adequar", "corrigir", "homologar", "cotar", "negociar", "comprar", "requisitar", "receber", "armazenar", "devolver",
-  "auditar", "contratar", "renovar", "pesquisar", "padronizar", "emitir", "rastrear", "autorizar", "buscar", "coletar", "atualizar", "minutar", "montar", "elaborar", "fazer",
-  "validar", "orientar", "supervisionar", "delegar", "capacitar", "reportar", "alocar", "resolver", "implantar", "alinhar"
-].map(v => v.toLowerCase());
-
-const segmentarPorDelimitadores = (texto) => {
-  const partes = texto.split(/([,.])/);
-  const segmentos = [];
-  let acumulador = "";
-
-  for (let i = 0; i < partes.length; i++) {
-    const parte = partes[i];
-    if (parte === "," || parte === ".") {
-      acumulador += parte;
-      segmentos.push(acumulador.trim());
-      acumulador = "";
-    } else {
-      acumulador += parte;
-    }
-  }
-  if (acumulador.trim()) {
-    segmentos.push(acumulador.trim());
-  }
-  return segmentos;
-};
-
-const extrairObjetivos = (txt, objetivosAnteriores = [], verbosSet) => {
-  if (!txt) return [];
-
-  const segmentos = segmentarPorDelimitadores(txt);
-  const novosObjetivos = [];
-
-  for (const seg of segmentos) {
-    if (!seg) continue;
-
-    const segLimpo = seg.replace(/[,.]$/, "").trim();
-    if (!segLimpo) continue;
-
-    const palavras = segLimpo.split(/\s+/);
-    const primeiroVerbo = palavras[0]?.toLowerCase();
-
-    if (verbosSet.has(primeiroVerbo)) {
-      if (!novosObjetivos.some(o => o.texto === segLimpo)) {
-        const objetivoExistente = objetivosAnteriores.find(o => o.texto === segLimpo);
-        novosObjetivos.push({
-          id: objetivoExistente?.id || null,
-          texto: segLimpo,
-          responsavelId: objetivoExistente?.responsavelId || null,
-          responsavelNome: objetivoExistente?.responsavelNome || "",
-          dataEntrega: objetivoExistente?.dataEntrega || "",
-          concluido: objetivoExistente?.concluido || false,
-        });
-      }
-    }
-  }
-
-  return novosObjetivos;
-};
+import AtaObjetivos from "./AtaObjetivos";
 
 export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onProgressoChange }) {
   const [projetoNome, setProjetoNome] = useState("");
@@ -76,12 +12,9 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
   const [local, setLocal] = useState("");
   const [texto, setTexto] = useState("");
   const [proxima, setProxima] = useState("");
-  const [criarObjetivos, setCriarObjetivos] = useState(false);
-  const [objetivosList, setObjetivosList] = useState([]); // cada item: { id, texto, responsavelId, responsavelNome, dataEntrega, concluido }
   const [participantes, setParticipantes] = useState([]);
   const [participanteInput, setParticipanteInput] = useState("");
   const [sugestoesParticipantes, setSugestoesParticipantes] = useState([]);
-  const [sugestoesResponsavel, setSugestoesResponsavel] = useState({});
   const [autorNome, setAutorNome] = useState("Carregando...");
   const [usuarioId, setUsuarioId] = useState(null);
   const [ataId, setAtaId] = useState(null);
@@ -94,12 +27,6 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
   const [alteradoEm, setAlteradoEm] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [salvoComSucesso, setSalvoComSucesso] = useState(false);
-  const verbosSet = React.useMemo(() => new Set(VERBOS), []);
-
-  const objetivosListRef = useRef(objetivosList);
-  useEffect(() => {
-    objetivosListRef.current = objetivosList;
-  }, [objetivosList]);
 
   const fetchProjeto = useCallback(async () => {
     if (!projetoAtual?.id) return;
@@ -127,9 +54,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
         setLocal("");
         setTexto("");
         setProxima("");
-        setObjetivosList([]);
         setParticipantes([]);
-        setCriarObjetivos(false);
         setDataLocal("");
         setAlteradoPorNome("");
         setAlteradoEm("");
@@ -186,39 +111,6 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
 
       setParticipantes(participantesCarregados);
 
-      const { data: objData } = await supabase
-        .from("ata_objetivos")
-        .select(`
-          *,
-          profiles(id, nome)
-        `)
-        .eq("ata_id", ata.id)
-        .order("id", { ascending: true });
-
-      if (objData?.length > 0) {
-        const objetivos = objData.map((o) => {
-          let responsavelNome = "";
-          if (o.nome_responsavel_externo) {
-            responsavelNome = o.nome_responsavel_externo;
-          } else if (o.responsavel_id && o.profiles?.nome) {
-            responsavelNome = o.profiles.nome;
-          }
-          return {
-            id: o.id,
-            texto: o.texto,
-            responsavelId: o.responsavel_id,
-            responsavelNome,
-            dataEntrega: o.data_entrega,
-            concluido: o.concluido || false,
-          };
-        });
-        setObjetivosList(objetivos);
-        setCriarObjetivos(true);
-      } else {
-        setCriarObjetivos(false);
-        setObjetivosList([]);
-      }
-
       if (ata.redigido_por) {
         let nomeAutor = "Usuário desconhecido";
         const { data: perfil1 } = await supabase.from("profiles").select("nome").eq("id", ata.redigido_por).single();
@@ -273,221 +165,13 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     if (projetoAtual?.id && notaAtual?.id) fetchAta();
   }, [projetoAtual?.id, notaAtual?.id, fetchAta]);
 
-  useEffect(() => {
-    if (criarObjetivos) {
-      const novos = extrairObjetivos(texto, objetivosListRef.current, verbosSet);
-      setObjetivosList(novos);
-    }
-  }, [texto, criarObjetivos, verbosSet]);
-
-  // ✅ Cálculo de progresso baseado no campo `concluido`
-  const progressoPercent = objetivosList.length
-    ? Math.round((objetivosList.filter(o => o.concluido).length / objetivosList.length) * 100)
-    : 0;
-
-  useEffect(() => {
-    if (typeof onProgressoChange === "function") onProgressoChange(progressoPercent);
-  }, [progressoPercent, onProgressoChange]);
-
-  // ✅ Nova função: marca/desmarca e salva imediatamente
-  const toggleObjetivo = async (i) => {
-    const objetivo = objetivosList[i];
-    if (!objetivo || !ataId) return;
-
-    const novoConcluido = !objetivo.concluido;
-    const novosObjetivos = [...objetivosList];
-    novosObjetivos[i] = { ...objetivo, concluido: novoConcluido };
-    setObjetivosList(novosObjetivos);
-
-    try {
-      const { error } = await supabase
-        .from("ata_objetivos")
-        .update({ concluido: novoConcluido })
-        .eq("id", objetivo.id);
-
-      if (error) throw error;
-
-      const novoProgresso = Math.round((novosObjetivos.filter(o => o.concluido).length / novosObjetivos.length) * 100);
-      if (typeof onProgressoChange === "function") {
-        onProgressoChange(novoProgresso);
-      }
-      if (notaAtual?.id) {
-        await supabase.from("notas").update({ progresso: novoProgresso }).eq("id", notaAtual.id);
-      }
-    } catch (err) {
-      console.error("Erro ao salvar conclusão do objetivo:", err);
-      // Reverter visualmente
-      const revertidos = [...objetivosList];
-      revertidos[i] = { ...objetivo, concluido: !novoConcluido };
-      setObjetivosList(revertidos);
-      alert("Erro ao salvar estado do objetivo. Verifique sua conexão.");
-    }
-  };
-
-  const salvarAta = useCallback(async () => {
-    if (!usuarioId || !notaAtual?.id || !projetoAtual?.id || !projetoAtual?.tipo) {
-      alert("Dados insuficientes: verifique se 'projetoAtual' tem 'id' e 'tipo' válido ('projeto' ou 'setor').");
-      return;
-    }
-
-    if (projetoAtual.tipo !== 'projeto' && projetoAtual.tipo !== 'setor') {
-      alert("Tipo inválido. 'projetoAtual.tipo' deve ser 'projeto' ou 'setor'.");
-      return;
-    }
-
-    setSalvando(true);
-    setSalvoComSucesso(false);
-
-    try {
-      let savedAta;
-      const agora = new Date().toISOString();
-
-      const payloadBase = {
-        nota_id: notaAtual.id,
-        pauta,
-        local,
-        texto,
-        proxima_reuniao: proxima || null,
-        data_local: dataLocal,
-        alterado_por: usuarioId,
-        alterado_em: agora,
-      };
-
-      const payload = projetoAtual.tipo === 'projeto'
-        ? { ...payloadBase, projeto_id: projetoAtual.id, setor_id: null }
-        : { ...payloadBase, projeto_id: null, setor_id: projetoAtual.id };
-
-      if (ataId) {
-        const { data, error } = await supabase
-          .from("atas")
-          .update(payload)
-          .eq("id", ataId)
-          .select()
-          .single();
-        if (error) throw error;
-        savedAta = data;
-      } else {
-        const payloadInserir = {
-          ...payload,
-          redigido_por: usuarioId,
-          criado_em: agora,
-        };
-        const { data, error } = await supabase
-          .from("atas")
-          .insert([payloadInserir])
-          .select()
-          .single();
-        if (error) throw error;
-        savedAta = data;
-        setAtaId(savedAta.id);
-        setAutorNome("Carregando...");
-      }
-
-      await supabase.from("ata_participantes").delete().eq("ata_id", savedAta.id);
-      const participantesInternos = [];
-      for (const p of participantes) {
-        if (p.id.toString().startsWith("ext")) {
-          await supabase.from("ata_participantes").insert({
-            ata_id: savedAta.id,
-            nome_externo: p.nome,
-            funcao_externa: p.funcao
-          });
-        } else {
-          await supabase.from("ata_participantes").insert({
-            ata_id: savedAta.id,
-            profile_id: p.id
-          });
-          if (p.id !== usuarioId) {
-            participantesInternos.push(p.id);
-          }
-        }
-      }
-
-      await supabase.from("ata_objetivos").delete().eq("ata_id", savedAta.id);
-      const responsaveisInternos = new Set();
-      for (const o of objetivosList) {
-        const ehExterno = o.responsavelId == null;
-        await supabase.from("ata_objetivos").insert({
-          ata_id: savedAta.id,
-          texto: o.texto,
-          responsavel_id: ehExterno ? null : o.responsavelId,
-          nome_responsavel_externo: o.responsavelNome || null,
-          data_entrega: o.dataEntrega || null,
-          concluido: o.concluido, // ✅ agora vem do estado
-        });
-
-        if (!ehExterno && o.responsavelId && o.responsavelId !== usuarioId) {
-          responsaveisInternos.add(o.responsavelId);
-        }
-      }
-
-      const notificacoes = [];
-      for (const userId of participantesInternos) {
-        notificacoes.push({
-          user_id: userId,
-          remetente_id: usuarioId,
-          projeto_id: projetoAtual.tipo === 'projeto' ? projetoAtual.id : null,
-          nota_id: notaAtual.id,
-          mensagem: `${autorNome} marcou você como participante da ata ${notaAtual.nome || 'sem nome'} ${projetoAtual.tipo === 'projeto' ? 'no projeto' : 'no setor'} ${projetoNome}`,
-          tipo: 'menção',
-          lido: false,
-        });
-      }
-
-      for (const userId of responsaveisInternos) {
-        notificacoes.push({
-          user_id: userId,
-          remetente_id: usuarioId,
-          projeto_id: projetoAtual.tipo === 'projeto' ? projetoAtual.id : null,
-          nota_id: notaAtual.id,
-          mensagem: `Você tem objetivos a serem resolvidos na ata ${notaAtual.nome || 'sem nome'} ${projetoAtual.tipo === 'projeto' ? 'do projeto' : 'do setor'} ${projetoNome}`,
-          tipo: 'menção',
-          lido: false,
-        });
-      }
-
-      if (notificacoes.length > 0) {
-        const idsParaNotificar = notificacoes.map(n => n.user_id);
-        const { data: notificacoesExistentes } = await supabase
-          .from("notificacoes")
-          .select("user_id")
-          .in("user_id", idsParaNotificar)
-          .eq("nota_id", notaAtual.id)
-          .eq("tipo", "menção");
-
-        const userIdsJaNotificados = new Set(notificacoesExistentes.map(n => n.user_id));
-        const notificacoesUnicas = notificacoes.filter(n => !userIdsJaNotificados.has(n.user_id));
-
-        if (notificacoesUnicas.length > 0) {
-          await supabase.from("notificacoes").insert(notificacoesUnicas);
-        }
-      }
-
-      await supabase.from("notas").update({ progresso: progressoPercent }).eq("id", notaAtual.id);
-
-      setSalvoComSucesso(true);
-      setTimeout(() => setSalvoComSucesso(false), 2000);
-    } catch (e) {
-      console.error(e);
-      alert(`❌ Erro ao salvar ata: ${e.message}`);
-    } finally {
-      setSalvando(false);
-    }
-  }, [
-    ataId, usuarioId, notaAtual, projetoAtual, projetoNome,
-    pauta, local, texto, proxima, dataLocal,
-    participantes, objetivosList, progressoPercent, autorNome
-  ]);
-
-  // 🔍 FUNÇÃO ATUALIZADA COM DEBUG
   const handleParticipanteChange = (e) => {
     const v = e.target.value;
     setParticipanteInput(v);
 
-    const containerId = usuarioId;
-
-    if (v.startsWith("@") && v.length > 1 && containerId) {
+    if (v.startsWith("@") && v.length > 1 && usuarioId) {
       const termo = v.slice(1).toLowerCase();
+      const containerId = usuarioId;
 
       supabase
         .from("convites")
@@ -495,19 +179,12 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
         .eq("container_id", containerId)
         .eq("status", "aceito")
         .then(async ({ data: convites, error }) => {
-          if (error) {
-            console.error("Erro ao buscar convites:", error);
-            setSugestoesParticipantes([]);
-            return;
-          }
-
-          if (!convites?.length) {
+          if (error || !convites?.length) {
             setSugestoesParticipantes([]);
             return;
           }
 
           const userIds = convites.map(c => c.user_id);
-
           const { data: profiles, error: profilesError } = await supabase
             .from("profiles")
             .select("id, nickname, nome, funcao")
@@ -551,67 +228,91 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
 
   const removerParticipante = (id) => setParticipantes(participantes.filter(p => p.id !== id));
 
-  const handleResponsavelChange = (e, i) => {
-    const v = e.target.value;
-    const novos = [...objetivosList];
-    novos[i].responsavelNome = v;
-    novos[i].responsavelId = null;
-    setObjetivosList(novos);
-
-    const containerId = usuarioId;
-
-    if (v.startsWith("@") && v.length > 1 && containerId) {
-      const termo = v.slice(1).toLowerCase();
-
-      supabase
-        .from("convites")
-        .select("user_id")
-        .eq("container_id", containerId)
-        .eq("status", "aceito")
-        .then(async ({ data: convites, error }) => {
-          if (error || !convites?.length) {
-            setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
-            return;
-          }
-
-          const userIds = convites.map(c => c.user_id);
-
-          const { data: profiles, error: profilesError } = await supabase
-            .from("profiles")
-            .select("id, nickname, nome, funcao")
-            .in("id", userIds);
-
-          if (profilesError) {
-            console.error("Erro ao buscar responsáveis:", profilesError);
-            setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
-            return;
-          }
-
-          const filtrados = (profiles || [])
-            .filter(p =>
-              (p.nickname?.toLowerCase().includes(termo)) ||
-              (p.nome?.toLowerCase().includes(termo))
-            )
-            .slice(0, 10);
-
-          setSugestoesResponsavel(prev => ({ ...prev, [i]: filtrados }));
-        })
-        .catch(err => {
-          console.error("Erro na busca de responsáveis:", err);
-          setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
-        });
-    } else {
-      setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
+  const salvarAta = useCallback(async () => {
+    if (!usuarioId || !notaAtual?.id || !projetoAtual?.id || !projetoAtual?.tipo) {
+      alert("Dados insuficientes: verifique se 'projetoAtual' tem 'id' e 'tipo' válido ('projeto' ou 'setor').");
+      return;
     }
-  };
 
-  const selecionarResponsavel = (item, i) => {
-    const novos = [...objetivosList];
-    novos[i].responsavelId = item.id;
-    novos[i].responsavelNome = item.nickname || item.nome;
-    setObjetivosList(novos);
-    setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
-  };
+    if (projetoAtual.tipo !== 'projeto' && projetoAtual.tipo !== 'setor') {
+      alert("Tipo inválido. 'projetoAtual.tipo' deve ser 'projeto' ou 'setor'.");
+      return;
+    }
+
+    setSalvando(true);
+    setSalvoComSucesso(false);
+
+    try {
+      const agora = new Date().toISOString();
+      const payloadBase = {
+        nota_id: notaAtual.id,
+        pauta,
+        local,
+        texto,
+        proxima_reuniao: proxima || null,
+        data_local: dataLocal,
+        alterado_por: usuarioId,
+        alterado_em: agora,
+      };
+
+      const payload = projetoAtual.tipo === 'projeto'
+        ? { ...payloadBase, projeto_id: projetoAtual.id, setor_id: null }
+        : { ...payloadBase, projeto_id: null, setor_id: projetoAtual.id };
+
+      let savedAta;
+      if (ataId) {
+        const { data, error } = await supabase
+          .from("atas")
+          .update(payload)
+          .eq("id", ataId)
+          .select()
+          .single();
+        if (error) throw error;
+        savedAta = data;
+      } else {
+        const payloadInserir = {
+          ...payload,
+          redigido_por: usuarioId,
+          criado_em: agora,
+        };
+        const { data, error } = await supabase
+          .from("atas")
+          .insert([payloadInserir])
+          .select()
+          .single();
+        if (error) throw error;
+        savedAta = data;
+        setAtaId(savedAta.id);
+        setAutorNome("Carregando...");
+      }
+
+      await supabase.from("ata_participantes").delete().eq("ata_id", savedAta.id);
+      for (const p of participantes) {
+        if (p.id.toString().startsWith("ext")) {
+          await supabase.from("ata_participantes").insert({
+            ata_id: savedAta.id,
+            nome_externo: p.nome,
+            funcao_externa: p.funcao
+          });
+        } else {
+          await supabase.from("ata_participantes").insert({
+            ata_id: savedAta.id,
+            profile_id: p.id
+          });
+        }
+      }
+
+      setSalvoComSucesso(true);
+      setTimeout(() => setSalvoComSucesso(false), 2000);
+    } catch (e) {
+      console.error(e);
+      alert(`❌ Erro ao salvar ata: ${e.message}`);
+    } finally {
+      setSalvando(false);
+    }
+  }, [
+    ataId, usuarioId, notaAtual, projetoAtual, pauta, local, texto, proxima, dataLocal, participantes
+  ]);
 
   if (loading) return <div className="ata-card-loading"><Loading size={200} /></div>;
 
@@ -704,89 +405,20 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
             value={texto}
             onChange={e => setTexto(e.target.value)}
             rows={6}
-            placeholder="Digite o texto da ata (use verbos no infinitivo: 'definir', 'acompanhar', etc.)"
+            placeholder="Digite o texto da ata..."
           />
-          <label className="checkbox-objetivos">
-            <input
-              type="checkbox"
-              checked={criarObjetivos}
-              onChange={(e) => {
-                const ativar = e.target.checked;
-                setCriarObjetivos(ativar);
-                if (ativar) {
-                  const novos = extrairObjetivos(texto, objetivosListRef.current, verbosSet);
-                  setObjetivosList(novos);
-                } else {
-                  setObjetivosList([]);
-                }
-              }}
-            />
-            Criar objetivos a partir da ata?
-          </label>
         </div>
 
-        {criarObjetivos && (
-          <div className="ata-section">
-            <div className="ata-objectives">
-              {objetivosList.map((o, i) => {
-                const textoCapitalizado = o.texto.charAt(0).toUpperCase() + o.texto.slice(1);
-                const numeroObjetivo = `${i + 1}.`;
-                return (
-                  <div key={o.id || i} className="objetivo-item">
-                    <input
-                      type="checkbox"
-                      checked={o.concluido} // ✅ usa o campo direto
-                      onChange={() => toggleObjetivo(i)} // ✅ salva imediatamente
-                    />
-                    <span><strong>{numeroObjetivo}</strong> {textoCapitalizado}</span>
-                    <div style={{ position: "relative" }}>
-                      <input
-                        type="text"
-                        placeholder="@Responsável"
-                        value={o.responsavelNome}
-                        onChange={e => handleResponsavelChange(e, i)}
-                      />
-                      {sugestoesResponsavel[i]?.length > 0 && (
-                        <div className="sugestoes-list" style={{ position: "absolute", zIndex: 10 }}>
-                          {sugestoesResponsavel[i].map(item => (
-                            <div key={item.id} className="sugestao-item" onClick={() => selecionarResponsavel(item, i)}>
-                              <span>@{item.nome}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                      <input
-                        type="date"
-                        value={o.dataEntrega || ""}
-                        onChange={e => {
-                          const novos = [...objetivosList];
-                          novos[i].dataEntrega = e.target.value;
-                          setObjetivosList(novos);
-                        }}
-                      />
-                      <span
-                        style={{ cursor: "pointer", color: "red", fontWeight: "bold" }}
-                        onClick={() => {
-                          const novos = [...objetivosList];
-                          novos.splice(i, 1);
-                          setObjetivosList(novos);
-                        }}
-                      >
-                        ×
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="progress-container">
-              <div className="progress-bar" style={{ width: `${progressoPercent}%` }}></div>
-              <span className="progress-percent">{progressoPercent}%</span>
-            </div>
-          </div>
-        )}
+        <AtaObjetivos
+          ataId={ataId}
+          texto={texto}
+          usuarioId={usuarioId}
+          projetoAtual={projetoAtual}
+          notaAtual={notaAtual}
+          projetoNome={projetoNome}
+          autorNome={autorNome}
+          onProgressoChange={onProgressoChange}
+        />
 
         <div className="ata-section proxima-reuniao-container">
           <div className="proxima-reuniao-linha">
@@ -799,7 +431,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
               Salvar
             </button>
             {salvando && <div className="loader"></div>}
-            {salvoComSucesso && <Check />}
+            {salvoComSucesso && <span style={{ color: "green", marginLeft: "8px" }}>✓ Salvo!</span>}
           </div>
 
           <div className="ata-data-local">
