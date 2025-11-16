@@ -67,7 +67,6 @@ const extrairObjetivos = (txt, objetivosAnteriores = [], verbosSet) => {
   return novosObjetivos;
 };
 
-// ✅ Ícone SVG de comentário (balão de fala simples)
 const ComentarioIcon = ({ onClick, title }) => (
   <svg
     width="18"
@@ -101,7 +100,7 @@ export default function AtaObjetivos({
   const [sugestoesResponsavel, setSugestoesResponsavel] = useState({});
   const [editandoComentario, setEditandoComentario] = useState({});
   const [comentarioTemp, setComentarioTemp] = useState({});
-  const [meuNome, setMeuNome] = useState("Você"); // ✅ Novo: nome do usuário logado
+  const [meuNome, setMeuNome] = useState("Você");
   const objetivosListRef = useRef(objetivosList);
   const verbosSet = React.useMemo(() => new Set(VERBOS), []);
 
@@ -109,7 +108,6 @@ export default function AtaObjetivos({
     objetivosListRef.current = objetivosList;
   }, [objetivosList]);
 
-  // ✅ Buscar nome do usuário logado
   useEffect(() => {
     const fetchMeuNome = async () => {
       if (!usuarioId) return;
@@ -175,24 +173,87 @@ export default function AtaObjetivos({
     carregarObjetivos();
   }, [carregarObjetivos]);
 
+  // ✅ Efeito robusto: salva automaticamente novos objetivos
   useEffect(() => {
-    if (criarObjetivos) {
+    if (!criarObjetivos || !ataId) return;
+
+    const processarObjetivos = async () => {
       const novos = extrairObjetivos(texto, objetivosListRef.current, verbosSet);
-      setObjetivosList(novos);
-    }
-  }, [texto, criarObjetivos, verbosSet]);
+      const existentes = novos.filter(o => o.id); // já têm ID
+      const paraSalvar = novos.filter(o => !o.id); // novos
+
+      let listaFinal = [...existentes];
+
+      if (paraSalvar.length > 0) {
+        // Preparar dados para inserção
+        const inserts = paraSalvar.map(o => ({
+          ata_id: ataId,
+          texto: o.texto,
+          concluido: o.concluido,
+          comentario: o.comentario,
+          data_entrega: o.dataEntrega || null,
+          responsavel_id: o.responsavelId || null,
+        }));
+
+        const { data: inseridos, error } = await supabase
+          .from("ata_objetivos")
+          .insert(inserts)
+          .select(`
+            id, ata_id, texto, concluido, comentario, data_entrega, responsavel_id
+          `);
+
+        if (error) {
+          console.error("Erro ao salvar novos objetivos:", error);
+          // Mesmo com erro, mantém os temporários (sem ID) para não quebrar UI
+          listaFinal = novos;
+        } else {
+          // Mapear os salvos de volta com ID
+          const mapPorTexto = {};
+          inseridos.forEach(item => {
+            mapPorTexto[item.texto] = item;
+          });
+
+          const comIds = novos.map(o => {
+            if (o.id) return o;
+            const correspondente = mapPorTexto[o.texto];
+            if (correspondente) {
+              return {
+                ...o,
+                id: correspondente.id,
+                responsavelId: correspondente.responsavel_id,
+                dataEntrega: correspondente.data_entrega,
+                comentario: correspondente.comentario,
+                concluido: correspondente.concluido,
+              };
+            }
+            return o; // fallback (não deveria acontecer)
+          });
+
+          listaFinal = comIds;
+        }
+      } else {
+        listaFinal = novos;
+      }
+
+      setObjetivosList(listaFinal);
+    };
+
+    processarObjetivos();
+  }, [texto, criarObjetivos, verbosSet, ataId]);
 
   const progressoPercent = objetivosList.length
     ? Math.round((objetivosList.filter(o => o.concluido).length / objetivosList.length) * 100)
     : 0;
 
   useEffect(() => {
-    if (typeof onProgressoChange === "function") onProgressoChange(progressoPercent);
+    if (typeof onProgressoChange === "function") {
+      onProgressoChange(progressoPercent);
+    }
   }, [progressoPercent, onProgressoChange]);
 
   const toggleObjetivo = async (i) => {
     const objetivo = objetivosList[i];
-    if (!objetivo || !ataId) return;
+    if (!objetivo?.id || !ataId) return; // agora sempre tem ID
 
     const novoConcluido = !objetivo.concluido;
     const novosObjetivos = [...objetivosList];
@@ -239,14 +300,14 @@ export default function AtaObjetivos({
         .select("user_id")
         .eq("container_id", containerId)
         .eq("status", "aceito")
-        .then(async ({  convites, error }) => {
+        .then(async ({ data: convites, error }) => {
           if (error || !convites?.length) {
             setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
             return;
           }
 
           const userIds = convites.map(c => c.user_id);
-          const {  profiles, error: profilesError } = await supabase
+          const { data: profiles, error: profilesError } = await supabase
             .from("profiles")
             .select("id, nickname, nome, funcao")
             .in("id", userIds);
@@ -281,15 +342,33 @@ export default function AtaObjetivos({
     novos[i].responsavelNome = item.nickname || item.nome;
     setObjetivosList(novos);
     setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
+
+    // ✅ Salvar imediatamente no banco ao selecionar responsável
+    const objetivo = novos[i];
+    if (objetivo.id) {
+      supabase
+        .from("ata_objetivos")
+        .update({ responsavel_id: item.id })
+        .eq("id", objetivo.id)
+        .catch(err => console.error("Erro ao salvar responsável:", err));
+    }
   };
 
   const removerObjetivo = (i) => {
+    const objetivo = objetivosList[i];
     const novos = [...objetivosList];
     novos.splice(i, 1);
     setObjetivosList(novos);
+
+    if (objetivo?.id) {
+      supabase
+        .from("ata_objetivos")
+        .delete()
+        .eq("id", objetivo.id)
+        .catch(err => console.error("Erro ao remover objetivo:", err));
+    }
   };
 
-  // ✅ Ao iniciar edição, remove o nome do final
   const iniciarEdicaoComentario = (i, comentarioAtual) => {
     let comentarioPuro = comentarioAtual || "";
     if (comentarioPuro.includes(" — ")) {
@@ -300,7 +379,6 @@ export default function AtaObjetivos({
     setComentarioTemp(prev => ({ ...prev, [i]: comentarioPuro }));
   };
 
-  // ✅ Ao salvar, adiciona o nome no final
   const salvarComentario = async (i) => {
     const comentario = comentarioTemp[i] || "";
     const objetivo = objetivosList[i];
@@ -342,10 +420,7 @@ export default function AtaObjetivos({
             onChange={(e) => {
               const ativar = e.target.checked;
               setCriarObjetivos(ativar);
-              if (ativar) {
-                const novos = extrairObjetivos(texto, objetivosListRef.current, verbosSet);
-                setObjetivosList(novos);
-              } else {
+              if (!ativar) {
                 setObjetivosList([]);
               }
             }}
@@ -401,10 +476,17 @@ export default function AtaObjetivos({
                         const novos = [...objetivosList];
                         novos[i].dataEntrega = e.target.value;
                         setObjetivosList(novos);
+
+                        if (o.id) {
+                          supabase
+                            .from("ata_objetivos")
+                            .update({ data_entrega: e.target.value })
+                            .eq("id", o.id)
+                            .catch(err => console.error("Erro ao salvar data:", err));
+                        }
                       }}
                     />
 
-                    {/* ✅ Ícone SVG de comentário — só se concluído */}
                     {isConcluido && (
                       <div style={{ position: "relative" }}>
                         {isEditing ? (
@@ -434,7 +516,6 @@ export default function AtaObjetivos({
                       </div>
                     )}
 
-                    {/* ✅ "×" só se NÃO concluído */}
                     {!isConcluido && (
                       <span
                         className="botao-excluir"

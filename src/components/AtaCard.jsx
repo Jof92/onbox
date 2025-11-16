@@ -4,7 +4,7 @@ import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
 import "./loader.css";
 import "./AtaCard.css";
-import AtaObjetivos from "./AtaObjetivos";
+import AtaObjetivos from "./AtaObjetivos"; // ✅ Novo componente
 
 export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onProgressoChange }) {
   const [projetoNome, setProjetoNome] = useState("");
@@ -28,17 +28,20 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
   const [salvando, setSalvando] = useState(false);
   const [salvoComSucesso, setSalvoComSucesso] = useState(false);
 
+  // Fetch projeto nome
   const fetchProjeto = useCallback(async () => {
     if (!projetoAtual?.id) return;
     const { data } = await supabase.from("projects").select("name").eq("id", projetoAtual.id).single();
     setProjetoNome(data?.name || "Projeto sem nome");
   }, [projetoAtual]);
 
+  // Fetch usuário logado
   const fetchUsuarioLogado = useCallback(async () => {
     const { data } = await supabase.auth.getUser();
     setUsuarioId(data?.user?.id || null);
   }, []);
 
+  // Fetch Ata (sem objetivos)
   const fetchAta = useCallback(async () => {
     if (!notaAtual?.id) {
       setLoading(false);
@@ -70,6 +73,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
       setProxima(ata.proxima_reuniao || "");
       setDataLocal(ata.data_local || "");
 
+      // Carregar participantes
       const { data: partData } = await supabase
         .from("ata_participantes")
         .select(`
@@ -111,6 +115,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
 
       setParticipantes(participantesCarregados);
 
+      // Autor
       if (ata.redigido_por) {
         let nomeAutor = "Usuário desconhecido";
         const { data: perfil1 } = await supabase.from("profiles").select("nome").eq("id", ata.redigido_por).single();
@@ -125,6 +130,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
         setAutorNome("Autor não registrado");
       }
 
+      // Última alteração
       if (ata.alterado_por) {
         const { data: perfilAlterador } = await supabase
           .from("profiles")
@@ -165,6 +171,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     if (projetoAtual?.id && notaAtual?.id) fetchAta();
   }, [projetoAtual?.id, notaAtual?.id, fetchAta]);
 
+  // 🔍 Buscar participantes com @
   const handleParticipanteChange = (e) => {
     const v = e.target.value;
     setParticipanteInput(v);
@@ -228,6 +235,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
 
   const removerParticipante = (id) => setParticipantes(participantes.filter(p => p.id !== id));
 
+  // Salvar Ata (sem objetivos)
   const salvarAta = useCallback(async () => {
     if (!usuarioId || !notaAtual?.id || !projetoAtual?.id || !projetoAtual?.tipo) {
       alert("Dados insuficientes: verifique se 'projetoAtual' tem 'id' e 'tipo' válido ('projeto' ou 'setor').");
@@ -286,6 +294,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
         setAutorNome("Carregando...");
       }
 
+      // Salvar participantes
       await supabase.from("ata_participantes").delete().eq("ata_id", savedAta.id);
       for (const p of participantes) {
         if (p.id.toString().startsWith("ext")) {
@@ -409,6 +418,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
           />
         </div>
 
+        {/* ✅ Novo componente de objetivos */}
         <AtaObjetivos
           ataId={ataId}
           texto={texto}
