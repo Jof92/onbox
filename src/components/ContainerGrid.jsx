@@ -1,10 +1,17 @@
 // src/components/ContainerGrid.jsx
 import React from "react";
 
-// ✅ Função definida aqui também
-const getRandomColor = () => {
-  const colors = ["#FFB74D", "#4DB6AC", "#BA68C8", "#7986CB", "#F06292", "#81C784"];
-  return colors[Math.floor(Math.random() * colors.length)];
+// ✅ Nova função: gera cor suave e única com base no ID
+const getConsistentColor = (str) => {
+  if (!str) return "#81C784";
+
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 65%, 60%)`;
 };
 
 export default function ContainerGrid({
@@ -29,7 +36,7 @@ export default function ContainerGrid({
               <div
                 className="project-photo"
                 style={{
-                  backgroundColor: proj.photo_url ? undefined : getRandomColor(),
+                  backgroundColor: proj.photo_url ? undefined : getConsistentColor(proj.id),
                   color: "#fff",
                 }}
               >
@@ -73,15 +80,15 @@ export default function ContainerGrid({
 
                 {menuSetorAberto === setor.id && (
                   <div className="setor-actions-menu">
-                   <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onSetorAction?.("verPerfil", setor); // novo tipo de ação
-                            setMenuSetorAberto?.(null);
-                        }}
-                        >
-                        Ver perfil
-                        </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSetorAction?.("verPerfil", setor);
+                        setMenuSetorAberto?.(null);
+                      }}
+                    >
+                      Ver perfil
+                    </button>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -97,7 +104,7 @@ export default function ContainerGrid({
                 <div
                   className="project-photo"
                   style={{
-                    backgroundColor: setor.photo_url ? undefined : getRandomColor(),
+                    backgroundColor: setor.photo_url ? undefined : getConsistentColor(setor.id),
                     color: "#fff",
                   }}
                 >

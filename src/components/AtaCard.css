@@ -261,9 +261,8 @@
   font-family: inherit;
   font-size: 14px;
   resize: vertical;
-  min-height: 100px;
   box-sizing: border-box;
-  overflow-wrap: break-word;   /* padrão moderno */
+  overflow-wrap: break-word;
   white-space: normal; 
 }
 

@@ -3,9 +3,17 @@ import React from "react";
 import { FaArrowLeft } from "react-icons/fa";
 import "./Containers.css";
 
-const getRandomColor = () => {
-  const colors = ["#FFB74D", "#4DB6AC", "#BA68C8", "#7986CB", "#F06292", "#81C784"];
-  return colors[Math.floor(Math.random() * colors.length)];
+// ✅ Função idêntica à usada em ContainerGrid.jsx: gera cor suave e única com base no ID
+const getConsistentColor = (str) => {
+  if (!str) return "#81C784"; // fallback seguro
+
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 65%, 60%)`;
 };
 
 export default function EntityDetails({
@@ -14,7 +22,7 @@ export default function EntityDetails({
   onBack,
   onEdit,
   children,
-  canEdit = false, // ← nova prop
+  canEdit = false,
 }) {
   const name = entity.name || (entityType === "project" ? "Projeto" : "Setor");
   const membros = Array.isArray(entity.membros) ? entity.membros : [];
@@ -28,7 +36,7 @@ export default function EntityDetails({
       <div
         className="details-photo"
         style={{
-          backgroundColor: entity.photo_url ? undefined : getRandomColor(),
+          backgroundColor: entity.photo_url ? undefined : getConsistentColor(entity.id),
           color: "#fff",
         }}
       >
