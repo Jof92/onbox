@@ -14,41 +14,35 @@ const VERBOS = [
 
 const PREFIXO_EXCLUIDO = "[EXCLUIDO]";
 
-const segmentarPorDelimitadores = (texto) => {
+const extrairObjetivosValidos = (texto, verbosSet) => {
+  if (!texto?.trim()) return [];
   const partes = texto.split(/([,.])/);
   const segmentos = [];
   let acumulador = "";
-
   for (let i = 0; i < partes.length; i++) {
-    const parte = partes[i];
-    if (parte === "," || parte === ".") {
-      acumulador += parte;
+    const p = partes[i];
+    if (p === "," || p === ".") {
+      acumulador += p;
       segmentos.push(acumulador.trim());
       acumulador = "";
     } else {
-      acumulador += parte;
+      acumulador += p;
     }
   }
-  if (acumulador.trim()) {
-    segmentos.push(acumulador.trim());
-  }
-  return segmentos;
+  if (acumulador.trim()) segmentos.push(acumulador.trim());
+  return segmentos
+    .map(seg => seg.replace(/[,.]+$/, "").trim())
+    .filter(seg => {
+      if (!seg) return false;
+      const primeiraPalavra = seg.split(/\s+/)[0].toLowerCase().replace(/[^\wÀ-ÿ]/g, "");
+      return verbosSet.has(primeiraPalavra);
+    });
 };
 
 const ComentarioIcon = ({ onClick, title }) => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    style={{ cursor: 'pointer' }}
-    onClick={onClick}
-    title={title}
-  >
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+    style={{ cursor: 'pointer' }} onClick={onClick} title={title}>
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
   </svg>
 );
@@ -61,15 +55,31 @@ const podeDesmarcarConclusao = (concluidoEm) => {
   return diffHoras < 24;
 };
 
+const ChipResponsavel = ({ responsavel, onRemove, disabled }) => {
+  const nomeExibicao = responsavel.nome_exibicao || "Usuário";
+  const isExterno = !responsavel.usuario_id;
+
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center',
+      background: isExterno ? '#fde68a' : '#e0f2fe',
+      color: isExterno ? '#854d0e' : '#0369a1',
+      padding: '2px 8px', borderRadius: '12px', fontSize: '12px',
+      marginRight: '4px', border: isExterno ? '1px solid #fcd34d' : '1px solid #bae6fd',
+      maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+    }}>
+      {nomeExibicao}
+      {!disabled && (
+        <span onClick={(e) => { e.stopPropagation(); onRemove(responsavel); }}
+          style={{ marginLeft: '4px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold',
+            color: isExterno ? '#854d0e' : '#0369a1' }}>×</span>
+      )}
+    </span>
+  );
+};
+
 export default function AtaObjetivos({
-  ataId,
-  texto,
-  usuarioId,
-  projetoAtual,
-  notaAtual,
-  projetoNome,
-  autorNome,
-  onProgressoChange
+  ataId, texto, usuarioId, projetoAtual, notaAtual, projetoNome, autorNome, onProgressoChange
 }) {
   const [criarObjetivos, setCriarObjetivos] = useState(false);
   const [objetivosList, setObjetivosList] = useState([]);
@@ -77,24 +87,15 @@ export default function AtaObjetivos({
   const [editandoComentario, setEditandoComentario] = useState({});
   const [comentarioTemp, setComentarioTemp] = useState({});
   const [meuNome, setMeuNome] = useState("Você");
-  const objetivosListRef = useRef(objetivosList);
+  const [inputResponsavel, setInputResponsavel] = useState({});
   const verbosSet = React.useMemo(() => new Set(VERBOS), []);
-
-  useEffect(() => {
-    objetivosListRef.current = objetivosList;
-  }, [objetivosList]);
+  const isSaving = useRef(false);
 
   useEffect(() => {
     const fetchMeuNome = async () => {
       if (!usuarioId) return;
-      const { data } = await supabase
-        .from("profiles")
-        .select("nome")
-        .eq("id", usuarioId)
-        .single();
-      if (data?.nome) {
-        setMeuNome(data.nome);
-      }
+      const { data } = await supabase.from("profiles").select("nome").eq("id", usuarioId).single();
+      if (data?.nome) setMeuNome(data.nome);
     };
     fetchMeuNome();
   }, [usuarioId]);
@@ -102,118 +103,161 @@ export default function AtaObjetivos({
   const carregarObjetivos = useCallback(async () => {
     if (!ataId) {
       setObjetivosList([]);
+      setCriarObjetivos(false);
       return;
     }
 
-    const { data, error } = await supabase
+    const { data: objetivosData, error: ataError } = await supabase
       .from("ata_objetivos")
-      .select(`
-        *,
-        profiles(id, nome)
-      `)
+      .select(`*, profiles(id, nome)`)
       .eq("ata_id", ataId)
       .order("id", { ascending: true });
 
-    if (error) {
-      console.error("Erro ao carregar objetivos:", error);
+    if (ataError) {
+      console.error("Erro ao carregar objetivos:", ataError);
+      setObjetivosList([]);
+      setCriarObjetivos(false);
       return;
     }
 
-    const objetivos = (data || []).map((o) => {
-      let responsavelNome = o.nome_responsavel_externo || (o.profiles?.nome || "");
-      return {
+    const lista = Array.isArray(objetivosData) ? objetivosData : [];
+    const objetivoIds = lista.map(o => o.id);
+    let respPorObj = {};
+
+    if (objetivoIds.length > 0) {
+      // ✅ Usa a view enriquecida com nome_exibicao
+      const { data: respData, error: respErr } = await supabase
+        .from("ata_objetivos_responsaveis_enriquecidos")
+        .select("*")
+        .in("ata_objetivo_id", objetivoIds);
+
+      if (!respErr && Array.isArray(respData)) {
+        respPorObj = respData.reduce((acc, r) => {
+          if (!acc[r.ata_objetivo_id]) acc[r.ata_objetivo_id] = [];
+          acc[r.ata_objetivo_id].push({
+            id: r.id,
+            usuario_id: r.usuario_id,
+            nome_externo: r.nome_externo,
+            nome_exibicao: r.nome_exibicao
+          });
+          return acc;
+        }, {});
+      }
+    }
+
+    const objetivos = lista
+      .filter(o => !o.texto?.startsWith(PREFIXO_EXCLUIDO))
+      .map(o => ({
         id: o.id,
-        texto: o.texto,
-        responsavelId: o.responsavel_id,
-        responsavelNome,
+        texto: o.texto || "",
+        responsaveis: respPorObj[o.id] || [],
         dataEntrega: o.data_entrega,
         concluido: o.concluido || false,
         concluidoEm: o.concluido_em ? new Date(o.concluido_em) : null,
         comentario: o.comentario || "",
-      };
-    });
+      }));
 
-    // ✅ Filtra objetivos excluídos
-    const ativos = objetivos.filter(o => !o.texto.startsWith(PREFIXO_EXCLUIDO));
-
-    setObjetivosList(ativos);
-    setCriarObjetivos(true);
+    setObjetivosList(objetivos);
+    setCriarObjetivos(objetivos.length > 0);
   }, [ataId]);
 
   useEffect(() => {
     carregarObjetivos();
   }, [carregarObjetivos]);
 
-  // ✅ Efeito corrigido — tratamento seguro de undefined
   useEffect(() => {
-    if (!criarObjetivos || !ataId) return;
+    if (!criarObjetivos) return;
 
-    const processarObjetivos = async () => {
-      const { data: todosObjetivos, error: err } = await supabase
-        .from("ata_objetivos")
-        .select("texto")
-        .eq("ata_id", ataId);
-
-      if (err) {
-        console.error("Erro ao buscar objetivos existentes:", err);
-        return;
-      }
-
-      const textosExistentes = new Set(
-        (todosObjetivos || []).map(o => 
-          o.texto?.startsWith(PREFIXO_EXCLUIDO)
-            ? o.texto.replace(PREFIXO_EXCLUIDO + " ", "")
-            : o.texto
-        ).filter(Boolean)
-      );
-
-      const segmentos = segmentarPorDelimitadores(texto);
-      const candidatos = segmentos
-        .map(seg => seg.replace(/[,.]$/, "").trim())
-        .filter(seg => seg && verbosSet.has(seg.split(/\s+/)[0]?.toLowerCase()))
-        .filter(seg => !textosExistentes.has(seg));
-
-      if (candidatos.length === 0) {
-        return;
-      }
-
-      const inserts = candidatos.map(textoObj => ({
-        ata_id: ataId,
-        texto: textoObj,
+    const validos = extrairObjetivosValidos(texto, verbosSet);
+    const novosObjetivos = validos.map(txt => {
+      const existente = objetivosList.find(o => o.texto === txt && o.id && !String(o.id).startsWith('temp'));
+      if (existente) return existente;
+      const tempExistente = objetivosList.find(o => o.texto === txt && String(o.id).startsWith('temp'));
+      return tempExistente || {
+        id: `temp-${Date.now()}-${Math.random()}`,
+        texto: txt,
+        responsaveis: [],
+        dataEntrega: null,
         concluido: false,
+        concluidoEm: null,
         comentario: "",
-        data_entrega: null,
-        responsavel_id: null,
-        concluido_em: null,
-      }));
+      };
+    });
 
-      const {  inseridos, error } = await supabase
-        .from("ata_objetivos")
-        .insert(inserts)
-        .select(`id, ata_id, texto, concluido, comentario, data_entrega, responsavel_id, concluido_em`);
+    const textosAtuais = objetivosList.map(o => o.texto).sort();
+    const textosNovos = novosObjetivos.map(o => o.texto).sort();
+    if (JSON.stringify(textosAtuais) !== JSON.stringify(textosNovos)) {
+      setObjetivosList(novosObjetivos);
+    }
 
-      if (error) {
-        console.error("Erro ao salvar novos objetivos:", error);
-        return;
+    if (validos.length > 0) {
+      setCriarObjetivos(true);
+    }
+  }, [texto, criarObjetivos, verbosSet, objetivosList]);
+
+  useEffect(() => {
+    if (!ataId || !criarObjetivos) return;
+
+    const timer = setTimeout(async () => {
+      if (isSaving.current) return;
+      isSaving.current = true;
+
+      try {
+        const validos = extrairObjetivosValidos(texto, verbosSet);
+        const salvos = new Set(objetivosList
+          .filter(o => o.id && !String(o.id).startsWith('temp'))
+          .map(o => o.texto));
+
+        const paraInserir = validos.filter(txt => !salvos.has(txt));
+        if (paraInserir.length > 0) {
+          const inserts = paraInserir.map(txt => ({
+            ata_id: ataId,
+            texto: txt,
+            concluido: false,
+            comentario: "",
+            data_entrega: null,
+            concluido_em: null,
+          }));
+
+          const { data: inseridos, error } = await supabase
+            .from("ata_objetivos")
+            .insert(inserts)
+            .select();
+
+          if (!error && inseridos) {
+            setObjetivosList(prev => {
+              const atualizado = [...prev];
+              inseridos.forEach((novo, idx) => {
+                const txt = paraInserir[idx];
+                const tempIndex = atualizado.findIndex(o => 
+                  o.texto === txt && String(o.id).startsWith('temp')
+                );
+                if (tempIndex !== -1) {
+                  atualizado[tempIndex] = { ...atualizado[tempIndex], id: novo.id };
+                }
+              });
+              return atualizado;
+            });
+          }
+        }
+
+        const paraExcluir = objetivosList.filter(o => 
+          o.id && !String(o.id).startsWith('temp') && !validos.includes(o.texto)
+        );
+        for (const o of paraExcluir) {
+          await supabase
+            .from("ata_objetivos")
+            .update({ texto: `${PREFIXO_EXCLUIDO} ${o.texto}` })
+            .eq("id", o.id);
+        }
+
+      } finally {
+        isSaving.current = false;
       }
+    }, 800);
 
-      const novos = (inseridos || []).map(item => ({
-        id: item.id,
-        texto: item.texto,
-        responsavelId: item.responsavel_id,
-        responsavelNome: "",
-        dataEntrega: item.data_entrega,
-        concluido: item.concluido,
-        concluidoEm: item.concluido_em ? new Date(item.concluido_em) : null,
-        comentario: item.comentario,
-      }));
-
-      setObjetivosList(prev => [...prev, ...novos]);
-    };
-
-    const timer = setTimeout(processarObjetivos, 500);
     return () => clearTimeout(timer);
-  }, [texto, criarObjetivos, verbosSet, ataId]);
+  }, [texto, ataId, criarObjetivos, objetivosList, verbosSet]);
 
   const progressoPercent = objetivosList.length
     ? Math.round((objetivosList.filter(o => o.concluido).length / objetivosList.length) * 100)
@@ -227,127 +271,155 @@ export default function AtaObjetivos({
 
   const toggleObjetivo = async (i) => {
     const objetivo = objetivosList[i];
-    if (!objetivo?.id || !ataId) return;
+    if (!objetivo?.id || !ataId || String(objetivo.id).startsWith('temp')) return;
 
     const novoConcluido = !objetivo.concluido;
-
     if (!novoConcluido && !podeDesmarcarConclusao(objetivo.concluidoEm)) {
       alert("Não é possível desmarcar um objetivo concluído há mais de 24 horas.");
       return;
     }
 
     const agora = new Date();
-    const novosObjetivos = [...objetivosList];
-    novosObjetivos[i] = {
-      ...objetivo,
-      concluido: novoConcluido,
-      concluidoEm: novoConcluido ? agora : null,
-    };
-    setObjetivosList(novosObjetivos);
+    const novos = [...objetivosList];
+    novos[i] = { ...objetivo, concluido: novoConcluido, concluidoEm: novoConcluido ? agora : null };
+    setObjetivosList(novos);
 
     try {
-      const updateData = {
-        concluido: novoConcluido,
-        concluido_em: novoConcluido ? agora.toISOString() : null,
-      };
-
       const { error } = await supabase
         .from("ata_objetivos")
-        .update(updateData)
+        .update({
+          concluido: novoConcluido,
+          concluido_em: novoConcluido ? agora.toISOString() : null,
+        })
         .eq("id", objetivo.id);
 
       if (error) throw error;
 
-      const novoProgresso = Math.round((novosObjetivos.filter(o => o.concluido).length / novosObjetivos.length) * 100);
-      if (typeof onProgressoChange === "function") {
-        onProgressoChange(novoProgresso);
-      }
+      const novoProgresso = Math.round((novos.filter(o => o.concluido).length / novos.length) * 100);
+      if (typeof onProgressoChange === "function") onProgressoChange(novoProgresso);
       if (notaAtual?.id) {
-        const { error: notaError } = await supabase.from("notas").update({ progresso: novoProgresso }).eq("id", notaAtual.id);
-        if (notaError) console.error("Erro ao atualizar progresso na nota:", notaError);
+        await supabase.from("notas").update({ progresso: novoProgresso }).eq("id", notaAtual.id);
       }
     } catch (err) {
       console.error("Erro ao salvar conclusão:", err);
-      const revertidos = [...objetivosList];
-      revertidos[i] = { ...objetivo };
-      setObjetivosList(revertidos);
+      setObjetivosList([...objetivosList]);
       alert("Erro ao salvar estado do objetivo.");
     }
   };
 
-  const handleResponsavelChange = (e, i) => {
+  // ============= Funções de responsáveis =============
+
+  const handleResponsavelInputChange = (e, i) => {
+    const valor = e.target.value;
+    setInputResponsavel(prev => ({ ...prev, [i]: valor }));
     const objetivo = objetivosList[i];
     if (objetivo?.concluido) return;
 
-    const v = e.target.value;
-    const novos = [...objetivosList];
-    novos[i].responsavelNome = v;
-    novos[i].responsavelId = null;
-    setObjetivosList(novos);
-
-    if (v.startsWith("@") && v.length > 1 && usuarioId) {
-      const termo = v.slice(1).toLowerCase();
-      const containerId = usuarioId;
-
+    if (valor.startsWith("@") && valor.length > 1 && usuarioId) {
+      const termo = valor.slice(1).toLowerCase();
       supabase
         .from("convites")
         .select("user_id")
-        .eq("container_id", containerId)
+        .eq("container_id", usuarioId)
         .eq("status", "aceito")
-        .then(async ({   convites, error }) => {
+        .then(async ({ data: convites, error }) => {
           if (error || !convites?.length) {
             setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
             return;
           }
-
           const userIds = convites.map(c => c.user_id);
-          const {   profiles, error: profilesError } = await supabase
+          const { data: profiles } = await supabase
             .from("profiles")
             .select("id, nickname, nome, funcao")
             .in("id", userIds);
-
-          if (profilesError) {
-            console.error("Erro ao buscar responsáveis:", profilesError);
-            setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
-            return;
-          }
-
           const filtrados = (profiles || [])
-            .filter(p =>
-              (p.nickname?.toLowerCase().includes(termo)) ||
-              (p.nome?.toLowerCase().includes(termo))
-            )
+            .filter(p => (p.nickname?.toLowerCase().includes(termo)) || (p.nome?.toLowerCase().includes(termo)))
             .slice(0, 10);
-
           setSugestoesResponsavel(prev => ({ ...prev, [i]: filtrados }));
         })
-        .catch(err => {
-          console.error("Erro na busca de responsáveis:", err);
-          setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
-        });
+        .catch(() => setSugestoesResponsavel(prev => ({ ...prev, [i]: [] })));
     } else {
       setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
     }
   };
 
-  const selecionarResponsavel = (item, i) => {
+  const handleKeyDownResponsavel = (e, i) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const nome = e.target.value.trim();
+      if (nome && !nome.startsWith('@')) {
+        adicionarResponsavelExterno(nome, i);
+        setInputResponsavel(prev => ({ ...prev, [i]: "" }));
+      }
+    }
+  };
+
+  const adicionarResponsavelExterno = async (nome, i) => {
+    const objetivo = objetivosList[i];
+    if (objetivo?.concluido) return;
+    if (objetivo?.responsaveis.some(r => r.nome_externo === nome && !r.usuario_id)) return;
+
+    const novos = [...objetivosList];
+    const novoResp = { nome_externo: nome, usuario_id: null, id: Date.now() + Math.random() };
+    novos[i] = { ...novos[i], responsaveis: [...novos[i].responsaveis, novoResp] };
+    setObjetivosList(novos);
+
+    if (objetivo?.id && !String(objetivo.id).startsWith('temp')) {
+      const { data, error } = await supabase
+        .from("ata_objetivos_responsaveis")
+        .insert({ ata_objetivo_id: objetivo.id, nome_externo: nome, usuario_id: null })
+        .select('id');
+      if (!error && data?.[0]?.id) {
+        const idReal = data[0].id;
+        setObjetivosList(prev => {
+          const updated = [...prev];
+          const idx = updated[i].responsaveis.findIndex(r => r.id === novoResp.id);
+          if (idx !== -1) updated[i].responsaveis[idx] = { ...novoResp, id: idReal };
+          return updated;
+        });
+      }
+    }
+  };
+
+  const adicionarResponsavelInterno = async (item, i) => {
+    const objetivo = objetivosList[i];
+    if (objetivo?.concluido) return;
+    if (objetivo?.responsaveis.some(r => r.usuario_id === item.id)) return;
+
+    const novos = [...objetivosList];
+    const novoResp = { id: Date.now() + Math.random(), usuario_id: item.id, nome: item.nome, nickname: item.nickname };
+    novos[i] = { ...novos[i], responsaveis: [...novos[i].responsaveis, novoResp] };
+    setObjetivosList(novos);
+    setInputResponsavel(prev => ({ ...prev, [i]: "" }));
+    setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
+
+    if (objetivo?.id && !String(objetivo.id).startsWith('temp')) {
+      const { data, error } = await supabase
+        .from("ata_objetivos_responsaveis")
+        .insert({ ata_objetivo_id: objetivo.id, usuario_id: item.id, nome_externo: null })
+        .select('id');
+      if (!error && data?.[0]?.id) {
+        const idReal = data[0].id;
+        setObjetivosList(prev => {
+          const updated = [...prev];
+          const idx = updated[i].responsaveis.findIndex(r => r.id === novoResp.id);
+          if (idx !== -1) updated[i].responsaveis[idx] = { ...novoResp, id: idReal };
+          return updated;
+        });
+      }
+    }
+  };
+
+  const removerResponsavel = async (responsavel, i) => {
     const objetivo = objetivosList[i];
     if (objetivo?.concluido) return;
 
     const novos = [...objetivosList];
-    novos[i].responsavelId = item.id;
-    novos[i].responsavelNome = item.nickname || item.nome;
+    novos[i] = { ...novos[i], responsaveis: novos[i].responsaveis.filter(r => r.id !== responsavel.id) };
     setObjetivosList(novos);
-    setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
 
-    if (objetivo.id) {
-      supabase
-        .from("ata_objetivos")
-        .update({ responsavel_id: item.id })
-        .eq("id", objetivo.id)
-        .then(({ error }) => {
-          if (error) console.error("Erro ao salvar responsável:", error);
-        });
+    if (objetivo?.id && responsavel.id && !String(objetivo.id).startsWith('temp')) {
+      await supabase.from("ata_objetivos_responsaveis").delete().eq("id", responsavel.id);
     }
   };
 
@@ -362,23 +434,14 @@ export default function AtaObjetivos({
     novos.splice(i, 1);
     setObjetivosList(novos);
 
-    if (objetivo?.id) {
-      // ✅ Marca como excluído alterando o texto
-      const textoExcluido = `${PREFIXO_EXCLUIDO} ${objetivo.texto}`;
-      const { error } = await supabase
+    if (objetivo?.id && !String(objetivo.id).startsWith('temp')) {
+      await supabase
         .from("ata_objetivos")
-        .update({ texto: textoExcluido })
+        .update({ texto: `${PREFIXO_EXCLUIDO} ${objetivo.texto}` })
         .eq("id", objetivo.id);
-
-      if (error) {
-        console.error("Erro ao marcar objetivo como excluído:", error);
-        setObjetivosList(prev => [...prev, objetivo]); // reverter
-        alert("Erro ao excluir objetivo.");
-      }
     }
   };
 
-  // ✅ Funções de comentário atualizadas
   const iniciarEdicaoComentario = (i, comentarioAtual) => {
     let comentarioPuro = comentarioAtual || "";
     if (comentarioPuro.includes(" — Comentário feito por ")) {
@@ -392,21 +455,15 @@ export default function AtaObjetivos({
   const salvarComentario = async (i) => {
     const comentario = comentarioTemp[i] || "";
     const objetivo = objetivosList[i];
-    if (!objetivo?.id || !usuarioId) return;
+    if (!objetivo?.id || !usuarioId || String(objetivo.id).startsWith('temp')) return;
 
     const comentarioComAutor = `${comentario} — Comentário feito por ${meuNome}`;
-
     try {
       const { error } = await supabase
         .from("ata_objetivos")
-        .update({ 
-          comentario: comentarioComAutor,
-          comentario_por: usuarioId
-        })
+        .update({ comentario: comentarioComAutor, comentario_por: usuarioId })
         .eq("id", objetivo.id);
-
       if (error) throw error;
-
       const novos = [...objetivosList];
       novos[i].comentario = comentarioComAutor;
       setObjetivosList(novos);
@@ -421,6 +478,19 @@ export default function AtaObjetivos({
     setEditandoComentario(prev => ({ ...prev, [i]: false }));
   };
 
+  const handleCriarObjetivosChange = (e) => {
+    const novaEscolha = e.target.checked;
+    const temObjetivosSalvos = objetivosList.some(o => o.id && !String(o.id).startsWith('temp'));
+    if (!novaEscolha && temObjetivosSalvos) {
+      alert("Você não pode desativar esta opção enquanto houver objetivos salvos. Exclua todos os objetivos primeiro.");
+      return;
+    }
+    setCriarObjetivos(novaEscolha);
+    if (!novaEscolha) {
+      setObjetivosList([]);
+    }
+  };
+
   return (
     <>
       <div className="ata-section">
@@ -428,13 +498,7 @@ export default function AtaObjetivos({
           <input
             type="checkbox"
             checked={criarObjetivos}
-            onChange={(e) => {
-              const ativar = e.target.checked;
-              setCriarObjetivos(ativar);
-              if (!ativar) {
-                setObjetivosList([]);
-              }
-            }}
+            onChange={handleCriarObjetivosChange}
           />
           Criar objetivos a partir da ata?
         </label>
@@ -449,8 +513,6 @@ export default function AtaObjetivos({
               const isEditing = editandoComentario[i];
               const isConcluido = o.concluido;
               const podeDesmarcar = podeDesmarcarConclusao(o.concluidoEm);
-
-              // ✅ Mostra "Comentário por [nome]" enquanto digita
               const comentarioPreview = comentarioTemp[i] || "";
               const comentarioComAutorPreview = comentarioPreview
                 ? `${comentarioPreview} — Comentário feito por ${meuNome}`
@@ -469,18 +531,32 @@ export default function AtaObjetivos({
                   />
                   <span><strong>{numeroObjetivo}</strong> {textoCapitalizado}</span>
 
-                  <div style={{ position: "relative" }}>
-                    <input
-                      type="text"
-                      placeholder="@Responsável"
-                      value={o.responsavelNome}
-                      onChange={e => handleResponsavelChange(e, i)}
-                      disabled={isConcluido}
-                    />
+                  <div style={{ position: "relative", display: 'flex', flexWrap: 'wrap', gap: '4px', padding: '4px 0'}}>
+                    {o.responsaveis.map(resp => (
+                      <ChipResponsavel
+                        key={resp.id}
+                        responsavel={resp}
+                        onRemove={(r) => removerResponsavel(r, i)}
+                        disabled={isConcluido}
+                      />
+                    ))}
+                    {!isConcluido && (
+                      <input
+                        type="text"
+                        placeholder={o.responsaveis.length === 0 ? "Digite nome ou @" : ""}
+                        value={inputResponsavel[i] || ""}
+                        onChange={e => handleResponsavelInputChange(e, i)}
+                        onKeyDown={e => handleKeyDownResponsavel(e, i)}
+                      />
+                    )}
                     {sugestoesResponsavel[i]?.length > 0 && !isConcluido && (
-                      <div className="sugestoes-list" style={{ position: "absolute", zIndex: 10 }}>
+                      <div className="sugestoes-list" style={{ position: "absolute", zIndex: 10, top: '100%', left: 0 }}>
                         {sugestoesResponsavel[i].map(item => (
-                          <div key={item.id} className="sugestao-item" onClick={() => selecionarResponsavel(item, i)}>
+                          <div
+                            key={item.id}
+                            className="sugestao-item"
+                            onClick={() => adicionarResponsavelInterno(item, i)}
+                          >
                             <span>@{item.nome}</span>
                           </div>
                         ))}
@@ -497,15 +573,8 @@ export default function AtaObjetivos({
                         const novos = [...objetivosList];
                         novos[i].dataEntrega = e.target.value;
                         setObjetivosList(novos);
-
-                        if (o.id) {
-                          supabase
-                            .from("ata_objetivos")
-                            .update({ data_entrega: e.target.value })
-                            .eq("id", o.id)
-                            .then(({ error }) => {
-                              if (error) console.error("Erro ao salvar ", error);
-                            });
+                        if (o.id && !String(o.id).startsWith('temp')) {
+                          supabase.from("ata_objetivos").update({ data_entrega: e.target.value }).eq("id", o.id);
                         }
                       }}
                       disabled={isConcluido}
@@ -522,7 +591,6 @@ export default function AtaObjetivos({
                               rows={2}
                               className="comentario-textarea"
                             />
-                            {/* ✅ Mostra preview em tempo real */}
                             {comentarioTemp[i] && (
                               <div className="comentario-preview">
                                 <small style={{ color: "#666", fontStyle: "italic" }}>

@@ -230,7 +230,12 @@ const renderMencoes = (conteudo, perfilesPorId, projetoAtual, containerId, supab
     partes.push(conteudo.slice(lastIndex));
   }
 
-  return partes;
+  // ✅ Envolve tudo em div com classe que força quebra de linha
+  return (
+    <div className="comentario-texto">
+      {partes}
+    </div>
+  );
 };
 
 export default function Task({ onClose, projetoAtual, notaAtual, containerId }) {
