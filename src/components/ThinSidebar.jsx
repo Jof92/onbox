@@ -1,6 +1,6 @@
 // src/components/ThinSidebar.jsx
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { FaCog, FaUserFriends, FaHome } from "react-icons/fa"; // ✅ Removido FaUpload
+import { FaCog, FaUserFriends, FaHome, FaCalendar } from "react-icons/fa";
 import "./ThinSidebar.css";
 import Collab from "./Collab";
 import ContainerSettings from "./ContainerSettings";
@@ -160,6 +160,12 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
     if (user?.id) setContainerAtual(user.id);
   };
 
+  // Função temporária para o botão de agenda — substitua conforme a funcionalidade for definida
+  const handleOpenAgenda = () => {
+    console.log("Abrir agenda");
+    // Ex: navegar para /agenda, abrir modal, etc.
+  };
+
   const meuContainerId = user?.id;
 
   return (
@@ -175,13 +181,19 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
 
         <button
           className="thin-btn"
+          title="Agenda"
+          onClick={handleOpenAgenda}
+        >
+          <FaCalendar />
+        </button>
+
+        <button
+          className="thin-btn"
           title="Minhas configurações"
           onClick={() => setShowSettings(true)}
         >
           <FaCog />
         </button>
-
-        {/* ✅ Botão de "Enviar / Carregar XML" REMOVIDO */}
 
         <button
           className="thin-btn thin-btn-collab"
@@ -227,11 +239,11 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
           onClose={() => {
             setShowCollab(false);
             fetchColaboradores();
-            fetchNotificacoesNaoLidas(); // Para atualizar se algo foi lido/removido
+            fetchNotificacoesNaoLidas();
           }}
           user={user}
           onOpenTask={() => {
-            fetchNotificacoesNaoLidas(); // Atualiza ao abrir uma tarefa
+            fetchNotificacoesNaoLidas();
           }}
         />
       )}
