@@ -66,7 +66,7 @@ const ChipResponsavel = ({ responsavel, onRemove, disabled }) => {
       color: isExterno ? '#854d0e' : '#0369a1',
       padding: '2px 8px', borderRadius: '12px', fontSize: '12px',
       marginRight: '4px', border: isExterno ? '1px solid #fcd34d' : '1px solid #bae6fd',
-      maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+      maxWidth: '120px', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
     }}>
       {nomeExibicao}
       {!disabled && (
@@ -360,7 +360,12 @@ export default function AtaObjetivos({
     if (objetivo?.responsaveis.some(r => r.nome_externo === nome && !r.usuario_id)) return;
 
     const novos = [...objetivosList];
-    const novoResp = { nome_externo: nome, usuario_id: null, id: Date.now() + Math.random() };
+    const novoResp = {
+      nome_externo: nome,
+      usuario_id: null,
+      nome_exibicao: nome, // ✅ Nome exibido imediatamente
+      id: Date.now() + Math.random()
+    };
     novos[i] = { ...novos[i], responsaveis: [...novos[i].responsaveis, novoResp] };
     setObjetivosList(novos);
 
@@ -387,7 +392,13 @@ export default function AtaObjetivos({
     if (objetivo?.responsaveis.some(r => r.usuario_id === item.id)) return;
 
     const novos = [...objetivosList];
-    const novoResp = { id: Date.now() + Math.random(), usuario_id: item.id, nome: item.nome, nickname: item.nickname };
+    const novoResp = {
+      id: Date.now() + Math.random(),
+      usuario_id: item.id,
+      nome: item.nome,
+      nickname: item.nickname,
+      nome_exibicao: item.nome, // ✅ Nome exibido imediatamente
+    };
     novos[i] = { ...novos[i], responsaveis: [...novos[i].responsaveis, novoResp] };
     setObjetivosList(novos);
     setInputResponsavel(prev => ({ ...prev, [i]: "" }));
@@ -444,8 +455,8 @@ export default function AtaObjetivos({
 
   const iniciarEdicaoComentario = (i, comentarioAtual) => {
     let comentarioPuro = comentarioAtual || "";
-    if (comentarioPuro.includes(" — Comentário feito por ")) {
-      const ultimaOcorrencia = comentarioPuro.lastIndexOf(" — Comentário feito por ");
+    if (comentarioPuro.includes(" — Comentário por ")) {
+      const ultimaOcorrencia = comentarioPuro.lastIndexOf(" — Comentário por ");
       comentarioPuro = comentarioPuro.substring(0, ultimaOcorrencia);
     }
     setEditandoComentario(prev => ({ ...prev, [i]: true }));
@@ -457,7 +468,7 @@ export default function AtaObjetivos({
     const objetivo = objetivosList[i];
     if (!objetivo?.id || !usuarioId || String(objetivo.id).startsWith('temp')) return;
 
-    const comentarioComAutor = `${comentario} — Comentário feito por ${meuNome}`;
+    const comentarioComAutor = `${comentario} — Comentário por ${meuNome}`;
     try {
       const { error } = await supabase
         .from("ata_objetivos")

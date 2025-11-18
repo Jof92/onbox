@@ -4,11 +4,13 @@ import { FaCog, FaUserFriends, FaHome, FaCalendar } from "react-icons/fa";
 import "./ThinSidebar.css";
 import Collab from "./Collab";
 import ContainerSettings from "./ContainerSettings";
+import Agenda from "./Agenda"; // ✅ Importando o novo componente
 import { supabase } from "../supabaseClient";
 
 export default function ThinSidebar({ containerAtual, setContainerAtual, user }) {
   const [showCollab, setShowCollab] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showAgenda, setShowAgenda] = useState(false); // ✅ Novo estado
   const [notificacoesNaoLidas, setNotificacoesNaoLidas] = useState(0);
   const [colaboradores, setColaboradores] = useState([]);
   const realtimeRef = useRef(null);
@@ -148,7 +150,6 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
 
   const handleOpenCollab = () => {
     setShowCollab(true);
-    // O Collab vai marcar menções como lidas e aceitar convites
   };
 
   const handleTrocarContainer = (colaborador) => {
@@ -160,10 +161,9 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
     if (user?.id) setContainerAtual(user.id);
   };
 
-  // Função temporária para o botão de agenda — substitua conforme a funcionalidade for definida
+  // ✅ Função atualizada para abrir a agenda
   const handleOpenAgenda = () => {
-    console.log("Abrir agenda");
-    // Ex: navegar para /agenda, abrir modal, etc.
+    setShowAgenda(true);
   };
 
   const meuContainerId = user?.id;
@@ -253,6 +253,14 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
           onClose={() => setShowSettings(false)}
           containerId={meuContainerId}
           user={user}
+        />
+      )}
+
+      {/* ✅ Modal da Agenda */}
+      {showAgenda && (
+        <Agenda
+          user={user}
+          onClose={() => setShowAgenda(false)}
         />
       )}
     </>

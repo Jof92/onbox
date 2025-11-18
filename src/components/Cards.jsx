@@ -27,6 +27,7 @@ export default function Cards() {
   const [usuarioAtual, setUsuarioAtual] = useState("Usuário Atual");
   const [notaProgresso, setNotaProgresso] = useState({});
   const [menuOpenNota, setMenuOpenNota] = useState(null);
+  const [menuOpenPilha, setMenuOpenPilha] = useState(null); // ✅ Novo estado
 
   // --- Carregar entidade (projeto ou setor) + pilhas + notas ---
   useEffect(() => {
@@ -38,9 +39,9 @@ export default function Cards() {
 
     if (!entityId) {
       alert("Projeto ou setor não encontrado.");
-      navigate(-1); // ou navigate("/", { replace: true });
-      return null;
-}
+      navigate(-1);
+      return;
+    }
 
     setEntityType(type);
 
@@ -145,6 +146,29 @@ export default function Cards() {
       setColumns((prev) => prev.map((c) => (c.id === id ? { ...c, title: columnTitleDraft } : c)));
     }
     setEditingColumnId(null);
+  };
+
+  // --- Excluir pilha (apenas se vazia) ---
+  const handleDeletePilha = async (pilhaId) => {
+    const pilha = columns.find(c => c.id === pilhaId);
+    if (!pilha || pilha.notas.length > 0) {
+      alert("Apenas pilhas vazias podem ser excluídas.");
+      return;
+    }
+
+    if (!window.confirm(`Tem certeza que deseja excluir a pilha "${pilha.title}"? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+
+    const { error } = await supabase.from("pilhas").delete().eq("id", pilhaId);
+    if (error) {
+      console.error("Erro ao excluir pilha:", error);
+      alert("Erro ao excluir pilha.");
+      return;
+    }
+
+    setColumns(prev => prev.filter(c => c.id !== pilhaId));
+    setMenuOpenPilha(null);
   };
 
   // --- CRUD Notas ---
@@ -297,9 +321,85 @@ export default function Cards() {
                         {col.title}
                       </h3>
                     )}
-                    <button className="btn-add" onClick={() => setActiveColumnId(col.id)}>
-                      <FaPlus />
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <button className="btn-add" onClick={() => setActiveColumnId(col.id)}>
+                        <FaPlus />
+                      </button>
+                      {/* ✅ Menu de três pontos da pilha */}
+                      <div style={{ position: 'relative', display: 'inline-block' }}>
+                        <button
+                          className="column-menu-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuOpenPilha(menuOpenPilha === col.id ? null : col.id);
+                          }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: '#666',
+                            fontSize: '16px',
+                            padding: '4px',
+                            borderRadius: '4px'
+                          }}
+                        >
+                          <FaEllipsisV />
+                        </button>
+
+                        {menuOpenPilha === col.id && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: '100%',
+                              right: 0,
+                              backgroundColor: 'white',
+                              border: '1px solid #ddd',
+                              borderRadius: '4px',
+                              boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                              zIndex: 100,
+                              minWidth: '140px',
+                              display: 'flex',
+                              flexDirection: 'column'
+                            }}
+                          >
+                            {col.notas.length === 0 ? (
+                              <button
+                                onClick={async () => {
+                                  setMenuOpenPilha(null);
+                                  await handleDeletePilha(col.id);
+                                }}
+                                style={{
+                                  padding: '8px 12px',
+                                  background: 'none',
+                                  border: 'none',
+                                  textAlign: 'left',
+                                  cursor: 'pointer',
+                                  color: '#e53e3e',
+                                  fontSize: '14px'
+                                }}
+                              >
+                                <FaTrash /> Excluir pilha
+                              </button>
+                            ) : (
+                              <button
+                                disabled
+                                style={{
+                                  padding: '8px 12px',
+                                  background: 'none',
+                                  border: 'none',
+                                  textAlign: 'left',
+                                  color: '#aaa',
+                                  fontSize: '14px',
+                                  cursor: 'not-allowed'
+                                }}
+                              >
+                                <FaTrash /> Pilha não vazia
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
                   <div className="cards-list">
