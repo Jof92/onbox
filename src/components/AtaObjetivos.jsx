@@ -576,16 +576,28 @@ export default function AtaObjetivos({
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    {/* ✅ ÚNICA ALTERAÇÃO: bloco do input de data */}
                     <input
                       type="date"
                       value={o.dataEntrega || ""}
-                      onChange={e => {
+                      onChange={async (e) => {
                         if (isConcluido) return;
+                        const valorData = e.target.value || null;
                         const novos = [...objetivosList];
-                        novos[i].dataEntrega = e.target.value;
+                        novos[i].dataEntrega = valorData;
                         setObjetivosList(novos);
                         if (o.id && !String(o.id).startsWith('temp')) {
-                          supabase.from("ata_objetivos").update({ data_entrega: e.target.value }).eq("id", o.id);
+                          try {
+                            const { error } = await supabase
+                              .from("ata_objetivos")
+                              .update({ data_entrega: valorData })
+                              .eq("id", o.id);
+                            if (error) {
+                              console.error("Erro ao salvar data de entrega:", error);
+                            }
+                          } catch (err) {
+                            console.error("Erro inesperado ao salvar data de entrega:", err);
+                          }
                         }
                       }}
                       disabled={isConcluido}

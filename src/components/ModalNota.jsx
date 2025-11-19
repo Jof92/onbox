@@ -1,9 +1,10 @@
-// ModalNota.jsx
+// src/components/ModalNota.jsx
 import React, { useCallback } from "react";
 import { FaTimes } from "react-icons/fa";
 import Listagem from "./Listagem";
 import AtaCard from "./AtaCard";
 import Task from "./Task";
+import Metas from "./Meta";
 import "./Cards.css";
 
 export default function ModalNota({
@@ -22,10 +23,10 @@ export default function ModalNota({
   notaSelecionada,
   project,
   usuarioAtual,
+  usuarioId, // ✅ Novo: UUID do usuário logado
   notaProgresso,
   setNotaProgresso
 }) {
-  // ✅ Hooks sempre no topo, antes de qualquer return condicional
   const handleProgressoChange = useCallback((progresso) => {
     if (notaSelecionada?.id) {
       setNotaProgresso(prev => ({
@@ -43,7 +44,6 @@ export default function ModalNota({
     }
   };
 
-  // Renderiza placeholder vazio quando nenhum modal está ativo
   if (!showNovaNota && !showEditarNota && !showVisualizarNota) {
     return <></>;
   }
@@ -71,7 +71,7 @@ export default function ModalNota({
                   value={formData.tipo}
                   onChange={(e) => setFormData(prev => ({ ...prev, tipo: e.target.value }))}
                 >
-                  {["Lista", "Diário de Obra", "Atas", "Medição", "Tarefas"].map((t) => (
+                  {["Lista", "Diário de Obra", "Atas", "Medição", "Tarefas", "Metas"].map((t) => (
                     <option key={t} value={t}>{t}</option>
                   ))}
                 </select>
@@ -106,20 +106,44 @@ export default function ModalNota({
 
             {/* Renderização condicional por tipo da nota */}
             {(() => {
-              const commonProps = {
-                projetoAtual: project,
-                notaAtual: notaSelecionada,
-                usuarioAtual: usuarioAtual,
-                onClose: onCloseVisualizarNota,
-              };
-
               if (notaSelecionada.tipo === "Atas") {
-                return <AtaCard {...commonProps} onProgressoChange={handleProgressoChange} />;
+                return (
+                  <AtaCard
+                    projetoAtual={project}
+                    notaAtual={notaSelecionada}
+                    usuarioId={usuarioId}
+                    onProgressoChange={handleProgressoChange}
+                    onClose={onCloseVisualizarNota}
+                  />
+                );
               } else if (notaSelecionada.tipo === "Tarefas") {
                 const pilhaAtual = notaSelecionada.pilha_id ? { id: notaSelecionada.pilha_id } : null;
-                return <Task {...commonProps} pilhaAtual={pilhaAtual} />;
+                return (
+                  <Task
+                    projetoAtual={project}
+                    notaAtual={notaSelecionada}
+                    pilhaAtual={pilhaAtual}
+                    usuarioAtual={usuarioAtual}
+                    onClose={onCloseVisualizarNota}
+                  />
+                );
+              } else if (notaSelecionada.tipo === "Metas") {
+                return (
+                  <Metas
+                    notaId={notaSelecionada.id}
+                    projectId={project?.type === "projeto" ? project.id : null}
+                    usuarioId={usuarioId}
+                  />
+                );
               } else {
-                return <Listagem {...commonProps} />;
+                return (
+                  <Listagem
+                    projetoAtual={project}
+                    notaAtual={notaSelecionada}
+                    usuarioAtual={usuarioAtual}
+                    onClose={onCloseVisualizarNota}
+                  />
+                );
               }
             })()}
           </>

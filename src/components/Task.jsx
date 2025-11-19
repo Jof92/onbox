@@ -1,18 +1,16 @@
 // src/components/Task.jsx
 import React, { useState, useEffect, useRef } from "react";
 import "./Task.css";
-import { FiUploadCloud, FiUser } from "react-icons/fi";
+import { FiUploadCloud, FiUser, FiCalendar } from "react-icons/fi";
 import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
 import "./loader.css";
 
-// ✅ Componente Tooltip para menções — totalmente seguro contra null
 const MencoesTooltip = ({ children, userId, projetoAtual, containerId, supabaseClient }) => {
   const [showTooltip, setShowTooltip] = useState(false);
   const [tooltipData, setTooltipData] = useState(null);
   const [loadingTooltip, setLoadingTooltip] = useState(false);
 
-  // ✅ useEffect SEMPRE é chamado — a lógica condicional fica DENTRO
   useEffect(() => {
     if (!showTooltip || tooltipData || loadingTooltip || !userId) {
       return;
@@ -35,7 +33,6 @@ const MencoesTooltip = ({ children, userId, projetoAtual, containerId, supabaseC
 
         let pertenceA = "Não pertence a nenhuma entidade";
 
-        // Projetos
         const { data: projectMembers } = await supabaseClient
           .from("project_members")
           .select("project_id")
@@ -52,7 +49,6 @@ const MencoesTooltip = ({ children, userId, projetoAtual, containerId, supabaseC
             pertenceA = `Membro do Projeto "${projectNames[0].name}"`;
           }
         } else {
-          // Setores
           const { data: setorMembers } = await supabaseClient
             .from("setor_members")
             .select("setor_id")
@@ -89,7 +85,6 @@ const MencoesTooltip = ({ children, userId, projetoAtual, containerId, supabaseC
     fetchTooltipData();
   }, [showTooltip, userId, tooltipData, loadingTooltip, supabaseClient]);
 
-  // ✅ Renderização condicional APÓS todos os hooks
   if (!userId) {
     return (
       <span
@@ -189,7 +184,6 @@ const MencoesTooltip = ({ children, userId, projetoAtual, containerId, supabaseC
   );
 };
 
-// ✅ Função para renderizar menções com segurança
 const renderMencoes = (conteudo, perfilesPorId, projetoAtual, containerId, supabaseClient) => {
   if (!conteudo) return conteudo;
 
@@ -220,7 +214,7 @@ const renderMencoes = (conteudo, perfilesPorId, projetoAtual, containerId, supab
         </MencoesTooltip>
       );
     } else {
-      partes.push(match[0]); // mantém como texto plano
+      partes.push(match[0]);
     }
 
     lastIndex = match.index + match[0].length;
@@ -230,12 +224,19 @@ const renderMencoes = (conteudo, perfilesPorId, projetoAtual, containerId, supab
     partes.push(conteudo.slice(lastIndex));
   }
 
-  // ✅ Envolve tudo em div com classe que força quebra de linha
   return (
     <div className="comentario-texto">
       {partes}
     </div>
   );
+};
+
+const mencionaUsuario = (conteudo, userProfile) => {
+  if (!userProfile || !conteudo) return false;
+  const termos = [userProfile.nickname, userProfile.nome].filter(Boolean);
+  const regex = /@([\p{L}\p{N}_-]+)/gu;
+  const mencoes = [...conteudo.matchAll(regex)].map(m => m[1]);
+  return mencoes.some(m => termos.includes(m));
 };
 
 export default function Task({ onClose, projetoAtual, notaAtual, containerId }) {
@@ -249,11 +250,9 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
   const [userProfile, setUserProfile] = useState(null);
   const [comentando, setComentando] = useState(false);
   const [loadingExcluir, setLoadingExcluir] = useState(false);
-
   const [sugestoesMencoes, setSugestoesMencoes] = useState([]);
   const textareaRef = useRef(null);
 
-  // Obter ID do usuário logado
   useEffect(() => {
     const fetchUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -356,7 +355,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
 
         const { data: comentariosData } = await supabase
           .from("comentarios")
-          .select("id, conteudo, created_at, user_id")
+          .select("id, conteudo, created_at, user_id, agendado_por")
           .eq("nota_id", notaAtual.id)
           .order("created_at", { ascending: false });
 
@@ -374,6 +373,8 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
             formattedDate: formatarDataComentario(c.created_at),
             isEditing: false,
             editValue: undefined,
+            mencionaUsuarioLogado: mencionaUsuario(c.conteudo, userProfile),
+            estaAgendadoPeloUsuario: c.agendado_por === userId,
           }));
           if (isMounted) setComentarios(comentariosComUsuario);
         } else setComentarios([]);
@@ -394,7 +395,37 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     return () => {
       isMounted = false;
     };
-  }, [notaAtual?.id, userId]);
+  }, [notaAtual?.id, userId, userProfile]);
+
+const handleEnviarParaAgenda = async (comentarioId) => {
+  console.log("Tentando agendar comentário:", comentarioId, "para usuário:", userId);
+  if (!userId || !comentarioId) return;
+
+  // ✅ Adicione .select() para ver o que foi realmente salvo
+  const { data, error } = await supabase
+    .from("comentarios")
+    .update({ agendado_por: userId })
+    .eq("id", comentarioId)
+    .select("id, agendado_por"); // ← FORÇA o retorno
+
+  if (error) {
+    console.error("❌ Erro Supabase:", error);
+    alert("Erro ao adicionar à agenda: " + error.message);
+  } else {
+    console.log("✅ Resposta do UPDATE com SELECT:", data);
+    if (data && data[0]?.agendado_por === userId) {
+      setComentarios(prev =>
+        prev.map(c =>
+          c.id === comentarioId ? { ...c, estaAgendadoPeloUsuario: true } : c
+        )
+      );
+      alert("Adicionado à agenda!");
+    } else {
+      console.warn("⚠️ UPDATE não refletiu no banco. Possível problema de RLS ou trigger.");
+      alert("Falha silenciosa: não foi possível confirmar a atualização.");
+    }
+  }
+};
 
   const handleSaveDescricao = async () => {
     if (!notaAtual?.id) return;
@@ -416,31 +447,42 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     if (!notaAtual?.id || !userId || !comentario.trim()) return;
     setComentando(true);
     try {
-      const { data: novoComentarioDB, error } = await supabase
+      const conteudoTrim = comentario.trim();
+      const agora = new Date().toISOString();
+
+      const { error: insertError } = await supabase
         .from("comentarios")
         .insert({
           nota_id: notaAtual.id,
           user_id: userId,
-          conteudo: comentario.trim(),
-        })
-        .select("id, conteudo, created_at, user_id")
-        .single();
+          conteudo: conteudoTrim,
+          created_at: agora,
+        });
 
-      if (error) throw error;
+      if (insertError) {
+        throw insertError;
+      }
 
-      const comentarioFormatado = {
-        ...novoComentarioDB,
+      const novoComentarioLocal = {
+        id: null,
+        nota_id: notaAtual.id,
+        user_id: userId,
+        conteudo: conteudoTrim,
+        created_at: agora,
+        agendado_por: null,
         profiles: userProfile || { nome: "Você", nickname: null, avatar_url: null },
-        formattedDate: formatarDataComentario(novoComentarioDB.created_at),
+        formattedDate: formatarDataComentario(agora),
         isEditing: false,
         editValue: undefined,
+        mencionaUsuarioLogado: mencionaUsuario(conteudoTrim, userProfile),
+        estaAgendadoPeloUsuario: false,
       };
 
-      setComentarios((prev) => [comentarioFormatado, ...prev]);
+      setComentarios((prev) => [novoComentarioLocal, ...prev]);
       setComentario("");
       setSugestoesMencoes([]);
 
-      const mencionados = comentario.match(/@(\S+)/g);
+      const mencionados = conteudoTrim.match(/@(\S+)/g);
       if (mencionados?.length > 0) {
         const nomesMencionados = mencionados.map((m) => m.slice(1));
         const { data: candidatos } = await supabase
@@ -491,7 +533,13 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
       setComentarios((prev) =>
         prev.map((c) =>
           c.id === comentarioId
-            ? { ...c, conteudo: novoConteudo.trim(), isEditing: false, editValue: undefined }
+            ? { 
+                ...c, 
+                conteudo: novoConteudo.trim(), 
+                isEditing: false, 
+                editValue: undefined,
+                mencionaUsuarioLogado: mencionaUsuario(novoConteudo.trim(), userProfile),
+              }
             : c
         )
       );
@@ -590,7 +638,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
   const getNomeProjeto = () => projetoAtual?.nome || projetoAtual?.name || "Sem projeto";
   const getNomeNota = () => notaAtual?.nome || notaAtual?.name || "Sem nota";
 
-  // ✅ Mapa de perfis por ID para uso nas menções
   const perfilesPorId = {};
   comentarios.forEach(c => {
     if (c.profiles?.id) {
@@ -743,6 +790,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
             };
             const nomeExibicao = profile.nickname || profile.nome;
             const editavel = podeEditarComentario(c.created_at, c.user_id);
+            const podeEnviarParaAgenda = c.mencionaUsuarioLogado && !c.estaAgendadoPeloUsuario;
 
             return (
               <div key={c.id} className="comentario-item">
@@ -764,19 +812,38 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
                   <div className="comentario-header">
                     <strong>{nomeExibicao}</strong>
                     <span>{c.formattedDate}</span>
-                    {editavel && !c.isEditing && (
-                      <button
-                        type="button"
-                        className="comentario-menu-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setMenuAberto(menuAberto === c.id ? null : c.id);
-                        }}
-                        aria-label="Opções"
-                      >
-                        ⋮
-                      </button>
-                    )}
+                    <div style={{ display: "flex", gap: "6px", marginLeft: "8px" }}>
+                      {podeEnviarParaAgenda && (
+                        <button
+                          type="button"
+                          title="Adicionar à minha agenda"
+                          onClick={() => handleEnviarParaAgenda(c.id)}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            color: "#1E88E5",
+                            fontSize: "16px",
+                          }}
+                          aria-label="Adicionar à agenda"
+                        >
+                          <FiCalendar />
+                        </button>
+                      )}
+                      {editavel && !c.isEditing && (
+                        <button
+                          type="button"
+                          className="comentario-menu-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuAberto(menuAberto === c.id ? null : c.id);
+                          }}
+                          aria-label="Opções"
+                        >
+                          ⋮
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {c.isEditing ? (
