@@ -464,7 +464,7 @@ const handleEnviarParaAgenda = async (comentarioId) => {
       }
 
       const novoComentarioLocal = {
-        id: null,
+        id: `temp-${Date.now()}`, // ✅ ID temporário único
         nota_id: notaAtual.id,
         user_id: userId,
         conteudo: conteudoTrim,
@@ -669,14 +669,24 @@ const handleEnviarParaAgenda = async (comentarioId) => {
       <div className="descricao-section">
         <h3>Descrição</h3>
         <textarea
-          className="descricao-editor-textarea"
-          value={descricao}
-          onChange={(e) => setDescricao(e.target.value)}
-          onBlur={handleSaveDescricao}
-          placeholder="Clique aqui para adicionar uma descrição..."
-          rows={2}
-          disabled={loading}
-        />
+        className="descricao-editor-textarea"
+        value={descricao}
+        onChange={(e) => {
+          setDescricao(e.target.value);
+          // Ajusta a altura automaticamente
+          e.target.style.height = "auto";
+          e.target.style.height = e.target.scrollHeight + "px";
+        }}
+        onBlur={handleSaveDescricao}
+        placeholder="Clique aqui para adicionar uma descrição..."
+        rows={3}
+        style={{
+          minHeight: "3.25em", // ~3 linhas
+          height: "8em",
+          resize: "none", // opcional: impede redimensionamento manual
+        }}
+        disabled={loading}
+      />
       </div>
 
       <div className="anexos-section">
@@ -809,42 +819,46 @@ const handleEnviarParaAgenda = async (comentarioId) => {
                   )}
                 </div>
                 <div className="comentario-conteudo">
-                  <div className="comentario-header">
-                    <strong>{nomeExibicao}</strong>
-                    <span>{c.formattedDate}</span>
-                    <div style={{ display: "flex", gap: "6px", marginLeft: "8px" }}>
-                      {podeEnviarParaAgenda && (
-                        <button
-                          type="button"
-                          title="Adicionar à minha agenda"
-                          onClick={() => handleEnviarParaAgenda(c.id)}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            color: "#1E88E5",
-                            fontSize: "16px",
-                          }}
-                          aria-label="Adicionar à agenda"
-                        >
-                          <FiCalendar />
-                        </button>
-                      )}
-                      {editavel && !c.isEditing && (
-                        <button
-                          type="button"
-                          className="comentario-menu-btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setMenuAberto(menuAberto === c.id ? null : c.id);
-                          }}
-                          aria-label="Opções"
-                        >
-                          ⋮
-                        </button>
-                      )}
-                    </div>
+               <div className="comentario-header">
+                <div className="comentario-autor">
+                  <strong>{nomeExibicao}</strong>
+                </div>
+                <div className="comentario-meta" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span>{c.formattedDate}</span>
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    {podeEnviarParaAgenda && (
+                      <button
+                        type="button"
+                        title="Adicionar à minha agenda"
+                        onClick={() => handleEnviarParaAgenda(c.id)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          color: "#1E88E5",
+                          fontSize: "16px",
+                        }}
+                        aria-label="Adicionar à agenda"
+                      >
+                        <FiCalendar />
+                      </button>
+                    )}
+                    {editavel && !c.isEditing && (
+                      <button
+                        type="button"
+                        className="comentario-menu-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMenuAberto(menuAberto === c.id ? null : c.id);
+                        }}
+                        aria-label="Opções"
+                      >
+                        ⋮
+                      </button>
+                    )}
                   </div>
+                </div>
+              </div>
 
                   {c.isEditing ? (
                     <div>

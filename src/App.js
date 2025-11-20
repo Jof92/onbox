@@ -110,10 +110,10 @@ export default function App() {
 
             {/* Páginas protegidas */}
             <Route
-              path="/containers"
+              path="/containers/:containerId?"
               element={
                 session ? (
-                  <Containers projects={projects} setProjects={setProjects} />
+                  <Containers />
                 ) : (
                   <Navigate to="/" replace />
                 )

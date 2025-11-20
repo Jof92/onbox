@@ -1,8 +1,8 @@
 // src/components/Collab.jsx
 import React, { useState, useEffect, useCallback } from "react";
 import "./Collab.css";
-import "./loader.css"; // 👈 Importa o CSS do loader
-import { FaPaperPlane, FaUserPlus, FaEllipsisV } from "react-icons/fa";
+import "./loader.css";
+import { FaPaperPlane, FaUserPlus, FaEllipsisV, FaBell } from "react-icons/fa";
 import { supabase } from "../supabaseClient";
 
 export default function Collab({ onClose, user, onOpenTask }) {
@@ -12,10 +12,11 @@ export default function Collab({ onClose, user, onOpenTask }) {
   const [enviando, setEnviando] = useState(false);
   const [menuAberto, setMenuAberto] = useState(null);
   const [removendo, setRemovendo] = useState(null);
-  const [loadingNotificacoes, setLoadingNotificacoes] = useState(true); // 👈 Novo
-  const [loadingIntegrantes, setLoadingIntegrantes] = useState(true);   // 👈 Novo
+  const [loadingNotificacoes, setLoadingNotificacoes] = useState(true);
+  const [loadingIntegrantes, setLoadingIntegrantes] = useState(true);
+  const [activeTab, setActiveTab] = useState("notificacoes"); // "notificacoes" | "convites"
 
-  // 🔔 Buscar notificações com useCallback
+  // 🔔 Buscar notificações
   const fetchNotificacoes = useCallback(async () => {
     if (!user?.id || !user?.email) {
       setNotificacoes([]);
@@ -89,7 +90,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
     }
   }, [user?.id, user?.email]);
 
-  // 👥 Buscar integrantes com useCallback
+  // 👥 Buscar integrantes
   const fetchIntegrantes = useCallback(async () => {
     if (!user?.id) {
       setIntegrantes([]);
@@ -144,66 +145,62 @@ export default function Collab({ onClose, user, onOpenTask }) {
     fetchIntegrantes();
   }, [fetchNotificacoes, fetchIntegrantes]);
 
- // ==============================
-// ✉️ ENVIAR CONVITE
-// ==============================
-const enviarConvite = async () => {
-  if (!emailConvite.trim()) return alert("Digite um e-mail válido.");
-  setEnviando(true);
+  // ✉️ ENVIAR CONVITE
+  const enviarConvite = async () => {
+    if (!emailConvite.trim()) return alert("Digite um e-mail válido.");
+    setEnviando(true);
 
-  try {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("id, nome, email, nickname") // 👈 Adicionado 'nickname'
-      .ilike("email", emailConvite)
-      .maybeSingle();
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id, nome, email, nickname")
+        .ilike("email", emailConvite)
+        .maybeSingle();
 
-    if (!profile) {
-      alert("Usuário não encontrado no OnBox.");
+      if (!profile) {
+        alert("Usuário não encontrado no OnBox.");
+        setEnviando(false);
+        return;
+      }
+
+      const { data: existingInvite } = await supabase
+        .from("convites")
+        .select("*")
+        .eq("email", profile.email)
+        .eq("status", "pendente")
+        .maybeSingle();
+
+      if (existingInvite) {
+        alert("Convite já enviado.");
+        setEnviando(false);
+        return;
+      }
+
+      const { error } = await supabase.from("convites").insert([
+        {
+          email: profile.email,
+          remetente_id: user.id,
+          user_id: profile.id,
+          nickname: profile.nickname,
+          container_id: user.id,
+          status: "pendente",
+        },
+      ]);
+
+      if (error) throw error;
+
+      alert(`Convite enviado para ${profile.nome}`);
+      setEmailConvite("");
+      fetchNotificacoes();
+    } catch (err) {
+      console.error("Erro ao enviar convite:", err);
+      alert("Erro ao enviar convite.");
+    } finally {
       setEnviando(false);
-      return;
     }
+  };
 
-    const { data: existingInvite } = await supabase
-      .from("convites")
-      .select("*")
-      .eq("email", profile.email)
-      .eq("status", "pendente")
-      .maybeSingle();
-
-    if (existingInvite) {
-      alert("Convite já enviado.");
-      setEnviando(false);
-      return;
-    }
-
-    const { error } = await supabase.from("convites").insert([
-      {
-        email: profile.email,
-        remetente_id: user.id,
-        user_id: profile.id,          // 👈 Preenchido
-        nickname: profile.nickname,   // 👈 Preenchido
-        container_id: user.id,        // 👈 Preenchido
-        status: "pendente",
-      },
-    ]);
-
-    if (error) throw error;
-
-    alert(`Convite enviado para ${profile.nome}`);
-    setEmailConvite("");
-    fetchNotificacoes();
-  } catch (err) {
-    console.error("Erro ao enviar convite:", err);
-    alert("Erro ao enviar convite.");
-  } finally {
-    setEnviando(false);
-  }
-};
-
-  // ==============================
   // ✅ ACEITAR CONVITE
-  // ==============================
   const aceitarConvite = async (convite) => {
     try {
       await supabase.from("convites").update({ status: "aceito" }).eq("id", convite.id);
@@ -215,9 +212,7 @@ const enviarConvite = async () => {
     }
   };
 
-  // ==============================
   // 🔗 LER MENÇÃO
-  // ==============================
   const lerMensagemMencoes = async (notificacao) => {
     if (notificacao.lido) return;
 
@@ -238,9 +233,7 @@ const enviarConvite = async () => {
     }
   };
 
-  // ==============================
   // ❌ REMOVER INTEGRANTE
-  // ==============================
   const removerIntegrante = async (item) => {
     const ok = window.confirm(`Remover ${item.nome} do seu container?`);
     if (!ok) return;
@@ -265,149 +258,169 @@ const enviarConvite = async () => {
 
         <div className="collab-header">
           <h2>Colaborações</h2>
-        </div>
-
-        <div className="collab-section-convite">
-          <h3>
-            <FaUserPlus className="icon" /> Enviar Convite
-          </h3>
-          <div className="convite-form">
-            <input
-              type="email"
-              placeholder="Digite o e-mail do colaborador..."
-              value={emailConvite}
-              onChange={(e) => setEmailConvite(e.target.value)}
-            />
+          <div className="collab-tabs">
             <button
-              className={`btn-enviar ${enviando ? "plane-fly" : ""}`}
-              onClick={!enviando ? enviarConvite : undefined}
-              disabled={enviando}
+              className={`tab-btn ${activeTab === "notificacoes" ? "active" : ""}`}
+              onClick={() => setActiveTab("notificacoes")}
+              aria-label="Notificações"
             >
-              <FaPaperPlane className="plane-icon" />
-              {!enviando && " Enviar"}
+              <FaBell className="icon" />
+            </button>
+            <button
+              className={`tab-btn ${activeTab === "convites" ? "active" : ""}`}
+              onClick={() => setActiveTab("convites")}
+              aria-label="Convidar"
+            >
+              <FaUserPlus className="icon" />
             </button>
           </div>
         </div>
 
-        <hr />
+        {activeTab === "notificacoes" && (
+          <div className="collab-section">
+            <h3>Notificações</h3>
+            {loadingNotificacoes ? (
+              <div className="loader-container">
+                <div className="loader"></div>
+              </div>
+            ) : notificacoes.length === 0 ? (
+              <p className="empty">Nenhuma notificação no momento.</p>
+            ) : (
+              <>
+                {notificacoes.map((n, index) => {
+                  const isConvite = n.hasOwnProperty('email') && n.hasOwnProperty('status');
+                  const isMencao = n.hasOwnProperty('mensagem') && (n.tipo === 'menção' || !n.email);
+                  const tipo = isConvite ? 'convite' : isMencao ? 'menção' : 'desconhecido';
+                  const isLido = tipo === 'menção' ? n.lido : tipo === 'convite' ? n.status === 'aceito' : true;
 
-        <div className="collab-section">
-          <h3>Notificações</h3>
-          {loadingNotificacoes ? (
-            <div className="loader-container">
-              <div className="loader"></div>
-            </div>
-          ) : notificacoes.length === 0 ? (
-            <p className="empty">Nenhuma notificação no momento.</p>
-          ) : (
-            <>
-              {notificacoes.map((n, index) => {
-                const isConvite = n.hasOwnProperty('email') && n.hasOwnProperty('status');
-                const isMencao = n.hasOwnProperty('mensagem') && (n.tipo === 'menção' || !n.email);
-                const tipo = isConvite ? 'convite' : isMencao ? 'menção' : 'desconhecido';
-                const isLido = tipo === 'menção' ? n.lido : tipo === 'convite' ? n.status === 'aceito' : true;
+                  let content = null;
 
-                let content = null;
-
-                if (tipo === 'convite') {
-                  const remetenteNome = n.remetente?.nome || n.remetente_id?.substring(0, 8) || 'Alguém';
-                  content = (
-                    <>
-                      <span>
-                        <strong>{remetenteNome}</strong> te convidou
-                        {n.status === 'aceito' && ' (aceito)'}
-                      </span>
-                      {n.status === 'pendente' && (
-                        <button className="btn-aceitar" onClick={() => aceitarConvite(n)}>
-                          Aceitar
+                  if (tipo === 'convite') {
+                    const remetenteNome = n.remetente?.nome || n.remetente_id?.substring(0, 8) || 'Alguém';
+                    content = (
+                      <>
+                        <span>
+                          <strong>{remetenteNome}</strong> te convidou
+                          {n.status === 'aceito' && ' (aceito)'}
+                        </span>
+                        {n.status === 'pendente' && (
+                          <button className="btn-aceitar" onClick={() => aceitarConvite(n)}>
+                            Aceitar
+                          </button>
+                        )}
+                      </>
+                    );
+                  } else if (tipo === 'menção') {
+                    content = (
+                      <>
+                        <span>{n.mensagem || 'Você foi mencionado em uma tarefa.'}</span>
+                        <button
+                          className="btn-ler"
+                          onClick={() => lerMensagemMencoes(n)}
+                          disabled={n.lido}
+                        >
+                          {n.lido ? 'Aberto' : 'Abrir'}
                         </button>
-                      )}
-                    </>
-                  );
-                } else if (tipo === 'menção') {
-                  content = (
-                    <>
-                      <span>{n.mensagem || 'Você foi mencionado em uma tarefa.'}</span>
-                      <button
-                        className="btn-ler"
-                        onClick={() => lerMensagemMencoes(n)}
-                        disabled={n.lido}
-                      >
-                        {n.lido ? 'Aberto' : 'Abrir'}
-                      </button>
-                    </>
-                  );
-                } else {
-                  content = (
-                    <span style={{ color: '#d9534f' }}>
-                      <em>Notificação inválida</em>
-                    </span>
-                  );
-                }
+                      </>
+                    );
+                  } else {
+                    content = (
+                      <span style={{ color: '#d9534f' }}>
+                        <em>Notificação inválida</em>
+                      </span>
+                    );
+                  }
 
-                return (
-                  <div
-                    key={n.id || `fallback-${index}`}
-                    className={`notificacao-item ${isLido ? 'lida' : 'nao-lida'}`}
-                  >
-                    {content}
-                  </div>
-                );
-              })}
-            </>
-          )}
-        </div>
-
-        <hr />
-
-        <div className="collab-section">
-          <h3>Integrantes</h3>
-          {loadingIntegrantes ? (
-            <div className="loader-container">
-              <div className="loader"></div>
-            </div>
-          ) : integrantes.length === 0 ? (
-            <p className="empty">Nenhum integrante ainda.</p>
-          ) : (
-            <div className="integrantes-list">
-              {integrantes.map((i) => (
-                <div
-                  key={i.convite_id}
-                  className={`integrante-item ${removendo === i.convite_id ? "fade-out" : ""}`}
-                >
-                  <div className="integrante-info">
-                    {i.avatar_url ? (
-                      <img src={i.avatar_url} alt={i.nome} className="integrante-avatar" />
-                    ) : (
-                      <div className="integrante-avatar placeholder">
-                        {i.nome.charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                    <div className="integrante-texto">
-                      <strong>{i.nome}</strong>
-                      <span>{i.email}</span>
-                    </div>
-                  </div>
-
-                  <div className="integrante-menu">
-                    <button
-                      className="menu-btn"
-                      onClick={() => setMenuAberto(menuAberto === i.convite_id ? null : i.convite_id)}
+                  return (
+                    <div
+                      key={n.id || `fallback-${index}`}
+                      className={`notificacao-item ${isLido ? 'lida' : 'nao-lida'}`}
                     >
-                      <FaEllipsisV />
-                    </button>
+                      {content}
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
+        )}
 
-                    {menuAberto === i.convite_id && (
-                      <div className="menu-opcoes">
-                        <button onClick={() => removerIntegrante(i)}>Remover</button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
+        {activeTab === "convites" && (
+          <>
+            <div className="collab-section-convite">
+              <h4>
+               Enviar Convite
+              </h4>
+              <div className="convite-form">
+                <input
+                  type="email"
+                  placeholder="Digite o e-mail do colaborador..."
+                  value={emailConvite}
+                  onChange={(e) => setEmailConvite(e.target.value)}
+                />
+                <button
+                  className={`btn-enviar ${enviando ? "plane-fly" : ""}`}
+                  onClick={!enviando ? enviarConvite : undefined}
+                  disabled={enviando}
+                >
+                  <FaPaperPlane className="plane-icon" />
+                  {!enviando && " Enviar"}
+                </button>
+              </div>
             </div>
-          )}
-        </div>
+
+            <hr />
+
+            <div className="collab-section">
+              <h3>Integrantes</h3>
+              {loadingIntegrantes ? (
+                <div className="loader-container">
+                  <div className="loader"></div>
+                </div>
+              ) : integrantes.length === 0 ? (
+                <p className="empty">Nenhum integrante ainda.</p>
+              ) : (
+                <div className="integrantes-list">
+                  {integrantes.map((i) => (
+                    <div
+                      key={i.convite_id}
+                      className={`integrante-item ${removendo === i.convite_id ? "fade-out" : ""}`}
+                    >
+                      <div className="integrante-info">
+                        {i.avatar_url ? (
+                          <img src={i.avatar_url} alt={i.nome} className="integrante-avatar" />
+                        ) : (
+                          <div className="integrante-avatar placeholder">
+                            {i.nome.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div className="integrante-texto">
+                          <strong>{i.nome}</strong>
+                          <span>{i.email}</span>
+                        </div>
+                      </div>
+
+                      <div className="integrante-menu">
+                        <button
+                          className="menu-btn"
+                          onClick={() => setMenuAberto(menuAberto === i.convite_id ? null : i.convite_id)}
+                        >
+                          <FaEllipsisV />
+                        </button>
+
+                        {menuAberto === i.convite_id && (
+                          <div className="menu-opcoes">
+                            <button onClick={() => removerIntegrante(i)}>Remover</button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

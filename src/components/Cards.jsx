@@ -25,19 +25,38 @@ export default function Cards() {
   const [notaEditData, setNotaEditData] = useState({ id: null, nome: "", responsavel: "", pilhaId: null });
   const [notaSelecionada, setNotaSelecionada] = useState(null);
   const [usuarioAtual, setUsuarioAtual] = useState("Usuário Atual");
-  const [usuarioId, setUsuarioId] = useState(null); // ✅ UUID do usuário
+  const [usuarioId, setUsuarioId] = useState(null); // ✅ UUID do usuário logado
   const [notaProgresso, setNotaProgresso] = useState({});
   const [menuOpenNota, setMenuOpenNota] = useState(null);
   const [menuOpenPilha, setMenuOpenPilha] = useState(null);
 
+  // 👇 Armazena o containerId da pessoa dona do projeto/setor
+  const [donoContainerId, setDonoContainerId] = useState(null);
+
   // Carregar entidade + pilhas + usuário
   useEffect(() => {
     const loadInitialData = async () => {
-      const { projectId, setorId, projectName, setorName, projectPhoto, setorPhoto, entityType: typeFromState } = location.state || {};
+      const { 
+        projectId, 
+        setorId, 
+        projectName, 
+        setorName, 
+        projectPhoto, 
+        setorPhoto, 
+        entityType: typeFromState,
+        // 👇 Recebe o containerId da pessoa dona
+        containerId: containerIdFromState 
+      } = location.state || {};
+      
       const entityId = projectId || setorId;
       const entityName = projectName || setorName || "Entidade";
       const entityPhoto = projectPhoto || setorPhoto;
       const type = typeFromState || (projectId ? "project" : "setor");
+
+      // 👇 Armazena o containerId da pessoa dona (se fornecido)
+      if (containerIdFromState) {
+        setDonoContainerId(containerIdFromState);
+      }
 
       if (!entityId) {
         alert("Projeto ou setor não encontrado.");
@@ -263,7 +282,25 @@ export default function Cards() {
   return (
     <div className="cards-page">
       <header className="cards-header">
-        <button className="btn-voltar" onClick={() => navigate(-1)} title="Voltar">
+        {/* 👇 Botão de voltar agora respeita o container da pessoa dona */}
+        <button 
+          className="btn-voltar" 
+          onClick={() => {
+            if (donoContainerId) {
+              // Vai para o container da pessoa dona do projeto/setor
+              navigate("/containers", {
+                state: {
+                  fromCards: true,
+                  targetContainerId: donoContainerId
+                }
+              });
+            } else {
+              // Fallback: volta para a lista de containers
+              navigate("/containers");
+            }
+          }} 
+          title="Voltar"
+        >
           <FaArrowLeft />
         </button>
         {entity?.photo_url && (

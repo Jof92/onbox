@@ -5,7 +5,7 @@ import "./Agenda.css";
 
 const Agenda = ({ user, onClose }) => {
   const [objetivosCompletos, setObjetivosCompletos] = useState(null);
-  const [comentariosAgendados, setComentariosAgendados] = useState(null); // ✅ Novo estado
+  const [comentariosAgendados, setComentariosAgendados] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -18,7 +18,7 @@ const Agenda = ({ user, onClose }) => {
       }
 
       try {
-        // ========== PARTE 1: Carregar objetivos (original) ==========
+        // ========== PARTE 1: Carregar objetivos (INALTERADA) ==========
         const { data: responsaveis, error: err1 } = await supabase
           .from("ata_objetivos_responsaveis_enriquecidos")
           .select("ata_objetivo_id")
@@ -124,13 +124,14 @@ const Agenda = ({ user, onClose }) => {
                   nomeProjeto: projeto ? projeto.nome : "–",
                   nomeDono: dono ? dono.nomeDono : "Sem dono",
                   nomeContainer: dono ? dono.nomeContainer : "Sem container",
+                  _chaveNota: obj.ata_id,
                 };
               });
             }
           }
         }
 
-        // ========== PARTE 2: Carregar comentários agendados ==========
+        // ========== PARTE 2: Carregar comentários agendados (INALTERADA) ==========
         const { data: comentarios, error: errComentarios } = await supabase
           .from("comentarios")
           .select("id, conteudo, created_at, nota_id, user_id")
@@ -139,15 +140,13 @@ const Agenda = ({ user, onClose }) => {
 
         if (errComentarios) {
           console.warn("Erro ao carregar comentários agendados:", errComentarios);
-          // Não falha totalmente, só ignora
         }
 
         let comentariosCompletos = [];
         if (comentarios && Array.isArray(comentarios) && comentarios.length > 0) {
           const userIdsAutores = [...new Set(comentarios.map(c => c.user_id).filter(id => id))];
-          const notaIds = [...new Set(comentarios.map(c => c.nota_id).filter(id => id))];
+          const notaIds = [...new Set(comentarios.map(c => c.nota_id).filter(id => id != null))];
 
-          // Carregar perfis dos autores
           let autoresMap = {};
           if (userIdsAutores.length > 0) {
             const { data: autores, error: errAutores } = await supabase
@@ -161,51 +160,74 @@ const Agenda = ({ user, onClose }) => {
             }
           }
 
-          // Carregar notas para obter projeto_id e nome
           let notasMap = {};
-          const projetoIdsNotas = new Set();
+          const pilhaIdsNotas = new Set();
           if (notaIds.length > 0) {
             const { data: notas, error: errNotas } = await supabase
               .from("notas")
-              .select("id, nome, projeto_id")
+              .select("id, nome, pilha_id")
               .in("id", notaIds);
             if (!errNotas && Array.isArray(notas)) {
               notas.forEach(nota => {
                 notasMap[nota.id] = {
                   nome: nota.nome || "Sem título",
-                  projeto_id: nota.projeto_id
+                  pilha_id: nota.pilha_id
                 };
-                if (nota.projeto_id) projetoIdsNotas.add(nota.projeto_id);
+                if (nota.pilha_id) pilhaIdsNotas.add(nota.pilha_id);
               });
             }
           }
 
-          // Carregar projetos das notas
+          let pilhasNotasMap = {};
+          const projetoIdsDasPilhas = new Set();
+          if (pilhaIdsNotas.size > 0) {
+            const { data: pilhas, error: errPilhas } = await supabase
+              .from("pilhas")
+              .select("id, title, project_id")
+              .in("id", Array.from(pilhaIdsNotas));
+            if (!errPilhas && Array.isArray(pilhas)) {
+              pilhas.forEach(p => {
+                pilhasNotasMap[p.id] = {
+                  title: p.title || "Pilha sem nome",
+                  project_id: p.project_id
+                };
+                if (p.project_id) projetoIdsDasPilhas.add(p.project_id);
+              });
+            }
+          }
+
           let projetosNotasMap = {};
-          if (projetoIdsNotas.size > 0) {
-            const { data: projetosNotas, error: errProjetos } = await supabase
+          if (projetoIdsDasPilhas.size > 0) {
+            const { data: projetos, error: errProjetos } = await supabase
               .from("projects")
               .select("id, name")
-              .in("id", Array.from(projetoIdsNotas));
-            if (!errProjetos && Array.isArray(projetosNotas)) {
+              .in("id", Array.from(projetoIdsDasPilhas));
+            if (!errProjetos && Array.isArray(projetos)) {
               projetosNotasMap = Object.fromEntries(
-                projetosNotas.map(p => [p.id, p.name || "Projeto sem nome"])
+                projetos.map(p => [p.id, p.name || "Projeto sem nome"])
               );
             }
           }
 
-          // Montar lista completa
-          comentariosCompletos = comentarios.map(com => ({
-            ...com,
-            nomeAutor: autoresMap[com.user_id] || "Usuário",
-            nomeNota: (notasMap[com.nota_id]?.nome) || "Nota não encontrada",
-            nomeProjeto: notasMap[com.nota_id]?.projeto_id
-              ? projetosNotasMap[notasMap[com.nota_id].projeto_id] || "Projeto não encontrado"
-              : "Sem projeto",
-          }));
+          comentariosCompletos = comentarios.map(com => {
+            const nota = notasMap[com.nota_id] || {};
+            const pilha = nota.pilha_id ? pilhasNotasMap[nota.pilha_id] : null;
+
+            return {
+              ...com,
+              nomeAutor: autoresMap[com.user_id] || "Usuário",
+              nomeNota: nota.nome || (com.nota_id ? "Nota não encontrada" : "Sem nota"),
+              nomeProjeto: pilha?.project_id
+                ? projetosNotasMap[pilha.project_id] || "Projeto não encontrado"
+                : "Sem projeto",
+              nomePilha: pilha ? pilha.title : "Sem pilha",
+              nomeDono: "Não informado",
+              nomeContainer: "Não informado",
+              _chaveNota: com.nota_id,
+            };
+          });
         }
 
-        // Atualizar estados
         setObjetivosCompletos(objetivosCompletos);
         setComentariosAgendados(comentariosCompletos);
         setError(null);
@@ -226,42 +248,83 @@ const Agenda = ({ user, onClose }) => {
     fetchData();
   }, [user?.id]);
 
-  // Formata data de comentário
-  const formatarDataComentario = (dateString) => {
-    const date = new Date(dateString);
-    const hoje = new Date();
-    const ontem = new Date();
-    ontem.setDate(hoje.getDate() - 1);
-    const isSameDay = (d1, d2) =>
-      d1.getDate() === d2.getDate() &&
-      d1.getMonth() === d2.getMonth() &&
-      d1.getFullYear() === d2.getFullYear();
-    const hora = date.toLocaleTimeString("pt-BR", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    if (isSameDay(date, hoje)) return `Hoje às ${hora}`;
-    if (isSameDay(date, ontem)) return `Ontem às ${hora}`;
-    return `em ${String(date.getDate()).padStart(2, "0")}/${String(
-      date.getMonth() + 1
-    ).padStart(2, "0")}/${date.getFullYear()} às ${hora}`;
+  const normalizeDate = (dateStr) => {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    return d.toISOString().split('T')[0];
   };
+
+  const getMonthName = (dateStr) => {
+    const date = new Date(dateStr);
+    return date.toLocaleString('pt-BR', { month: 'long' });
+  };
+
+  const calcularDiasRestantes = (dateStr) => {
+    if (!dateStr) return null;
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const dataAlvo = new Date(dateStr);
+    dataAlvo.setHours(0, 0, 0, 0);
+    const diffTime = dataAlvo - hoje;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
+  const todosItens = [];
+  if (objetivosCompletos?.length > 0) {
+    objetivosCompletos.forEach(obj => {
+      if (obj.data_entrega) {
+        todosItens.push({ ...obj, tipo: 'objetivo', data_ref: obj.data_entrega });
+      }
+    });
+  }
+  if (comentariosAgendados?.length > 0) {
+    comentariosAgendados.forEach(com => {
+      if (com.created_at) {
+        todosItens.push({ ...com, tipo: 'comentario', data_ref: com.created_at });
+      }
+    });
+  }
+
+  if (todosItens.length === 0 && !loading && !error) {
+    return (
+      <div className="agenda-modal-overlay" onClick={onClose}>
+        <div className="agenda-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="agenda-header">
+            <h2>📅 Minha Agenda</h2>
+            <button className="agenda-close-btn" onClick={onClose}>✕</button>
+          </div>
+          <div className="agenda-content">
+            <p className="agenda-empty">Você não tem itens na agenda.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  todosItens.sort((a, b) => new Date(a.data_ref) - new Date(b.data_ref));
+
+  const itensPorData = {};
+  todosItens.forEach(item => {
+    const key = normalizeDate(item.data_ref);
+    if (!itensPorData[key]) itensPorData[key] = [];
+    itensPorData[key].push(item);
+  });
+
+  const datasOrdenadas = Object.keys(itensPorData).sort((a, b) => new Date(a) - new Date(b));
 
   return (
     <div className="agenda-modal-overlay" onClick={onClose}>
       <div className="agenda-modal" onClick={(e) => e.stopPropagation()}>
         <div className="agenda-header">
           <h2>📅 Minha Agenda</h2>
-          <button className="agenda-close-btn" onClick={onClose}>
-            ✕
-          </button>
+          <button className="agenda-close-btn" onClick={onClose}>✕</button>
         </div>
 
-        <div className="agenda-content" style={{ padding: "20px" }}>
-          {loading && <p>Carregando sua agenda...</p>}
-
+        <div className="agenda-content">
+          {loading && <p className="agenda-loading">Carregando sua agenda...</p>}
           {error && (
-            <div style={{ color: "#e53e3e", whiteSpace: "pre-wrap" }}>
+            <div className="agenda-error">
               <strong>Erro:</strong> {error.message}
               {error.details && <div><strong>Detalhes:</strong> {error.details}</div>}
               {error.code && <div><strong>Código:</strong> {error.code}</div>}
@@ -270,70 +333,95 @@ const Agenda = ({ user, onClose }) => {
 
           {!loading && !error && (
             <div>
-              {/* Seção: Objetivos */}
-              {objetivosCompletos && objetivosCompletos.length > 0 && (
-                <>
-                  <h3 style={{ marginTop: "0", color: "#2d3748" }}>📌 Meus Objetivos</h3>
-                  {objetivosCompletos.map((obj) => (
-                    <div
-                      key={`objetivo-${obj.id}`}
-                      style={{
-                        border: "1px solid #e2e8f0",
-                        borderRadius: "8px",
-                        padding: "16px",
-                        marginBottom: "16px",
-                        backgroundColor: "#f8fafc",
-                      }}
-                    >
-                      <div><strong>Container:</strong> <span style={{ color: "#7e22ce", fontWeight: "bold" }}>{obj.nomeContainer}</span></div>
-                      <div><strong>Dono:</strong> {obj.nomeDono}</div>
-                      <div><strong>Projeto:</strong> <span style={{ color: "#2b6cb0", fontWeight: "bold" }}>{obj.nomeProjeto}</span></div>
-                      <div><strong>Pilha:</strong> {obj.nomePilha}</div>
-                      <div><strong>Nota:</strong> {obj.nomeNota}</div>
-                      <div style={{ marginTop: "8px", fontWeight: "bold" }}>{obj.texto}</div>
-                      <div style={{ marginTop: "6px", fontSize: "0.9em", color: "#4a5568" }}>
-                        <strong>Data:</strong> {obj.data_entrega || "–"} •{" "}
-                        <strong>Status:</strong> {obj.concluido ? "Concluído" : "Pendente"}
-                      </div>
-                    </div>
-                  ))}
-                </>
-              )}
+              {datasOrdenadas.map((dateKey, idx) => {
+                const itens = itensPorData[dateKey];
+                const data = new Date(dateKey);
+                const dia = data.getDate();
+                const mesAnterior = idx > 0 ? new Date(datasOrdenadas[idx - 1]) : null;
+                const novoMes = !mesAnterior || mesAnterior.getMonth() !== data.getMonth();
 
-              {/* Seção: Comentários Agendados */}
-              {comentariosAgendados && comentariosAgendados.length > 0 && (
-                <>
-                  <h3 style={{ color: "#2d3748", marginTop: "24px" }}>💬 Comentários Agendados</h3>
-                  {comentariosAgendados.map((com) => (
-                    <div
-                      key={`comentario-${com.id}`}
-                      style={{
-                        border: "1px solid #e2e8f0",
-                        borderRadius: "8px",
-                        padding: "16px",
-                        marginBottom: "16px",
-                        backgroundColor: "#f0fdf4",
-                      }}
-                    >
-                      <div><strong>Projeto:</strong> <span style={{ color: "#2b6cb0" }}>{com.nomeProjeto}</span></div>
-                      <div><strong>Nota:</strong> {com.nomeNota}</div>
-                      <div><strong>Autor:</strong> {com.nomeAutor}</div>
-                      <div style={{ marginTop: "8px", fontStyle: "italic", color: "#4a5568" }}>
-                        "{com.conteudo}"
-                      </div>
-                      <div style={{ marginTop: "6px", fontSize: "0.9em", color: "#718096" }}>
-                        {formatarDataComentario(com.created_at)}
-                      </div>
-                    </div>
-                  ))}
-                </>
-              )}
+                const gruposPorNota = {};
+                itens.forEach(item => {
+                  const chave = item._chaveNota || `sem_nota_${item.id}`;
+                  if (!gruposPorNota[chave]) gruposPorNota[chave] = [];
+                  gruposPorNota[chave].push(item);
+                });
 
-              {/* Mensagem se nada for encontrado */}
-              {(!objetivosCompletos || objetivosCompletos.length === 0) &&
-               (!comentariosAgendados || comentariosAgendados.length === 0) && (
-                <p>Você não tem itens na agenda.</p>
-              )}
+                return (
+                  <div key={dateKey} className="agenda-dia-secao">
+                    {novoMes && (
+                      <h3 className="agenda-mes-titulo">{getMonthName(dateKey)}</h3>
+                    )}
+                    <div className="agenda-dia-bloco">
+                      <h4 className="agenda-dia-titulo">Dia {dia}</h4>
+
+                      {Object.entries(gruposPorNota).map(([chaveNota, grupo]) => {
+                        const itemRef = grupo[0];
+                        return (
+                          <div key={chaveNota} className="agenda-nota-grupo">
+                            <div className="agenda-nota-cabecalho">
+                              {itemRef.nomeNota}
+                            </div>
+                            <div className="agenda-nota-detalhes">
+                              {itemRef.nomePilha} • {itemRef.nomeProjeto}{" "}
+                              <span>({itemRef.nomeDono} • {itemRef.nomeContainer})</span>
+                            </div>
+
+                            {grupo.map(item => {
+                              const prazo = item.tipo === 'objetivo' 
+                                ? item.data_entrega 
+                                : item.created_at;
+                              const prazoFormatado = prazo 
+                                ? new Date(prazo).toLocaleDateString('pt-BR') 
+                                : '–';
+                              const diasRestantes = item.tipo === 'objetivo' 
+                                ? calcularDiasRestantes(item.data_entrega) 
+                                : null;
+
+                              let diasClasse = '';
+                              if (diasRestantes !== null) {
+                                if (diasRestantes < 0) diasClasse = 'atrasado';
+                                else if (diasRestantes === 0) diasClasse = 'hoje';
+                                else diasClasse = 'futuro';
+                              }
+
+                              return (
+                                <div key={`${item.tipo}-${item.id}`} className="agenda-item">
+                                  <div className="agenda-item-linha">
+                                    <div className="agenda-item-check-wrapper">
+                                      <input
+                                        type="checkbox"
+                                        checked={item.concluido || false}
+                                        readOnly
+                                        className="agenda-item-check"
+                                      />
+                                    </div>
+                                    <div className={`agenda-item-conteudo ${item.tipo === 'comentario' ? 'comentario' : ''}`}>
+                                      {item.tipo === 'objetivo' ? item.texto : `"${item.conteudo}"`}
+                                    </div>
+                                    <div className="agenda-item-prazo">
+                                      {prazoFormatado}
+                                      {diasRestantes !== null && (
+                                        <span className={`dias-restantes ${diasClasse}`}>
+                                          {diasRestantes > 0
+                                            ? `+${diasRestantes}d`
+                                            : diasRestantes === 0
+                                            ? "hoje"
+                                            : `${diasRestantes}d`}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

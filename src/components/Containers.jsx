@@ -1,5 +1,6 @@
 // src/pages/Containers.jsx
 import React, { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom"; // 👈 Adicionado
 import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
 import ThinSidebar from "../components/ThinSidebar";
@@ -7,6 +8,8 @@ import ProjectManager from "./ProjectManager";
 import "./Containers.css";
 
 export default function Containers() {
+  const location = useLocation(); // 👈 Para acessar o state
+
   const [user, setUser] = useState(null);
   const [containerAtual, setContainerAtual] = useState(null);
   const [nomeContainer, setNomeContainer] = useState("");
@@ -23,12 +26,16 @@ export default function Containers() {
     loadUser();
   }, []);
 
+  // 👇 Define containerAtual com base no state OU no usuário logado
   useEffect(() => {
-    if (user && containerAtual === null) {
-      setContainerAtual(user.id);
+    if (user) {
+      // Se houver targetContainerId no state, use-o; senão, use o do usuário logado
+      const idParaUsar = location.state?.targetContainerId || user.id;
+      setContainerAtual(idParaUsar);
     }
-  }, [user, containerAtual]);
+  }, [user, location.state?.targetContainerId]);
 
+  // 👇 Busca o nome do container (agora pode ser de outra pessoa)
   useEffect(() => {
     const fetchContainerNome = async () => {
       if (!containerAtual) return;
@@ -65,6 +72,7 @@ export default function Containers() {
       <header className="containers-header">
         <h1 className="tittle-cont">
           Container {nomeContainer ? `- ${nomeContainer}` : ""}
+          {location.state?.targetContainerId && location.state.targetContainerId !== user.id }
         </h1>
       </header>
 

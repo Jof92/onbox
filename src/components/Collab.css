@@ -1,3 +1,43 @@
+.collab-tabs {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.tab-btn {
+  background: none;
+  border: 1px solid #ccc;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #555;
+  transition: 0.2s;
+}
+
+.tab-btn:hover {
+  background: #f0f0f0;
+}
+
+.tab-btn.active {
+  background: #bf9010;
+  color: white;
+  border-color: #bf9010;
+}
+
+.tab-btn .icon {
+  vertical-align: middle;
+}
+
+/* Garante que o header mantenha o flex e os botões fiquem alinhados à direita */
+.collab-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+/* Mantém os estilos existentes abaixo */
 .collab-modal-overlay {
   position: fixed;
   top: 0;
@@ -21,6 +61,7 @@
   animation: slideDown 0.3s ease;
   max-height: 70vh;
   overflow-y: auto;
+  height: 500px;
 }
 
 @keyframes slideDown {
@@ -32,19 +73,6 @@
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-.collab-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.collab-header h2 {
-  font-size: 20px;
-  font-weight: 600;
-  color: #222;
 }
 
 .close-btn {
@@ -62,14 +90,12 @@
 
 .collab-section {
   margin-bottom: 20px;
-  height: 10em;
+  height: 18em;
   overflow: auto;
-  
 }
 
 .collab-section-convite {
   margin-bottom: 20px;
-   
 }
 
 .collab-section h3 {
@@ -120,27 +146,52 @@
   background: #f9f9f9;
   padding: 10px;
   border-radius: 10px;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background-color 0.2s;
 }
 
-.notificacao-item .foto {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
+.notificacao-item.nao-lida {
+  background-color: #e8f4ff;
+  font-weight: bold;
+}
+
+.notificacao-item.lida {
+  background-color: #fff;
+  color: #666;
+}
+
+.btn-aceitar, .btn-ler {
+  padding: 4px 10px;
+  font-size: 14px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
 }
 
 .btn-aceitar {
-  background: #00c48c;
-  border: none;
+  background-color: #28a745;
   color: white;
-  border-radius: 8px;
-  padding: 6px 12px;
-  cursor: pointer;
-  margin-left: auto;
-  transition: 0.2s;
 }
 
 .btn-aceitar:hover {
-  background: #00a977;
+  background-color: #218838;
+}
+
+.btn-ler {
+  background-color: #17a2b8;
+  color: white;
+}
+
+.btn-ler:hover:not(:disabled) {
+  background-color: #138496;
+}
+
+.btn-ler:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
 }
 
 .colaboradores-lista {
@@ -192,11 +243,11 @@
   opacity: 0;
 }
 
-/* Opcional: desabilita o botão durante o voo */
 .plane-fly {
   pointer-events: none;
   opacity: 0.8;
 }
+
 .overlay-close-btn {
   position: absolute;
   top: 5em;
@@ -211,7 +262,7 @@
   cursor: pointer;
   transition: 0.25s;
 }
-  
+
 .integrantes-list {
   max-height: 200px;
   padding-right: 4px;
@@ -300,55 +351,4 @@
 
 .menu-opcoes button:hover {
   background: #ffeaea;
-}
-
-/* src/components/Collab.css */
-
-.notificacao-item {
-  border-bottom: 1px solid #eee;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  transition: background-color 0.2s;
-}
-
-.notificacao-item.nao-lida {
-  background-color: #e8f4ff;
-  font-weight: bold;
-}
-
-.notificacao-item.lida {
-  background-color: #fff;
-  color: #666;
-}
-
-.btn-aceitar, .btn-ler {
-  padding: 4px 10px;
-  font-size: 14px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.btn-aceitar {
-  background-color: #28a745;
-  color: white;
-}
-
-.btn-aceitar:hover {
-  background-color: #218838;
-}
-
-.btn-ler {
-  background-color: #17a2b8;
-  color: white;
-}
-
-.btn-ler:hover:not(:disabled) {
-  background-color: #138496;
-}
-
-.btn-ler:disabled {
-  background-color: #ccc;
-  cursor: not-allowed;
 }
