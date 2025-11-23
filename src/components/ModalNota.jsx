@@ -7,6 +7,15 @@ import Task from "./Task";
 import Metas from "./Meta";
 import "./Cards.css";
 
+const TIPOS_NOTA = [
+  { key: "Atas", label: "Atas" },
+  { key: "Diário de Obra", label: "Diário de Obra" },
+  { key: "Lista", label: "Lista" },
+  { key: "Medição", label: "Medição" },
+  { key: "Metas", label: "Metas" },
+  { key: "Tarefas", label: "Tarefas" },
+];
+
 export default function ModalNota({
   showNovaNota,
   showEditarNota,
@@ -23,24 +32,34 @@ export default function ModalNota({
   notaSelecionada,
   project,
   usuarioAtual,
-  usuarioId, // ✅ Novo: UUID do usuário logado
+  usuarioId,
   notaProgresso,
-  setNotaProgresso
+  setNotaProgresso,
 }) {
   const handleProgressoChange = useCallback((progresso) => {
     if (notaSelecionada?.id) {
-      setNotaProgresso(prev => ({
+      setNotaProgresso((prev) => ({
         ...prev,
-        [notaSelecionada.id]: progresso
+        [notaSelecionada.id]: progresso,
       }));
     }
   }, [notaSelecionada?.id, setNotaProgresso]);
 
   const handleFieldChange = (field, value) => {
     if (showNovaNota) {
-      setFormData(prev => ({ ...prev, [field]: value }));
+      setFormData((prev) => ({ ...prev, [field]: value }));
     } else {
-      setNotaEditData(prev => ({ ...prev, [field]: value }));
+      setNotaEditData((prev) => ({ ...prev, [field]: value }));
+    }
+  };
+
+  // Função para formatar data de forma segura
+  const formatarData = (dateString) => {
+    if (!dateString) return "Nunca";
+    try {
+      return new Date(dateString).toLocaleString("pt-BR");
+    } catch {
+      return "Data inválida";
     }
   };
 
@@ -54,35 +73,37 @@ export default function ModalNota({
         {(showNovaNota || showEditarNota) && (
           <div className="nota-modal-container">
             <h2>{showNovaNota ? "Nova Nota" : "Editar Nota"}</h2>
-            <label>Nome</label>
+
+            <label>Nome da nota</label>
             <input
               value={showNovaNota ? formData.nome : notaEditData.nome}
               onChange={(e) => handleFieldChange("nome", e.target.value)}
             />
-            <label>Responsável</label>
-            <input
-              value={showNovaNota ? formData.responsavel : notaEditData.responsavel}
-              onChange={(e) => handleFieldChange("responsavel", e.target.value)}
-            />
+
             {showNovaNota && (
               <>
-                <label>Tipo</label>
-                <select
-                  value={formData.tipo}
-                  onChange={(e) => setFormData(prev => ({ ...prev, tipo: e.target.value }))}
-                >
-                  {["Lista", "Diário de Obra", "Atas", "Medição", "Tarefas", "Metas"].map((t) => (
-                    <option key={t} value={t}>{t}</option>
+                <label>Tipo de Nota</label>
+                <div className="tipo-nota-buttons">
+                  {TIPOS_NOTA.map(({ key, label }) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className={`tipo-btn ${formData.tipo === key ? "ativo" : ""}`}
+                      onClick={() => setFormData((prev) => ({ ...prev, tipo: key }))}
+                    >
+                      {label}
+                    </button>
                   ))}
-                </select>
+                </div>
               </>
             )}
+
             <div className="modal-actions">
               <button
                 className="btn-salvar"
                 onClick={showNovaNota ? handleSaveTask : saveEditedNota}
               >
-                Salvar
+                {showNovaNota ? "Criar" : "Salvar"}
               </button>
               <button
                 className="btn-cancelar"
@@ -111,13 +132,15 @@ export default function ModalNota({
                   <AtaCard
                     projetoAtual={project}
                     notaAtual={notaSelecionada}
-                    usuarioId={usuarioId}
                     onProgressoChange={handleProgressoChange}
+                    user={{ id: usuarioId }}
                     onClose={onCloseVisualizarNota}
                   />
                 );
               } else if (notaSelecionada.tipo === "Tarefas") {
-                const pilhaAtual = notaSelecionada.pilha_id ? { id: notaSelecionada.pilha_id } : null;
+                const pilhaAtual = notaSelecionada.pilha_id
+                  ? { id: notaSelecionada.pilha_id }
+                  : null;
                 return (
                   <Task
                     projetoAtual={project}
@@ -131,7 +154,9 @@ export default function ModalNota({
                 return (
                   <Metas
                     notaId={notaSelecionada.id}
-                    projectId={project?.type === "projeto" ? project.id : null}
+                    projectId={
+                      project?.type === "projeto" ? project.id : null
+                    }
                     usuarioId={usuarioId}
                   />
                 );

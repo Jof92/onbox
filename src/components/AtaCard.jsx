@@ -115,20 +115,59 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
 
       setParticipantes(participantesCarregados);
 
-      // Autor
+      // ✅ Autor: corrige para usar o nome do usuário logado como fallback
+      let nomeAutor = "Você";
+
       if (ata.redigido_por) {
-        let nomeAutor = "Usuário desconhecido";
-        const { data: perfil1 } = await supabase.from("profiles").select("nome").eq("id", ata.redigido_por).single();
+        // Busca pelo ID do profile
+        const { data: perfil1 } = await supabase
+          .from("profiles")
+          .select("nome")
+          .eq("id", ata.redigido_por)
+          .single();
+
         if (perfil1?.nome) {
           nomeAutor = perfil1.nome;
         } else {
-          const { data: perfil2 } = await supabase.from("profiles").select("nome").eq("user_id", ata.redigido_por).single();
-          nomeAutor = perfil2?.nome || "Usuário desconhecido";
+          // Tenta pelo user_id (fallback)
+          const { data: perfil2 } = await supabase
+            .from("profiles")
+            .select("nome")
+            .eq("user_id", ata.redigido_por)
+            .single();
+          if (perfil2?.nome) {
+            nomeAutor = perfil2.nome;
+          } else if (usuarioId) {
+            // ✅ Fallback: se não encontrar, usa o nome do usuário logado
+            const { data: meuPerfil } = await supabase
+              .from("profiles")
+              .select("nome")
+              .eq("id", usuarioId)
+              .single();
+            nomeAutor = meuPerfil?.nome || "Você";
+          } else {
+            nomeAutor = "Você";
+          }
         }
-        setAutorNome(nomeAutor);
-      } else {
-        setAutorNome("Autor não registrado");
+      } else if (usuarioId && !ataId) {
+        // ATA ainda não salva → usa o nome do usuário logado
+        const { data: meuPerfil } = await supabase
+          .from("profiles")
+          .select("nome")
+          .eq("id", usuarioId)
+          .single();
+        nomeAutor = meuPerfil?.nome || "Você";
+      } else if (usuarioId) {
+        // ATA existe mas redigido_por ausente ou inválido → usa login atual como fallback
+        const { data: meuPerfil } = await supabase
+          .from("profiles")
+          .select("nome")
+          .eq("id", usuarioId)
+          .single();
+        nomeAutor = meuPerfil?.nome || "Você";
       }
+
+      setAutorNome(nomeAutor);
 
       // Última alteração
       if (ata.alterado_por) {
@@ -160,7 +199,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
       console.error("Erro ao carregar ata:", err);
       setLoading(false);
     }
-  }, [notaAtual]);
+  }, [notaAtual, usuarioId]);
 
   useEffect(() => {
     fetchProjeto();
@@ -171,49 +210,79 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     if (projetoAtual?.id && notaAtual?.id) fetchAta();
   }, [projetoAtual?.id, notaAtual?.id, fetchAta]);
 
-  // 🔍 Buscar participantes com @
+  // 🔍 Buscar participantes com @ — inclui VOCÊ e membros do container
   const handleParticipanteChange = (e) => {
     const v = e.target.value;
     setParticipanteInput(v);
 
     if (v.startsWith("@") && v.length > 1 && usuarioId) {
       const termo = v.slice(1).toLowerCase();
-      const containerId = usuarioId;
 
-      supabase
+      // Buscar seu próprio perfil
+      const fetchMeuPerfil = supabase
+        .from("profiles")
+        .select("id, nickname, nome, funcao")
+        .eq("id", usuarioId)
+        .single();
+
+      // Buscar membros do container (convites aceitos)
+      const fetchConvites = supabase
         .from("convites")
         .select("user_id")
-        .eq("container_id", containerId)
-        .eq("status", "aceito")
-        .then(async ({ data: convites, error }) => {
-          if (error || !convites?.length) {
-            setSugestoesParticipantes([]);
-            return;
+        .eq("container_id", usuarioId)
+        .eq("status", "aceito");
+
+      Promise.all([fetchMeuPerfil, fetchConvites])
+        .then(async ([meuPerfilRes, convitesRes]) => {
+          const sugestoes = [];
+
+          // Adicionar seu próprio perfil se corresponder
+          if (meuPerfilRes.data) {
+            const eu = meuPerfilRes.data;
+            if (
+              (eu.nickname?.toLowerCase().includes(termo)) ||
+              (eu.nome?.toLowerCase().includes(termo))
+            ) {
+              sugestoes.push(eu);
+            }
           }
 
-          const userIds = convites.map(c => c.user_id);
-          const { data: profiles, error: profilesError } = await supabase
-            .from("profiles")
-            .select("id, nickname, nome, funcao")
-            .in("id", userIds);
+          // Adicionar outros membros do container
+          if (!convitesRes.error && convitesRes.data?.length > 0) {
+            const userIds = convitesRes.data
+              .map(c => c.user_id)
+              .filter(id => id && id !== usuarioId); // evita duplicar você
 
-          if (profilesError) {
-            console.error("Erro ao buscar profiles:", profilesError);
-            setSugestoesParticipantes([]);
-            return;
+            if (userIds.length > 0) {
+              const { data: profiles, error: profilesError } = await supabase
+                .from("profiles")
+                .select("id, nickname, nome, funcao")
+                .in("id", userIds);
+
+              if (!profilesError && profiles) {
+                const filtrados = profiles.filter(p =>
+                  (p.nickname?.toLowerCase().includes(termo)) ||
+                  (p.nome?.toLowerCase().includes(termo))
+                );
+                sugestoes.push(...filtrados);
+              }
+            }
           }
 
-          const filtrados = (profiles || [])
-            .filter(p =>
-              (p.nickname?.toLowerCase().includes(termo)) ||
-              (p.nome?.toLowerCase().includes(termo))
-            )
-            .slice(0, 10);
+          // Remover duplicatas por ID
+          const ids = new Set();
+          const unicos = [];
+          for (const p of sugestoes) {
+            if (!ids.has(p.id)) {
+              ids.add(p.id);
+              unicos.push(p);
+            }
+          }
 
-          setSugestoesParticipantes(filtrados);
+          setSugestoesParticipantes(unicos.slice(0, 10));
         })
         .catch(err => {
-          console.error("Erro na cadeia de busca:", err);
+          console.error("Erro ao buscar sugestões de participantes:", err);
           setSugestoesParticipantes([]);
         });
     } else {
@@ -357,7 +426,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
                 onDoubleClick={() => setEditing({ ...editing, [campo]: true })}
                 style={{ cursor: "pointer" }}
               >
-                {campo === "pauta" ? pauta || "Digite a pauta da reunião" : local || "Digite o local"}
+                {campo === "pauta" ? pauta || "Pauta da reunião" : local || "Local"}
               </span>
             )}
           </div>
@@ -368,7 +437,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
             type="text"
             value={participanteInput}
             onChange={handleParticipanteChange}
-            placeholder="Digite @nickname (membros do seu container) ou Nome (externo) + Enter"
+            placeholder="@nickname ou nome (externo) + enter"
             className="participante-input"
             onKeyDown={e => {
               if (e.key === "Enter") {

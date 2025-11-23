@@ -25,15 +25,13 @@ export default function Cards() {
   const [notaEditData, setNotaEditData] = useState({ id: null, nome: "", responsavel: "", pilhaId: null });
   const [notaSelecionada, setNotaSelecionada] = useState(null);
   const [usuarioAtual, setUsuarioAtual] = useState("Usuário Atual");
-  const [usuarioId, setUsuarioId] = useState(null); // ✅ UUID do usuário logado
+  const [usuarioId, setUsuarioId] = useState(null);
   const [notaProgresso, setNotaProgresso] = useState({});
   const [menuOpenNota, setMenuOpenNota] = useState(null);
   const [menuOpenPilha, setMenuOpenPilha] = useState(null);
 
-  // 👇 Armazena o containerId da pessoa dona do projeto/setor
   const [donoContainerId, setDonoContainerId] = useState(null);
 
-  // Carregar entidade + pilhas + usuário
   useEffect(() => {
     const loadInitialData = async () => {
       const { 
@@ -44,7 +42,6 @@ export default function Cards() {
         projectPhoto, 
         setorPhoto, 
         entityType: typeFromState,
-        // 👇 Recebe o containerId da pessoa dona
         containerId: containerIdFromState 
       } = location.state || {};
       
@@ -53,7 +50,6 @@ export default function Cards() {
       const entityPhoto = projectPhoto || setorPhoto;
       const type = typeFromState || (projectId ? "project" : "setor");
 
-      // 👇 Armazena o containerId da pessoa dona (se fornecido)
       if (containerIdFromState) {
         setDonoContainerId(containerIdFromState);
       }
@@ -68,12 +64,10 @@ export default function Cards() {
       setLoading(true);
 
       try {
-        // Carregar sessão para obter usuarioId
         const { data: { session } } = await supabase.auth.getSession();
         const currentUserId = session?.user?.id;
         setUsuarioId(currentUserId);
 
-        // Carregar nome do usuário
         if (currentUserId) {
           const { data: profile } = await supabase
             .from("profiles")
@@ -83,7 +77,6 @@ export default function Cards() {
           if (profile?.nome) setUsuarioAtual(profile.nome);
         }
 
-        // Carregar entidade
         let entityData = null;
         if (type === "project") {
           const { data } = await supabase.from("projects").select("*").eq("id", entityId).single();
@@ -95,21 +88,13 @@ export default function Cards() {
 
         if (!entityData) return navigate("/containers", { replace: true });
 
-        // Carregar pilhas com notas
-        let pilhasData = [];
-        const pilhaFilter = type === "project" 
-          ? { project_id: entityId } 
-          : { setor_id: entityId };
-
         const { data: pilhas } = await supabase
           .from("pilhas")
           .select("*, notas(id, nome, tipo, responsavel, progresso)")
           .eq(type === "project" ? "project_id" : "setor_id", entityId)
           .order("created_at");
 
-        pilhasData = pilhas || [];
-
-        // Inicializar progresso
+        const pilhasData = pilhas || [];
         const progressoInicial = {};
         pilhasData.forEach((pilha) => {
           pilha.notas.forEach((nota) => {
@@ -140,7 +125,6 @@ export default function Cards() {
     loadInitialData();
   }, [location.state, navigate]);
 
-  // --- Funções de pilha e nota (mantidas iguais) ---
   const handleAddColumn = async () => {
     if (!entity) return;
     const newPilhaData = { title: "Nova Pilha" };
@@ -182,31 +166,34 @@ export default function Cards() {
     }
   };
 
+  // ✅ CORRIGIDO: Não envia 'responsavel' na inserção (a menos que você tenha certeza que existe no banco)
   const handleSaveTask = async () => {
-    if (!formData.nome.trim() || !activeColumnId) return;
+    if (!formData.nome.trim() || !activeColumnId) {
+      console.warn("Dados inválidos para criar nota", { nome: formData.nome, pilha: activeColumnId });
+      return;
+    }
     try {
+      // ✅ Apenas os campos que sabemos que existem na tabela 'notas'
+      const { nome, tipo } = formData;
       const { data: newNota, error } = await supabase
         .from("notas")
-        .insert([{ ...formData, pilha_id: activeColumnId }])
+        .insert([{ nome, tipo, pilha_id: activeColumnId }])
         .select()
         .single();
+
       if (error) throw error;
 
       setColumns(prev =>
         prev.map(c => c.id === activeColumnId ? { ...c, notas: [newNota, ...c.notas] } : c)
       );
 
-      // Abrir automaticamente apenas se for um tipo com conteúdo (inclui "Metas")
       if (["Atas", "Tarefas", "Lista", "Metas"].includes(newNota.tipo)) {
         setNotaSelecionada(newNota);
       }
     } catch (err) {
-      console.error("Erro ao criar nota completo:", {
-        message: err.message,
-        details: err.details,
-        hint: err.hint,
-        code: err.code
-      });
+      // ✅ Log completo do erro para depuração
+      console.error("Erro ao criar nota:", err);
+      alert(`Erro ao criar nota: ${err.message || 'Erro desconhecido'}`);
     } finally {
       setFormData({ nome: "", responsavel: "", tipo: "Lista" });
       setActiveColumnId(null);
@@ -233,6 +220,7 @@ export default function Cards() {
   const saveEditedNota = async () => {
     const { id, nome, responsavel, pilhaId } = notaEditData;
     if (!nome.trim()) return alert("Digite o nome da nota!");
+    // ✅ Aqui, 'responsavel' é atualizado apenas se a coluna existir
     const { error } = await supabase.from("notas").update({ nome, responsavel }).eq("id", id);
     if (!error) {
       setColumns(prev =>
@@ -246,6 +234,9 @@ export default function Cards() {
         setNotaSelecionada(prev => ({ ...prev, nome, responsavel }));
       }
       setNotaEditData({ id: null, nome: "", responsavel: "", pilhaId: null });
+    } else {
+      console.error("Erro ao editar nota:", error);
+      alert("Erro ao salvar alterações.");
     }
   };
 
@@ -273,6 +264,7 @@ export default function Cards() {
       } catch (err) {
         console.error("Erro ao mover nota:", err);
         alert("Erro ao mover nota. Revertendo.");
+        // Reverter visualmente já está implícito
       }
     }
   }, [columns, notaSelecionada]);
@@ -282,12 +274,10 @@ export default function Cards() {
   return (
     <div className="cards-page">
       <header className="cards-header">
-        {/* 👇 Botão de voltar agora respeita o container da pessoa dona */}
         <button 
           className="btn-voltar" 
           onClick={() => {
             if (donoContainerId) {
-              // Vai para o container da pessoa dona do projeto/setor
               navigate("/containers", {
                 state: {
                   fromCards: true,
@@ -295,7 +285,6 @@ export default function Cards() {
                 }
               });
             } else {
-              // Fallback: volta para a lista de containers
               navigate("/containers");
             }
           }} 
@@ -443,7 +432,7 @@ export default function Cards() {
         notaSelecionada={notaSelecionada}
         project={{ ...entity, tipo: entity?.type === "project" ? "projeto" : "setor" }}
         usuarioAtual={usuarioAtual}
-        usuarioId={usuarioId} // ✅ Passando UUID
+        usuarioId={usuarioId}
         notaProgresso={notaProgresso}
         setNotaProgresso={setNotaProgresso}
       />

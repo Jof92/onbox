@@ -4,7 +4,7 @@ import { supabase } from "../supabaseClient";
 
 const VERBOS = [
   "verificar", "quantificar", "viabilizar", "cobrar", "fechar", "iniciar", "definir", "reduzir", "alcançar", "acompanhar", "implementar", "analisar",
-  "finalizar", "revisar", "enviar", "agendar", "checar", "executar", "conferir", "monitorar", "organizar", "planejar",
+  "finalizar", "revisar", "enviar", "agendar", "checar", "executar", "conferir", "monitorar", "organizar", "planejar", "informar",
   "solicitar", "providenciar", "designar", "repassar", "avaliar", "confirmar", "documentar", "registrar", "controlar",
   "inspecionar", "medir", "orçar", "nivelar", "concretar", "dimensionar", "instalar", "regularizar", "liberar", "aprovar",
   "adequar", "corrigir", "homologar", "cotar", "negociar", "comprar", "requisitar", "receber", "armazenar", "devolver",
@@ -307,7 +307,7 @@ export default function AtaObjetivos({
     }
   };
 
-  // ============= Funções de responsáveis =============
+  // ============= Funções de responsáveis (CORRIGIDAS) =============
 
   const handleResponsavelInputChange = (e, i) => {
     const valor = e.target.value;
@@ -317,25 +317,69 @@ export default function AtaObjetivos({
 
     if (valor.startsWith("@") && valor.length > 1 && usuarioId) {
       const termo = valor.slice(1).toLowerCase();
-      supabase
+
+      // Buscar seu próprio perfil
+      const fetchMeuPerfil = supabase
+        .from("profiles")
+        .select("id, nickname, nome, funcao")
+        .eq("id", usuarioId)
+        .single();
+
+      // Buscar membros do container (convites aceitos)
+      const fetchConvites = supabase
         .from("convites")
         .select("user_id")
         .eq("container_id", usuarioId)
-        .eq("status", "aceito")
-        .then(async ({ data: convites, error }) => {
-          if (error || !convites?.length) {
-            setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
-            return;
+        .eq("status", "aceito");
+
+      Promise.all([fetchMeuPerfil, fetchConvites])
+        .then(async ([meuPerfilRes, convitesRes]) => {
+          const sugestoes = [];
+
+          // Adicionar seu próprio perfil se corresponder
+          if (meuPerfilRes.data) {
+            const eu = meuPerfilRes.data;
+            if (
+              (eu.nickname?.toLowerCase().includes(termo)) ||
+              (eu.nome?.toLowerCase().includes(termo))
+            ) {
+              sugestoes.push(eu);
+            }
           }
-          const userIds = convites.map(c => c.user_id);
-          const { data: profiles } = await supabase
-            .from("profiles")
-            .select("id, nickname, nome, funcao")
-            .in("id", userIds);
-          const filtrados = (profiles || [])
-            .filter(p => (p.nickname?.toLowerCase().includes(termo)) || (p.nome?.toLowerCase().includes(termo)))
-            .slice(0, 10);
-          setSugestoesResponsavel(prev => ({ ...prev, [i]: filtrados }));
+
+          // Adicionar outros membros do container
+          if (!convitesRes.error && convitesRes.data?.length > 0) {
+            const userIds = convitesRes.data
+              .map(c => c.user_id)
+              .filter(id => id && id !== usuarioId); // evita duplicar você
+
+            if (userIds.length > 0) {
+              const { data: profiles, error: profilesError } = await supabase
+                .from("profiles")
+                .select("id, nickname, nome, funcao")
+                .in("id", userIds);
+
+              if (!profilesError && profiles) {
+                const filtrados = profiles.filter(p =>
+                  (p.nickname?.toLowerCase().includes(termo)) ||
+                  (p.nome?.toLowerCase().includes(termo))
+                );
+                sugestoes.push(...filtrados);
+              }
+            }
+          }
+
+          // Remover duplicatas por ID
+          const ids = new Set();
+          const unicos = [];
+          for (const p of sugestoes) {
+            if (!ids.has(p.id)) {
+              ids.add(p.id);
+              unicos.push(p);
+            }
+          }
+
+          setSugestoesResponsavel(prev => ({ ...prev, [i]: unicos.slice(0, 10) }));
         })
         .catch(() => setSugestoesResponsavel(prev => ({ ...prev, [i]: [] })));
     } else {

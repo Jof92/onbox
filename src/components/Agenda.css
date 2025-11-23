@@ -1,216 +1,411 @@
-/* 
-  Agenda.css - Estilo integrado ao seu design system (Collab + Ata Objetivos)
-  Cores: destaque #bf9010 (dourado), tons neutros, tipografia clara
-*/
-
+/* Overlay do modal */
 .agenda-modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
+  padding-top: 40px;
   z-index: 1000;
-  backdrop-filter: blur(2px);
-}
-
-.agenda-modal {
-  background: white;
-  border-radius: 14px;
-  width: 92%;
-  max-width: 720px;
-  max-height: 85vh;
   overflow-y: auto;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-  display: flex;
-  flex-direction: column;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  padding: 24px;
-  animation: slideDown 0.3s ease;
 }
 
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+/* Estilo do modal */
+.agenda-modal {
+  width: 100%;
+  max-width: 980px;
+  background: var(--card, #ffffff);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(15, 20, 25, 0.06);
+  margin: 0 auto;
+  overflow: hidden;
 }
 
+/* Cabeçalho do modal */
 .agenda-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 24px 28px 16px;
+  border-bottom: 1px solid #eee;
 }
 
 .agenda-header h2 {
+  font-size: 20px;
   margin: 0;
-  font-size: 1.35rem;
-  color: #2d3748;
   font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  color: #222;
 }
 
 .agenda-close-btn {
   background: none;
   border: none;
-  font-size: 26px;
+  font-size: 20px;
   cursor: pointer;
-  color: #555;
-  transition: color 0.2s;
-  width: 32px;
-  height: 32px;
+  color: #888;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
+  border-radius: 4px;
+  transition: background 0.2s;
 }
 
 .agenda-close-btn:hover {
-  color: #000;
-  background: #f8f9fa;
+  background: #f0f0f0;
+  color: #333;
 }
 
-/* === Estrutura: Mês → Dia → Nota → Itens === */
+/* Conteúdo principal */
+.agenda-content {
+  padding: 0 28px 28px;
+}
 
-.agenda-mes-titulo {
-  margin-top: 28px;
-  margin-bottom: 16px;
-  color: #2c5282;
-  font-size: 1.25rem;
+/* Estilos do layout de agenda (copiados e adaptados) */
+:root {
+  --accent: #00c48c;
+  --muted: #9aa0a6;
+  --danger: #d9534f;
+  --bg: #f6f7f8;
+  --card: #ffffff;
+  --line: #e2e6ea;
+}
+
+.container {
+  max-width: 980px;
+  margin: 0 auto;
+  background: var(--card);
+  padding: 0; /* Já há padding no .agenda-content */
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+.container header h1 {
+  font-size: 20px;
+  margin: 0 0 4px;
+  font-weight: 600;
+  color: #222;
+}
+
+.container .year {
+  color: var(--muted);
+  margin-bottom: 18px;
+  font-size: 14px;
+}
+
+/* Meses */
+.months {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+
+.month {
+  border: 1px solid #e5d9b3;
+  background: #fff;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03) inset;
+  font-weight: 600;
+  color: #555;
+  transition: all 0.2s;
+}
+
+.month:hover {
+  background: #f9f5e8;
+}
+
+.month.selected {
+  background: #f4e8c0;
+  border-color: #d7b94f;
+  color: #8a660d;
+}
+
+/* Dias e tarefas */
+.day {
+  margin-bottom: 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed var(--line);
+}
+
+.day-header > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.date {
   font-weight: 700;
-  text-transform: capitalize;
-  padding-bottom: 6px;
-  border-bottom: 2px solid #f0f0f0;
-}
-
-.agenda-dia-secao {
-  margin-bottom: 28px;
-}
-
-.agenda-dia-titulo {
-  margin: 18px 0 14px 0;
-  font-weight: 700;
-  color: #2d3748;
-  font-size: 1.1rem;
-  padding-left: 6px;
-  border-left: 3px solid #bf9010;
-  display: inline-block;
-}
-
-.agenda-nota-grupo {
-  margin-bottom: 20px;
-}
-
-.agenda-nota-cabecalho {
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: #2d3748;
+  font-size: 15px;
+  color: #222;
   margin-bottom: 4px;
-  line-height: 1.3;
 }
 
-.agenda-nota-detalhes {
-  font-size: 0.9rem;
-  color: #4a5568;
-  margin-bottom: 12px;
+.project {
+  font-weight: 700;
+  font-size: 14px;
+  color: #222;
 }
 
-.agenda-nota-detalhes span {
-  color: #718096;
-  font-size: 0.85rem;
+.project-sub {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
 }
 
-/* === Itens: objetivos ou comentários === */
-
-.agenda-item {
-  margin-bottom: 12px;
-}
-
-.agenda-item-linha {
+.task {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  width: 100%;
+  background: transparent;
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  position: relative;
 }
 
-.agenda-item-check {
-  margin-top: 4px;
-  transform: scale(1.15);
-  cursor: default;
+.task.completed {
+  background: rgba(0, 196, 140, 0.08);
 }
 
-.agenda-item-conteudo {
+.task .check {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 2px solid #ced4da;
+  background: #fff;
+  cursor: pointer;
+  flex: 0 0 20px;
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  color: #00c48c;
+}
+
+.task.completed .check {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.task .body {
   flex: 1;
-  font-size: 0.97rem;
-  color: #2d3748;
-  line-height: 1.45;
-  word-break: break-word;
   min-width: 0;
 }
 
-.agenda-item-conteudo.comentario {
-  font-style: italic;
-  color: #2f855a;
+.task .title {
+  font-size: 15px;
+  line-height: 1.4;
+  word-break: break-word;
 }
 
-.agenda-item-prazo {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  font-size: 0.875rem;
-  color: #718096;
-  min-width: 70px;
+.task .meta {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+.task .status {
+  min-width: 68px;
+  text-align: right;
+  font-weight: 700;
+  font-size: 13px;
   white-space: nowrap;
 }
 
-.dias-restantes {
-  font-weight: 600;
-  font-size: 0.85rem;
-  margin-top: 3px;
+.status.overdue {
+  color: var(--danger);
 }
 
-.dias-restantes.atrasado {
-  color: #e53e3e;
+.status.remaining,
+.status.today {
+  color: var(--accent);
 }
 
-.dias-restantes.hoje {
-  color: #dd6b20;
+/* Tarefas sem data */
+.no-date {
+  background: #bdbdbd;
+  color: #fff;
+  padding: 12px;
+  border-radius: 4px;
+  text-align: center;
+  font-weight: 700;
+  margin: 22px 0;
+  font-size: 14px;
 }
 
-.dias-restantes.futuro {
-  color: #10b981; /* verde consistente com seus botões */
+.small.info {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 12px;
+  line-height: 1.4;
 }
 
-/* === Estados === */
+/* Helpers */
+.small {
+  font-size: 12px;
+  color: var(--muted);
+}
 
+.pill {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid var(--line);
+  font-size: 12px;
+}
+
+/* Mensagens de loading/erro/vazio */
 .agenda-loading,
 .agenda-empty,
 .agenda-error {
+  padding: 20px 0;
   text-align: center;
-  padding: 32px 20px;
-  color: #718096;
-  font-size: 1.05rem;
-  line-height: 1.5;
+  color: #666;
 }
 
 .agenda-error {
-  color: #e53e3e;
-  background: #fff5f5;
-  border-radius: 10px;
-  margin: 0 -24px;
-  padding: 24px;
-  white-space: pre-wrap;
+  color: var(--danger);
+  text-align: left;
 }
 
+/* Campo de data vazio na seção "sem data" */
+.empty-date-input {
+  padding: 4px 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  background: #fafafa;
+  color: transparent; /* Esconde o placeholder "dd/mm/aaaa" */
+  text-shadow: 0 0 0 black; /* Hack para mostrar cursor */
+  cursor: pointer;
+  min-width: 140px;
+  font-size: 14px;
+}
+
+.empty-date-input::-webkit-calendar-picker-indicator {
+  display: block;
+  cursor: pointer;
+}
+
+/* Linha de edição */
+.date-edit-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.date-edit-row input[type="date"] {
+  padding: 4px 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 14px;
+  min-width: 140px;
+}
+
+.date-edit-row button {
+  padding: 4px 10px;
+  font-size: 13px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.date-edit-row button:first-child {
+  background: var(--accent);
+  color: white;
+}
+
+.date-edit-row button:last-child {
+  background: #f0f0f0;
+}
+
+/* Botão de toggle na barra "TAREFAS SEM DATA" */
+.no-date {
+  position: relative;
+  padding-right: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  margin: 22px 0;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.toggle-sem-data-btn {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  padding: 0;
+  margin: 0;
+  color: blanchedalmond;
+}
+
+.toggle-sem-data-btn:hover {
+  opacity: 0.8;
+}
+
+.fa-solid, .fa-eye{
+  color: #222;
+
+}
+
+/* Anos */
+.years {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+
+.year-btn {
+  border: 1px solid #e5d9b3;
+  background: #fff;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03) inset;
+  font-weight: 600;
+  color: #555;
+  transition: all 0.2s;
+}
+
+.year-btn:hover {
+  background: #f9f5e8;
+}
+
+.year-btn.selected {
+  background: #f4e8c0;
+  border-color: #d7b94f;
+  color: #8a660d;
+}
+
+.agenda-empty-month {
+  text-align: center;
+  padding: 24px 0;
+  color: #666;
+  font-style: italic;
+  font-size: 14px;
+}

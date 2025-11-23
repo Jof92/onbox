@@ -397,35 +397,31 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     };
   }, [notaAtual?.id, userId, userProfile]);
 
-const handleEnviarParaAgenda = async (comentarioId) => {
-  console.log("Tentando agendar comentário:", comentarioId, "para usuário:", userId);
-  if (!userId || !comentarioId) return;
+  const handleEnviarParaAgenda = async (comentarioId) => {
+    if (!userId || !comentarioId || typeof comentarioId !== 'string') return;
 
-  // ✅ Adicione .select() para ver o que foi realmente salvo
-  const { data, error } = await supabase
-    .from("comentarios")
-    .update({ agendado_por: userId })
-    .eq("id", comentarioId)
-    .select("id, agendado_por"); // ← FORÇA o retorno
+    const { data, error } = await supabase
+      .from("comentarios")
+      .update({ agendado_por: userId })
+      .eq("id", comentarioId)
+      .select("id, agendado_por");
 
-  if (error) {
-    console.error("❌ Erro Supabase:", error);
-    alert("Erro ao adicionar à agenda: " + error.message);
-  } else {
-    console.log("✅ Resposta do UPDATE com SELECT:", data);
-    if (data && data[0]?.agendado_por === userId) {
-      setComentarios(prev =>
-        prev.map(c =>
-          c.id === comentarioId ? { ...c, estaAgendadoPeloUsuario: true } : c
-        )
-      );
-      alert("Adicionado à agenda!");
+    if (error) {
+      console.error("❌ Erro ao adicionar à agenda:", error);
+      alert("Erro ao adicionar à agenda: " + (error.message || "tente novamente"));
     } else {
-      console.warn("⚠️ UPDATE não refletiu no banco. Possível problema de RLS ou trigger.");
-      alert("Falha silenciosa: não foi possível confirmar a atualização.");
+      if (data && data[0]?.agendado_por === userId) {
+        setComentarios(prev =>
+          prev.map(c =>
+            c.id === comentarioId ? { ...c, estaAgendadoPeloUsuario: true } : c
+          )
+        );
+        alert("Adicionado à agenda!");
+      } else {
+        alert("Não foi possível adicionar à agenda. Verifique permissões.");
+      }
     }
-  }
-};
+  };
 
   const handleSaveDescricao = async () => {
     if (!notaAtual?.id) return;
@@ -448,30 +444,33 @@ const handleEnviarParaAgenda = async (comentarioId) => {
     setComentando(true);
     try {
       const conteudoTrim = comentario.trim();
-      const agora = new Date().toISOString();
 
-      const { error: insertError } = await supabase
+      // ✅ INSERT + SELECT para obter o ID REAL
+      const { data: novoComentario, error: insertError } = await supabase
         .from("comentarios")
         .insert({
           nota_id: notaAtual.id,
           user_id: userId,
           conteudo: conteudoTrim,
-          created_at: agora,
-        });
+        })
+        .select('id, nota_id, user_id, conteudo, created_at, agendado_por')
+        .single();
 
-      if (insertError) {
-        throw insertError;
+      if (insertError || !novoComentario) {
+        throw new Error(insertError?.message || "Falha ao criar comentário");
       }
 
+      const { id, created_at } = novoComentario;
+
       const novoComentarioLocal = {
-        id: `temp-${Date.now()}`, // ✅ ID temporário único
+        id,
         nota_id: notaAtual.id,
         user_id: userId,
         conteudo: conteudoTrim,
-        created_at: agora,
+        created_at,
         agendado_por: null,
         profiles: userProfile || { nome: "Você", nickname: null, avatar_url: null },
-        formattedDate: formatarDataComentario(agora),
+        formattedDate: formatarDataComentario(created_at),
         isEditing: false,
         editValue: undefined,
         mencionaUsuarioLogado: mencionaUsuario(conteudoTrim, userProfile),
@@ -482,6 +481,7 @@ const handleEnviarParaAgenda = async (comentarioId) => {
       setComentario("");
       setSugestoesMencoes([]);
 
+      // Notificações de menção
       const mencionados = conteudoTrim.match(/@(\S+)/g);
       if (mencionados?.length > 0) {
         const nomesMencionados = mencionados.map((m) => m.slice(1));
@@ -503,7 +503,7 @@ const handleEnviarParaAgenda = async (comentarioId) => {
             nota_id: notaAtual.id,
             projeto_id: projetoAtual?.id || null,
             tipo: "menção",
-            mensagem: `${userProfile?.nickname || userProfile?.nome || "Você"} marcou você em um comentário na tarefa ${notaAtual.nome || notaAtual.name
+            mensagem: `${userProfile?.nickname || userProfile?.nome || "Você"} marcou você em um comentário na tarefa ${notaAtual?.nome || notaAtual?.name
               } do projeto ${projetoAtual?.nome || projetoAtual?.name || "Sem projeto"}`,
             lido: false,
           });
@@ -669,24 +669,23 @@ const handleEnviarParaAgenda = async (comentarioId) => {
       <div className="descricao-section">
         <h3>Descrição</h3>
         <textarea
-        className="descricao-editor-textarea"
-        value={descricao}
-        onChange={(e) => {
-          setDescricao(e.target.value);
-          // Ajusta a altura automaticamente
-          e.target.style.height = "auto";
-          e.target.style.height = e.target.scrollHeight + "px";
-        }}
-        onBlur={handleSaveDescricao}
-        placeholder="Clique aqui para adicionar uma descrição..."
-        rows={3}
-        style={{
-          minHeight: "3.25em", // ~3 linhas
-          height: "8em",
-          resize: "none", // opcional: impede redimensionamento manual
-        }}
-        disabled={loading}
-      />
+          className="descricao-editor-textarea"
+          value={descricao}
+          onChange={(e) => {
+            setDescricao(e.target.value);
+            e.target.style.height = "auto";
+            e.target.style.height = e.target.scrollHeight + "px";
+          }}
+          onBlur={handleSaveDescricao}
+          placeholder="Clique aqui para adicionar uma descrição..."
+          rows={3}
+          style={{
+            minHeight: "3.25em",
+            height: "8em",
+            resize: "none",
+          }}
+          disabled={loading}
+        />
       </div>
 
       <div className="anexos-section">
@@ -727,64 +726,68 @@ const handleEnviarParaAgenda = async (comentarioId) => {
 
       <div className="comentarios-section">
         <h3>Comentários e atividades</h3>
-        <textarea
-          ref={textareaRef}
-          placeholder="Escrever um comentário... (use @ para mencionar)"
-          value={comentario}
-          onChange={handleComentarioChange}
-          rows={3}
-          disabled={loading}
-        />
+        <div style={{ position: "relative" }}>
+          <textarea
+            ref={textareaRef}
+            placeholder="Escrever um comentário... (use @ para mencionar)"
+            value={comentario}
+            onChange={handleComentarioChange}
+            rows={3}
+            disabled={loading}
+          />
 
-        {sugestoesMencoes.length > 0 && (
-          <div
-            className="sugestoes-list"
-            style={{
-              position: "absolute",
-              zIndex: 10,
-              backgroundColor: "white",
-              border: "1px solid #ccc",
-              borderRadius: "4px",
-              marginTop: "4px",
-              width: "250px",
-            }}
-          >
-            {sugestoesMencoes.map((u) => {
-              const nomeExibicao = u.nickname || u.nome;
-              return (
-                <div
-                  key={u.id}
-                  onClick={() => inserirMencoes(u)}
-                  style={{
-                    padding: "8px",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
-                  {u.avatar_url ? (
-                    <img
-                      src={u.avatar_url}
-                      alt={nomeExibicao}
-                      style={{ width: "24px", height: "24px", borderRadius: "50%" }}
-                    />
-                  ) : (
-                    <FiUser style={{ width: "24px", height: "24px" }} />
-                  )}
-                  <span>{nomeExibicao}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
+          {sugestoesMencoes.length > 0 && (
+            <div
+              className="sugestoes-list"
+              style={{
+                position: "absolute",
+                zIndex: 10,
+                backgroundColor: "white",
+                border: "1px solid #ccc",
+                borderRadius: "4px",
+                marginTop: "4px",
+                width: "250px",
+                maxHeight: "200px",
+                overflowY: "auto",
+              }}
+            >
+              {sugestoesMencoes.map((u) => {
+                const nomeExibicao = u.nickname || u.nome;
+                return (
+                  <div
+                    key={u.id}
+                    onClick={() => inserirMencoes(u)}
+                    style={{
+                      padding: "8px",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                    }}
+                  >
+                    {u.avatar_url ? (
+                      <img
+                        src={u.avatar_url}
+                        alt={nomeExibicao}
+                        style={{ width: "24px", height: "24px", borderRadius: "50%" }}
+                      />
+                    ) : (
+                      <FiUser style={{ width: "24px", height: "24px" }} />
+                    )}
+                    <span>{nomeExibicao}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "8px" }}>
           <button
             type="button"
             className="coment-btn"
             onClick={handleAddComentario}
-            disabled={loading || !userId || comentando}
+            disabled={loading || !userId || comentando || !comentario.trim()}
           >
             Comentar
           </button>
@@ -819,46 +822,46 @@ const handleEnviarParaAgenda = async (comentarioId) => {
                   )}
                 </div>
                 <div className="comentario-conteudo">
-               <div className="comentario-header">
-                <div className="comentario-autor">
-                  <strong>{nomeExibicao}</strong>
-                </div>
-                <div className="comentario-meta" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span>{c.formattedDate}</span>
-                  <div style={{ display: "flex", gap: "6px" }}>
-                    {podeEnviarParaAgenda && (
-                      <button
-                        type="button"
-                        title="Adicionar à minha agenda"
-                        onClick={() => handleEnviarParaAgenda(c.id)}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          cursor: "pointer",
-                          color: "#1E88E5",
-                          fontSize: "16px",
-                        }}
-                        aria-label="Adicionar à agenda"
-                      >
-                        <FiCalendar />
-                      </button>
-                    )}
-                    {editavel && !c.isEditing && (
-                      <button
-                        type="button"
-                        className="comentario-menu-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setMenuAberto(menuAberto === c.id ? null : c.id);
-                        }}
-                        aria-label="Opções"
-                      >
-                        ⋮
-                      </button>
-                    )}
+                  <div className="comentario-header">
+                    <div className="comentario-autor">
+                      <strong>{nomeExibicao}</strong>
+                    </div>
+                    <div className="comentario-meta" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span>{c.formattedDate}</span>
+                      <div style={{ display: "flex", gap: "6px" }}>
+                        {podeEnviarParaAgenda && (
+                          <button
+                            type="button"
+                            title="Adicionar à minha agenda"
+                            onClick={() => handleEnviarParaAgenda(c.id)}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              cursor: "pointer",
+                              color: "#1E88E5",
+                              fontSize: "16px",
+                            }}
+                            aria-label="Adicionar à agenda"
+                          >
+                            <FiCalendar />
+                          </button>
+                        )}
+                        {editavel && !c.isEditing && (
+                          <button
+                            type="button"
+                            className="comentario-menu-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMenuAberto(menuAberto === c.id ? null : c.id);
+                            }}
+                            aria-label="Opções"
+                          >
+                            ⋮
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
 
                   {c.isEditing ? (
                     <div>
