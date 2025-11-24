@@ -1,21 +1,23 @@
 // src/components/ThinSidebar.jsx
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { FaCog, FaUserFriends, FaHome, FaCalendar } from "react-icons/fa";
+import { useNavigate } from "react-router-dom"; // ✅ Adicionado
 import "./ThinSidebar.css";
 import Collab from "./Collab";
 import ContainerSettings from "./ContainerSettings";
-import Agenda from "./Agenda"; // ✅ Importando o novo componente
+import Agenda from "./Agenda";
 import { supabase } from "../supabaseClient";
 
 export default function ThinSidebar({ containerAtual, setContainerAtual, user }) {
+  const navigate = useNavigate(); // ✅ Para atualizar a URL
+
   const [showCollab, setShowCollab] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showAgenda, setShowAgenda] = useState(false); // ✅ Novo estado
+  const [showAgenda, setShowAgenda] = useState(false);
   const [notificacoesNaoLidas, setNotificacoesNaoLidas] = useState(0);
   const [colaboradores, setColaboradores] = useState([]);
   const realtimeRef = useRef(null);
 
-  // ✅ Busca total de notificações não lidas (convites pendentes + menções não lidas)
   const fetchNotificacoesNaoLidas = useCallback(async () => {
     if (!user?.id || !user?.email) {
       setNotificacoesNaoLidas(0);
@@ -23,14 +25,12 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
     }
 
     try {
-      // Convites pendentes
       const { data: convitesPendentes } = await supabase
         .from("convites")
         .select("id", { count: "exact" })
         .eq("email", user.email)
         .eq("status", "pendente");
 
-      // Menções não lidas
       const { data: mencoesNaoLidas } = await supabase
         .from("notificacoes")
         .select("id", { count: "exact" })
@@ -72,14 +72,12 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
     }
   }, [user?.id, user?.email]);
 
-  // ✅ Configurar Realtime
   useEffect(() => {
     if (!user?.id || !user?.email) return;
 
     fetchNotificacoesNaoLidas();
     fetchColaboradores();
 
-    // Canal para convites (quando alguém te convida)
     const convitesChannel = supabase
       .channel("convites-pendentes")
       .on(
@@ -101,7 +99,6 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
           filter: `email=eq.${user.email}`
         },
         (payload) => {
-          // Atualiza se o status mudar (ex: aceito ou rejeitado)
           if (payload.new.status === "pendente" || payload.old?.status === "pendente") {
             fetchNotificacoesNaoLidas();
           }
@@ -109,7 +106,6 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
       )
       .subscribe();
 
-    // Canal para menções
     const mencaoChannel = supabase
       .channel("mencoes-nao-lidas")
       .on(
@@ -152,21 +148,25 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
     setShowCollab(true);
   };
 
+  // ✅ Atualizado: navega para /containers/ID e atualiza estado
   const handleTrocarContainer = (colaborador) => {
-    if (!colaborador?.remetente?.id) return;
-    setContainerAtual(colaborador.remetente.id);
+    const containerId = colaborador?.remetente?.id;
+    if (!containerId) return;
+    setContainerAtual(containerId);
+    navigate(`/containers/${containerId}`);
   };
 
+  // ✅ Atualizado: navega para seu próprio container
   const handleVoltarHome = () => {
-    if (user?.id) setContainerAtual(user.id);
+    if (user?.id) {
+      setContainerAtual(user.id);
+      navigate(`/containers/${user.id}`);
+    }
   };
 
-  // ✅ Função atualizada para abrir a agenda
   const handleOpenAgenda = () => {
     setShowAgenda(true);
   };
-
-  const meuContainerId = user?.id;
 
   return (
     <>
@@ -251,12 +251,11 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
       {showSettings && (
         <ContainerSettings
           onClose={() => setShowSettings(false)}
-          containerId={meuContainerId}
+          containerId={user?.id}
           user={user}
         />
       )}
 
-      {/* ✅ Modal da Agenda */}
       {showAgenda && (
         <Agenda
           user={user}

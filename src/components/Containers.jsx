@@ -1,6 +1,6 @@
 // src/pages/Containers.jsx
 import React, { useState, useEffect } from "react";
-import { useLocation } from "react-router-dom"; // 👈 Adicionado
+import { useParams, useNavigate } from "react-router-dom"; // ✅ useParams + useNavigate
 import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
 import ThinSidebar from "../components/ThinSidebar";
@@ -8,71 +8,68 @@ import ProjectManager from "./ProjectManager";
 import "./Containers.css";
 
 export default function Containers() {
-  const location = useLocation(); // 👈 Para acessar o state
+  const { containerId: containerIdDaUrl } = useParams(); // ✅ Pega da URL
+  const navigate = useNavigate();
 
   const [user, setUser] = useState(null);
   const [containerAtual, setContainerAtual] = useState(null);
   const [nomeContainer, setNomeContainer] = useState("");
   const [loading, setLoading] = useState(true);
 
+  // Carrega usuário logado
   useEffect(() => {
     const loadUser = async () => {
       const { data, error } = await supabase.auth.getUser();
       if (!error && data.user) {
         setUser(data.user);
+      } else {
+        navigate("/login", { replace: true });
       }
       setLoading(false);
     };
     loadUser();
-  }, []);
+  }, [navigate]);
 
-  // 👇 Define containerAtual com base no state OU no usuário logado
+  // Define containerAtual com base na URL ou no usuário
   useEffect(() => {
     if (user) {
-      // Se houver targetContainerId no state, use-o; senão, use o do usuário logado
-      const idParaUsar = location.state?.targetContainerId || user.id;
+      const idParaUsar = containerIdDaUrl || user.id;
       setContainerAtual(idParaUsar);
     }
-  }, [user, location.state?.targetContainerId]);
+  }, [user, containerIdDaUrl]);
 
-  // 👇 Busca o nome do container (agora pode ser de outra pessoa)
+  // Busca nome do dono do container (para exibição)
   useEffect(() => {
-    const fetchContainerNome = async () => {
+    const fetchNomeDono = async () => {
       if (!containerAtual) return;
 
       try {
         const { data, error } = await supabase
           .from("profiles")
-          .select("container")
+          .select("nome")
           .eq("id", containerAtual)
           .single();
 
-        if (error) {
+        if (error || !data) {
           setNomeContainer("Desconhecido");
-          return;
+        } else {
+          setNomeContainer(data.nome || "Sem nome");
         }
-        setNomeContainer(data.container || "Sem nome");
       } catch (err) {
         setNomeContainer("Erro");
       }
     };
 
-    fetchContainerNome();
+    fetchNomeDono();
   }, [containerAtual]);
 
   if (loading) return <Loading />;
-
-  if (!user) {
-    window.location.href = "/login";
-    return null;
-  }
 
   return (
     <div className="containers-page">
       <header className="containers-header">
         <h1 className="tittle-cont">
           Container {nomeContainer ? `- ${nomeContainer}` : ""}
-          {location.state?.targetContainerId && location.state.targetContainerId !== user.id }
         </h1>
       </header>
 
@@ -85,7 +82,7 @@ export default function Containers() {
 
         <ProjectManager
           containerAtual={containerAtual}
-          onProjectSelect={(proj) => {}}
+          onProjectSelect={() => {}}
           onProjectDeleted={() => {}}
         />
       </div>

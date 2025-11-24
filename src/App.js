@@ -15,6 +15,8 @@ export default function App() {
   const [profile, setProfile] = useState(null);
   const [projects, setProjects] = useState([]);
   const [showLoginPanel, setShowLoginPanel] = useState(false);
+  const [hasOverdueToday, setHasOverdueToday] = useState(false);
+  const [glowDismissed, setGlowDismissed] = useState(false); // Controle para descartar glow
 
   // === Monitorar sessão do usuário ===
   useEffect(() => {
@@ -35,7 +37,7 @@ export default function App() {
   }, []);
 
   // === Buscar perfil do usuário ===
-    useEffect(() => {
+  useEffect(() => {
     const fetchProfile = async () => {
       if (!session?.user) {
         setProfile(null);
@@ -56,14 +58,75 @@ export default function App() {
     fetchProfile();
   }, [session, session?.user?.id]);
 
-  // === Fechar painel de login com a tecla ESC ===
+  // === Verificar se há itens atrasados na agenda ===
+  useEffect(() => {
+    const checkOverdueItems = async () => {
+      if (!session?.user?.id) {
+        setHasOverdueToday(false);
+        return;
+      }
+
+      try {
+        const { data: responsaveis, error: err1 } = await supabase
+          .from("ata_objetivos_responsaveis_enriquecidos")
+          .select("ata_objetivo_id")
+          .eq("usuario_id", session.user.id);
+
+        if (err1) throw err1;
+
+        let objetivoIds = [];
+        if (responsaveis?.length) {
+          objetivoIds = responsaveis.map(r => r.ata_objetivo_id).filter(Boolean);
+        }
+
+        let allItems = [];
+
+        if (objetivoIds.length > 0) {
+          const { data: objetivos, error: err2 } = await supabase
+            .from("ata_objetivos")
+            .select("data_entrega, concluido")
+            .in("id", objetivoIds);
+          if (err2) throw err2;
+          allItems.push(...(objetivos || []));
+        }
+
+        const { data: comentarios, error: err3 } = await supabase
+          .from("comentarios")
+          .select("data_entrega")
+          .eq("agendado_por", session.user.id);
+        if (err3) console.warn("Erro ao buscar comentários:", err3);
+        if (comentarios?.length) {
+          allItems.push(...comentarios);
+        }
+
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+
+        const hasOverdue = allItems.some(item => {
+          if (!item.data_entrega || item.concluido) return false;
+          const [y, m, d] = item.data_entrega.split('-').map(Number);
+          const dataItem = new Date(y, m - 1, d);
+          dataItem.setHours(0, 0, 0, 0);
+          return dataItem < hoje;
+        });
+
+        setHasOverdueToday(hasOverdue);
+      } catch (err) {
+        console.error("Erro ao verificar agenda:", err);
+        setHasOverdueToday(false);
+      }
+    };
+
+    checkOverdueItems();
+  }, [session?.user?.id]);
+
+  // === Fechar painel de login com ESC ===
   useEffect(() => {
     const handleEsc = (event) => {
       if (event.key === "Escape" && showLoginPanel) {
         setShowLoginPanel(false);
       }
     };
-
     window.addEventListener("keydown", handleEsc);
     return () => window.removeEventListener("keydown", handleEsc);
   }, [showLoginPanel]);
@@ -76,6 +139,9 @@ export default function App() {
     setProfile(null);
   };
 
+  // Glow só aparece se não foi descartado
+  const showGlow = session && !glowDismissed;
+
   return (
     <Router>
       <div className="App">
@@ -84,10 +150,12 @@ export default function App() {
           profile={profile}
           onLoginClick={handleLoginClick}
           onLogout={handleLogout}
-          onProfileUpdate={setProfile} // 👈 Linha adicionada
+          onProfileUpdate={setProfile}
+          hasOverdueToday={hasOverdueToday}
+          showGlow={showGlow}
+          onGlowDismiss={() => setGlowDismissed(true)}
         />
 
-        {/* Painel de login suspenso */}
         {showLoginPanel && !session && (
           <div className="login-panel-container show">
             <LoginPanel onLogin={() => setShowLoginPanel(false)} />
@@ -96,7 +164,6 @@ export default function App() {
 
         <main className="app-main">
           <Routes>
-            {/* Home pública */}
             <Route
               path="/"
               element={
@@ -107,26 +174,16 @@ export default function App() {
                 )
               }
             />
-
-            {/* Páginas protegidas */}
             <Route
               path="/containers/:containerId?"
               element={
-                session ? (
-                  <Containers />
-                ) : (
-                  <Navigate to="/" replace />
-                )
+                session ? <Containers /> : <Navigate to="/" replace />
               }
             />
             <Route
               path="/cards/:projectName"
               element={
-                session ? (
-                  <Cards projects={projects} />
-                ) : (
-                  <Navigate to="/" replace />
-                )
+                session ? <Cards projects={projects} /> : <Navigate to="/" replace />
               }
             />
           </Routes>

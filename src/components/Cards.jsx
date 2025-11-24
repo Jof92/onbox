@@ -32,6 +32,15 @@ export default function Cards() {
 
   const [donoContainerId, setDonoContainerId] = useState(null);
 
+  // ✅ Função para atualizar a URL com o ID da nota
+  const updateUrlWithNota = (notaId) => {
+    if (notaId) {
+      navigate(`${location.pathname}?nota=${notaId}`, { replace: true });
+    } else {
+      navigate(location.pathname, { replace: true });
+    }
+  };
+
   useEffect(() => {
     const loadInitialData = async () => {
       const { 
@@ -55,8 +64,7 @@ export default function Cards() {
       }
 
       if (!entityId) {
-        alert("Projeto ou setor não encontrado.");
-        navigate(-1);
+        navigate("/containers", { replace: true });
         return;
       }
 
@@ -86,7 +94,10 @@ export default function Cards() {
           entityData = data;
         }
 
-        if (!entityData) return navigate("/containers", { replace: true });
+        if (!entityData) {
+          navigate("/containers", { replace: true });
+          return;
+        }
 
         const { data: pilhas } = await supabase
           .from("pilhas")
@@ -114,6 +125,7 @@ export default function Cards() {
         );
 
         setEntity({ id: entityId, name: entityName, photo_url: entityPhoto, type });
+
       } catch (err) {
         console.error("Erro ao carregar dados:", err);
         navigate("/containers", { replace: true });
@@ -124,6 +136,30 @@ export default function Cards() {
 
     loadInitialData();
   }, [location.state, navigate]);
+
+  // ✅ Verifica se há parâmetro "nota" na URL após carregar as colunas
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.search);
+    const notaId = urlParams.get('nota');
+    if (notaId && columns.length > 0) {
+      let notaEncontrada = null;
+      for (const col of columns) {
+        const nota = col.notas.find(n => String(n.id) === notaId);
+        if (nota) {
+          notaEncontrada = nota;
+          break;
+        }
+      }
+      if (notaEncontrada) {
+        setNotaSelecionada(notaEncontrada);
+        // Garante que a URL está correta (ex: caso tenha ID inválido)
+        updateUrlWithNota(notaId);
+      } else {
+        // ✅ Nota não existe → limpa a URL
+        navigate(location.pathname, { replace: true });
+      }
+    }
+  }, [columns, location.search, navigate]);
 
   const handleAddColumn = async () => {
     if (!entity) return;
@@ -166,14 +202,12 @@ export default function Cards() {
     }
   };
 
-  // ✅ CORRIGIDO: Não envia 'responsavel' na inserção (a menos que você tenha certeza que existe no banco)
   const handleSaveTask = async () => {
     if (!formData.nome.trim() || !activeColumnId) {
       console.warn("Dados inválidos para criar nota", { nome: formData.nome, pilha: activeColumnId });
       return;
     }
     try {
-      // ✅ Apenas os campos que sabemos que existem na tabela 'notas'
       const { nome, tipo } = formData;
       const { data: newNota, error } = await supabase
         .from("notas")
@@ -189,9 +223,9 @@ export default function Cards() {
 
       if (["Atas", "Tarefas", "Lista", "Metas"].includes(newNota.tipo)) {
         setNotaSelecionada(newNota);
+        updateUrlWithNota(newNota.id);
       }
     } catch (err) {
-      // ✅ Log completo do erro para depuração
       console.error("Erro ao criar nota:", err);
       alert(`Erro ao criar nota: ${err.message || 'Erro desconhecido'}`);
     } finally {
@@ -209,7 +243,10 @@ export default function Cards() {
       );
       setMenuOpenNota(null);
       setNotaProgresso(p => { const cp = { ...p }; delete cp[notaId]; return cp; });
-      if (notaSelecionada?.id === notaId) setNotaSelecionada(null);
+      if (notaSelecionada?.id === notaId) {
+        setNotaSelecionada(null);
+        updateUrlWithNota(null);
+      }
     }
   };
 
@@ -220,7 +257,6 @@ export default function Cards() {
   const saveEditedNota = async () => {
     const { id, nome, responsavel, pilhaId } = notaEditData;
     if (!nome.trim()) return alert("Digite o nome da nota!");
-    // ✅ Aqui, 'responsavel' é atualizado apenas se a coluna existir
     const { error } = await supabase.from("notas").update({ nome, responsavel }).eq("id", id);
     if (!error) {
       setColumns(prev =>
@@ -264,10 +300,19 @@ export default function Cards() {
       } catch (err) {
         console.error("Erro ao mover nota:", err);
         alert("Erro ao mover nota. Revertendo.");
-        // Reverter visualmente já está implícito
       }
     }
   }, [columns, notaSelecionada]);
+
+  const handleOpenNota = (nota) => {
+    setNotaSelecionada(nota);
+    updateUrlWithNota(nota.id);
+  };
+
+  const handleCloseNota = () => {
+    setNotaSelecionada(null);
+    updateUrlWithNota(null);
+  };
 
   if (loading) return <Loading />;
 
@@ -277,13 +322,9 @@ export default function Cards() {
         <button 
           className="btn-voltar" 
           onClick={() => {
+            // ✅ Correção principal: navegar diretamente para a URL do container correto
             if (donoContainerId) {
-              navigate("/containers", {
-                state: {
-                  fromCards: true,
-                  targetContainerId: donoContainerId
-                }
-              });
+              navigate(`/containers/${donoContainerId}`);
             } else {
               navigate("/containers");
             }
@@ -374,7 +415,7 @@ export default function Cards() {
                             {...prov.draggableProps}
                             {...prov.dragHandleProps}
                             style={{ ...prov.draggableProps.style, userSelect: "none" }}
-                            onClick={() => setNotaSelecionada(nota)}
+                            onClick={() => handleOpenNota(nota)}
                           >
                             <div className="card-info">
                               <div className="card-title-wrapper"><strong>{nota.nome}</strong></div>
@@ -422,7 +463,7 @@ export default function Cards() {
         showVisualizarNota={!!notaSelecionada}
         onCloseNovaNota={() => setActiveColumnId(null)}
         onCloseEditarNota={() => setNotaEditData({ id: null, nome: "", responsavel: "", pilhaId: null })}
-        onCloseVisualizarNota={() => setNotaSelecionada(null)}
+        onCloseVisualizarNota={handleCloseNota}
         formData={formData}
         setFormData={setFormData}
         handleSaveTask={handleSaveTask}

@@ -390,6 +390,7 @@
   font-weight: 600;
   color: #555;
   transition: all 0.2s;
+  margin-top: 10px;
 }
 
 .year-btn:hover {

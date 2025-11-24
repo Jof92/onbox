@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Header.css";
-import "./loader.css"; // ✅ Importa o loader
+import "./loader.css";
 import { supabase } from "../supabaseClient";
 import ob2 from "../assets/ob2.png";
 import { FaSignOutAlt, FaUserCircle, FaUserEdit } from "react-icons/fa";
@@ -13,6 +13,9 @@ export default function Header({
   session,
   profile: externalProfile,
   onProfileUpdate,
+  hasOverdueToday = false,
+  showGlow = true,
+  onGlowDismiss,
 }) {
   const navigate = useNavigate();
 
@@ -34,7 +37,6 @@ export default function Header({
   const menuRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // 🔹 Atualiza dados quando o perfil externo muda
   useEffect(() => {
     if (externalProfile) {
       setFormData({
@@ -49,7 +51,6 @@ export default function Header({
     }
   }, [externalProfile]);
 
-  // 🔹 Busca avatar diretamente do Supabase se houver sessão
   useEffect(() => {
     const fetchAvatar = async () => {
       if (!session?.user) return;
@@ -66,7 +67,6 @@ export default function Header({
     fetchAvatar();
   }, [session]);
 
-  // 🔹 Detecta clique fora do menu
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (!menuRef.current?.contains(e.target)) setShowMenu(false);
@@ -78,7 +78,6 @@ export default function Header({
     };
   }, [tempPreview]);
 
-  // 🔹 Upload do avatar para o Supabase
   const uploadAvatar = async (file) => {
     if (!file || !session?.user) return null;
     const ext = file.name.split(".").pop();
@@ -95,7 +94,6 @@ export default function Header({
     return data.publicUrl;
   };
 
-  // 🔹 Atualiza avatar (modal ou menu)
   const handleAvatarSelect = async (file, isFromModal = false) => {
     if (!file) return;
     if (isFromModal) {
@@ -141,14 +139,12 @@ export default function Header({
     if (file) handleAvatarSelect(file, isFromModal);
   };
 
-  // 🔹 Logout
   const handleLogout = async () => {
     await supabase.auth.signOut();
     onLogout?.();
     navigate("/");
   };
 
-  // 🔹 Salvar alterações no perfil
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!session?.user)
@@ -176,11 +172,29 @@ export default function Header({
     : avatarUrl
       ? `${avatarUrl}?v=${Date.now()}`
       : null;
+
   const perfilIncompleto =
     !externalProfile?.nome ||
     !externalProfile?.empresa ||
     !externalProfile?.funcao ||
     !externalProfile?.container;
+
+  // Determinar classe do wrapper com base no glow ativo
+  const avatarWrapperClass = `header-avatar-wrapper ${
+    showGlow
+      ? hasOverdueToday
+        ? 'overdue-glow'
+        : 'on-time-glow'
+      : ''
+  }`;
+
+  // Ao clicar no avatar, abre o menu e descarta o glow (se aplicável)
+  const handleAvatarClick = () => {
+    setShowMenu(prev => !prev);
+    if (showGlow && onGlowDismiss) {
+      onGlowDismiss();
+    }
+  };
 
   return (
     <>
@@ -193,8 +207,8 @@ export default function Header({
           {session ? (
             <div className="header-user-info" ref={menuRef}>
               <div
-                className="header-avatar-wrapper"
-                onClick={() => setShowMenu(!showMenu)}
+                className={avatarWrapperClass}
+                onClick={handleAvatarClick}
               >
                 {currentAvatar ? (
                   <img

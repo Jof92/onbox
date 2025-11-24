@@ -13,7 +13,7 @@ const Agenda = ({ user, onClose }) => {
   const [editingItemId, setEditingItemId] = useState(null);
   const [editingItemType, setEditingItemType] = useState(null);
   const [editingDate, setEditingDate] = useState('');
-  const [hideSemData, setHideSemData] = useState(false);
+  const [hideSemData, setHideSemData] = useState(true); // ✅ Começa oculto
 
   const fetchData = useCallback(async () => {
     if (!user?.id) {
@@ -51,24 +51,42 @@ const Agenda = ({ user, onClose }) => {
             let atasMap = {};
             const projetoIds = new Set();
             const pilhaIds = new Set();
+            const notaIds = new Set(); // ✅ Coletar IDs das notas
 
             if (ataIds.length > 0) {
+              // ✅ Buscar campos corretos: nota_id, pilha_id, projeto_id, setor_id
               const { data: atas, error: err3 } = await supabase
                 .from("atas")
-                .select("id, pilha, nota, projeto_id")
+                .select("id, nota_id, pilha_id, projeto_id, setor_id")
                 .in("id", ataIds);
 
               if (err3) throw err3;
               if (Array.isArray(atas)) {
                 atas.forEach(ata => {
                   atasMap[ata.id] = {
-                    nota: ata.nota || "Sem nota",
-                    pilha_id: ata.pilha,
+                    nota_id: ata.nota_id, // ✅ ID obrigatório
+                    pilha_id: ata.pilha_id,
                     projeto_id: ata.projeto_id,
+                    setor_id: ata.setor_id,
                   };
-                  if (ata.pilha) pilhaIds.add(ata.pilha);
+                  if (ata.nota_id) notaIds.add(ata.nota_id);
+                  if (ata.pilha_id) pilhaIds.add(ata.pilha_id);
                   if (ata.projeto_id) projetoIds.add(ata.projeto_id);
                 });
+              }
+            }
+
+            // ✅ Buscar nomes das notas
+            let notasMap = {};
+            if (notaIds.size > 0) {
+              const { data: notas, error: errNotas } = await supabase
+                .from("notas")
+                .select("id, nome")
+                .in("id", Array.from(notaIds));
+              if (!errNotas && Array.isArray(notas)) {
+                notasMap = Object.fromEntries(
+                  notas.map(n => [n.id, n.nome || "Nota sem título"])
+                );
               }
             }
 
@@ -121,10 +139,11 @@ const Agenda = ({ user, onClose }) => {
               const ata = atasMap[obj.ata_id] || {};
               const projeto = ata.projeto_id ? projetosMap[ata.projeto_id] : null;
               const dono = projeto?.user_id ? donosMap[projeto.user_id] : null;
+              const nomeNota = ata.nota_id ? (notasMap[ata.nota_id] || "Nota não encontrada") : "Nota não associada";
 
               return {
                 ...obj,
-                nomeNota: ata.nota,
+                nomeNota,
                 nomePilha: ata.pilha_id ? pilhasMap[ata.pilha_id] || "Pilha não encontrada" : "–",
                 nomeProjeto: projeto ? projeto.nome : "–",
                 nomeDono: dono ? dono.nomeDono : "Sem dono",
@@ -253,6 +272,30 @@ const Agenda = ({ user, onClose }) => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // =============== Escutar exclusões em tempo real ===============
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channelObjetivos = supabase
+      .channel('agenda-objetivos-delete')
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'ata_objetivos' }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    const channelComentarios = supabase
+      .channel('agenda-comentarios-delete')
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'comentarios' }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channelObjetivos);
+      supabase.removeChannel(channelComentarios);
+    };
+  }, [user?.id, fetchData]);
 
   // =============== Funções auxiliares ===============
   const getMonthNameShort = (monthIndex) => {
@@ -407,7 +450,7 @@ const Agenda = ({ user, onClose }) => {
       <div className="agenda-modal-overlay" onClick={onClose}>
         <div className="agenda-modal" onClick={e => e.stopPropagation()}>
           <div className="agenda-header">
-            <h2>📅 Minha Agenda</h2>
+            <h2>Minha Agenda</h2>
             <button className="agenda-close-btn" onClick={onClose}>✕</button>
           </div>
           <div className="agenda-content">
@@ -422,7 +465,7 @@ const Agenda = ({ user, onClose }) => {
     <div className="agenda-modal-overlay" onClick={onClose}>
       <div className="agenda-modal" onClick={e => e.stopPropagation()}>
         <div className="agenda-header">
-          <h2>📅 Minha Agenda</h2>
+          <h2>Minha Agenda</h2>
           <button className="agenda-close-btn" onClick={onClose}>✕</button>
         </div>
 
@@ -432,10 +475,6 @@ const Agenda = ({ user, onClose }) => {
 
           {!loading && !error && (
             <div className="container">
-              <header>
-                <h1>Minha agenda</h1>
-              </header>
-
               {/* Botões de ano */}
               {anosComItens.length > 0 && (
                 <div className="years">
@@ -534,7 +573,7 @@ const Agenda = ({ user, onClose }) => {
                       color: hideSemData ? '#fff' : '#222',
                     }}
                   >
-                    TAREFAS SEM DATA
+                    TAREFAS SEM DATA ({itensSemData.length})
                     <button
                       className="toggle-sem-data-btn"
                       onClick={() => setHideSemData(!hideSemData)}
