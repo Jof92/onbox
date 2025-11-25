@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { supabase } from "../supabaseClient";
 import "./Agenda.css";
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 
 const Agenda = ({ user, onClose }) => {
   const [objetivosCompletos, setObjetivosCompletos] = useState(null);
@@ -470,7 +471,16 @@ const Agenda = ({ user, onClose }) => {
         </div>
 
         <div className="agenda-content">
-          {loading && <p className="agenda-loading">Carregando...</p>}
+          {loading && (
+            <div className="agenda-loading-animation">
+              <DotLottieReact
+                src="https://lottie.host/9780c0a4-579c-4cdb-a974-4205aa670757/qDN0lkVs2V.lottie"
+                loop
+                autoplay
+                style={{ width: '120px', height: '120px', justifyContent: "center" }}
+              />
+            </div>
+          )}
           {error && <div className="agenda-error"><strong>Erro:</strong> {error.message}</div>}
 
           {!loading && !error && (

@@ -587,13 +587,27 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     }
   };
 
+  // ✅ Função handleAddAnexos CORRIGIDA (única alteração no arquivo)
   const handleAddAnexos = async (e) => {
     const files = Array.from(e.target.files || []);
     if (!notaAtual?.id || !userId || files.length === 0) return;
     setLoading(true);
     try {
       for (const file of files) {
-        const fileName = `anexos/${notaAtual.id}_${Date.now()}_${file.name}`;
+        // Sanitiza o nome do arquivo para evitar "Invalid key"
+        const sanitizeFileName = (name) => {
+          return name
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-zA-Z0-9._-]/g, '_')
+            .replace(/_+/g, '_')
+            .trim()
+            .replace(/^_+|_+$/g, '');
+        };
+
+        const originalName = file.name;
+        const safeName = sanitizeFileName(originalName);
+        const fileName = `anexos/${notaAtual.id}_${Date.now()}_${safeName}`;
         const { error: uploadError } = await supabase.storage.from("anexos").upload(fileName, file);
         if (uploadError) throw uploadError;
         const { data } = supabase.storage.from("anexos").getPublicUrl(fileName);
@@ -603,7 +617,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
           .insert({
             nota_id: notaAtual.id,
             user_id: userId,
-            file_name: file.name,
+            file_name: originalName, // Mantém o nome original para exibição
             file_url: fileUrl,
           })
           .select()

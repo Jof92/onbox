@@ -410,3 +410,8 @@
   font-style: italic;
   font-size: 14px;
 }
+.agenda-loading-animation {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
