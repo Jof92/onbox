@@ -2,57 +2,55 @@
 import React, { useState, useEffect, useCallback } from "react";
 import "./Collab.css";
 import "./loader.css";
-import { FaPaperPlane, FaUserPlus, FaEllipsisV, FaBell } from "react-icons/fa";
+import { FaPaperPlane, FaUserPlus, FaEllipsisV, FaBell, FaArchive } from "react-icons/fa";
 import { supabase } from "../supabaseClient";
 
 export default function Collab({ onClose, user, onOpenTask }) {
   const [emailConvite, setEmailConvite] = useState("");
-  const [notificacoes, setNotificacoes] = useState([]);
+  const [convitesRecebidos, setConvitesRecebidos] = useState([]);
+  const [mencoes, setMencoes] = useState([]);
   const [integrantes, setIntegrantes] = useState([]);
   const [enviando, setEnviando] = useState(false);
   const [menuAberto, setMenuAberto] = useState(null);
   const [removendo, setRemovendo] = useState(null);
   const [loadingNotificacoes, setLoadingNotificacoes] = useState(true);
   const [loadingIntegrantes, setLoadingIntegrantes] = useState(true);
-  const [activeTab, setActiveTab] = useState("notificacoes"); // "notificacoes" | "convites"
+  const [activeTab, setActiveTab] = useState("convites-recebidos");
 
-  // 🔔 Buscar notificações
+  // 🔔 Buscar convites recebidos e menções separadamente
   const fetchNotificacoes = useCallback(async () => {
     if (!user?.id || !user?.email) {
-      setNotificacoes([]);
+      setConvitesRecebidos([]);
+      setMencoes([]);
       setLoadingNotificacoes(false);
       return;
     }
 
     setLoadingNotificacoes(true);
     try {
-      const allNotificacoes = [];
-
-      // Convites (pendentes + aceitos)
+      // === Convites recebidos ===
       const { data: convites, error: convitesError } = await supabase
         .from("convites")
         .select("*")
         .eq("email", user.email)
         .in("status", ["pendente", "aceito"]);
 
-      if (convitesError) {
-        console.error("Erro ao buscar convites:", convitesError);
-      } else if (convites?.length) {
-        const convitesComPerfil = await Promise.all(
+      let convitesFormatados = [];
+      if (!convitesError && convites?.length) {
+        convitesFormatados = await Promise.all(
           convites.map(async (c) => {
             const { data: remetente } = await supabase
               .from("profiles")
               .select("id, nome, email, avatar_url")
               .eq("id", c.remetente_id)
               .maybeSingle();
-            return { ...c, remetente, tipo: "convite" };
+            return { ...c, remetente };
           })
         );
-        allNotificacoes.push(...convitesComPerfil);
       }
 
-      // Menções
-      const { data: mencoes, error: mencaoError } = await supabase
+      // === Menções ===
+      const { data: notificacoesMencoes, error: mencaoError } = await supabase
         .from("notificacoes")
         .select(`
           id,
@@ -70,21 +68,20 @@ export default function Collab({ onClose, user, onOpenTask }) {
         `)
         .eq("user_id", user.id);
 
-      if (mencaoError) {
-        console.error("Erro ao buscar menções:", mencaoError);
-      } else if (mencoes?.length) {
-        const mencoesFormatadas = mencoes.map((m) => ({
+      let mencoesFormatadas = [];
+      if (!mencaoError && notificacoesMencoes?.length) {
+        mencoesFormatadas = notificacoesMencoes.map((m) => ({
           ...m,
           tipo: m.tipo || "menção",
         }));
-        allNotificacoes.push(...mencoesFormatadas);
       }
 
-      allNotificacoes.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-      setNotificacoes(allNotificacoes);
+      setConvitesRecebidos(convitesFormatados);
+      setMencoes(mencoesFormatadas);
     } catch (err) {
       console.error("Erro geral ao buscar notificações:", err);
-      setNotificacoes([]);
+      setConvitesRecebidos([]);
+      setMencoes([]);
     } finally {
       setLoadingNotificacoes(false);
     }
@@ -212,7 +209,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
     }
   };
 
-  // 🔗 LER MENÇÃO
+  // 🔗 ABRIR MENÇÃO
   const lerMensagemMencoes = async (notificacao) => {
     if (notificacao.lido) return;
 
@@ -260,6 +257,13 @@ export default function Collab({ onClose, user, onOpenTask }) {
           <h2>Colaborações</h2>
           <div className="collab-tabs">
             <button
+              className={`tab-btn ${activeTab === "convites-recebidos" ? "active" : ""}`}
+              onClick={() => setActiveTab("convites-recebidos")}
+              aria-label="Convites recebidos"
+            >
+              <FaArchive className="icon" /> {/* ✅ Ícone válido no react-icons */}
+            </button>
+            <button
               className={`tab-btn ${activeTab === "notificacoes" ? "active" : ""}`}
               onClick={() => setActiveTab("notificacoes")}
               aria-label="Notificações"
@@ -267,90 +271,96 @@ export default function Collab({ onClose, user, onOpenTask }) {
               <FaBell className="icon" />
             </button>
             <button
-              className={`tab-btn ${activeTab === "convites" ? "active" : ""}`}
-              onClick={() => setActiveTab("convites")}
-              aria-label="Convidar"
+              className={`tab-btn ${activeTab === "enviar" ? "active" : ""}`}
+              onClick={() => setActiveTab("enviar")}
+              aria-label="Enviar convite"
             >
               <FaUserPlus className="icon" />
             </button>
           </div>
         </div>
 
-        {activeTab === "notificacoes" && (
+        {/* Aba: Convites Recebidos — com avatar do remetente antes do nome */}
+        {activeTab === "convites-recebidos" && (
           <div className="collab-section">
-            <h3>Notificações</h3>
+            <h3>Convites Recebidos</h3>
             {loadingNotificacoes ? (
               <div className="loader-container">
                 <div className="loader"></div>
               </div>
-            ) : notificacoes.length === 0 ? (
-              <p className="empty">Nenhuma notificação no momento.</p>
+            ) : convitesRecebidos.length === 0 ? (
+              <p className="empty">Nenhum convite recebido.</p>
             ) : (
-              <>
-                {notificacoes.map((n, index) => {
-                  const isConvite = n.hasOwnProperty('email') && n.hasOwnProperty('status');
-                  const isMencao = n.hasOwnProperty('mensagem') && (n.tipo === 'menção' || !n.email);
-                  const tipo = isConvite ? 'convite' : isMencao ? 'menção' : 'desconhecido';
-                  const isLido = tipo === 'menção' ? n.lido : tipo === 'convite' ? n.status === 'aceito' : true;
-
-                  let content = null;
-
-                  if (tipo === 'convite') {
-                    const remetenteNome = n.remetente?.nome || n.remetente_id?.substring(0, 8) || 'Alguém';
-                    content = (
-                      <>
-                        <span>
-                          <strong>{remetenteNome}</strong> te convidou
-                          {n.status === 'aceito' && ' (aceito)'}
-                        </span>
-                        {n.status === 'pendente' && (
-                          <button className="btn-aceitar" onClick={() => aceitarConvite(n)}>
-                            Aceitar
-                          </button>
-                        )}
-                      </>
-                    );
-                  } else if (tipo === 'menção') {
-                    content = (
-                      <>
-                        <span>{n.mensagem || 'Você foi mencionado em uma tarefa.'}</span>
-                        <button
-                          className="btn-ler"
-                          onClick={() => lerMensagemMencoes(n)}
-                          disabled={n.lido}
-                        >
-                          {n.lido ? 'Aberto' : 'Abrir'}
-                        </button>
-                      </>
-                    );
-                  } else {
-                    content = (
-                      <span style={{ color: '#d9534f' }}>
-                        <em>Notificação inválida</em>
-                      </span>
-                    );
-                  }
-
-                  return (
-                    <div
-                      key={n.id || `fallback-${index}`}
-                      className={`notificacao-item ${isLido ? 'lida' : 'nao-lida'}`}
-                    >
-                      {content}
-                    </div>
-                  );
-                })}
-              </>
+              convitesRecebidos.map((convite) => (
+                <div
+                  key={convite.id}
+                  className={`notificacao-item ${convite.status === "aceito" ? "lida" : "nao-lida"}`}
+                >
+                  <div className="convite-remetente-info">
+                    {convite.remetente?.avatar_url ? (
+                      <img
+                        src={convite.remetente.avatar_url}
+                        alt={convite.remetente.nome || "Remetente"}
+                        className="remetente-avatar"
+                      />
+                    ) : (
+                      <div className="remetente-avatar placeholder">
+                        {convite.remetente?.nome
+                          ? convite.remetente.nome.charAt(0).toUpperCase()
+                          : "?"}
+                      </div>
+                    )}
+                    <span>
+                      <strong>{convite.remetente?.nome || "Alguém"}</strong> te convidou
+                      {convite.status === "aceito" && " (aceito)"}
+                    </span>
+                  </div>
+                  {convite.status === "pendente" && (
+                    <button className="btn-aceitar" onClick={() => aceitarConvite(convite)}>
+                      Aceitar
+                    </button>
+                  )}
+                </div>
+              ))
             )}
           </div>
         )}
 
-        {activeTab === "convites" && (
+        {/* Aba: Notificações (Menções) */}
+        {activeTab === "notificacoes" && (
+          <div className="collab-section">
+            <h3>Menções</h3>
+            {loadingNotificacoes ? (
+              <div className="loader-container">
+                <div className="loader"></div>
+              </div>
+            ) : mencoes.length === 0 ? (
+              <p className="empty">Nenhuma menção no momento.</p>
+            ) : (
+              mencoes.map((n) => (
+                <div
+                  key={n.id}
+                  className={`notificacao-item ${n.lido ? "lida" : "nao-lida"}`}
+                >
+                  <span>{n.mensagem || "Você foi mencionado em uma tarefa."}</span>
+                  <button
+                    className="btn-ler"
+                    onClick={() => lerMensagemMencoes(n)}
+                    disabled={n.lido}
+                  >
+                    {n.lido ? "Aberto" : "Abrir"}
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* Aba: Enviar Convite + Meus Integrantes */}
+        {activeTab === "enviar" && (
           <>
             <div className="collab-section-convite">
-              <h4>
-               Enviar Convite
-              </h4>
+              <h4>Enviar Convite</h4>
               <div className="convite-form">
                 <input
                   type="email"
@@ -371,8 +381,8 @@ export default function Collab({ onClose, user, onOpenTask }) {
 
             <hr />
 
-            <div className="collab-section">
-              <h3>Integrantes</h3>
+            <div className="collab-section1">
+              <h3>Convidados do meu container</h3>
               {loadingIntegrantes ? (
                 <div className="loader-container">
                   <div className="loader"></div>
@@ -403,7 +413,9 @@ export default function Collab({ onClose, user, onOpenTask }) {
                       <div className="integrante-menu">
                         <button
                           className="menu-btn"
-                          onClick={() => setMenuAberto(menuAberto === i.convite_id ? null : i.convite_id)}
+                          onClick={() =>
+                            setMenuAberto(menuAberto === i.convite_id ? null : i.convite_id)
+                          }
                         >
                           <FaEllipsisV />
                         </button>

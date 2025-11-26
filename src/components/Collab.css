@@ -90,6 +90,12 @@
 
 .collab-section {
   margin-bottom: 20px;
+  height: 23.5em;
+  overflow: auto;
+}
+
+.collab-section1 {
+  margin-bottom: 20px;
   height: 18em;
   overflow: auto;
 }
@@ -351,4 +357,29 @@
 
 .menu-opcoes button:hover {
   background: #ffeaea;
+}
+
+.convite-remetente-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.remetente-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  object-fit: cover;
+  background-color: #f0f0f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  color: #666;
+  flex-shrink: 0;
+}
+
+.remetente-avatar.placeholder {
+  border: 1px solid #ddd;
 }
