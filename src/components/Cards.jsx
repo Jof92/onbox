@@ -7,6 +7,7 @@ import { FaPlus, FaArrowLeft, FaEllipsisV, FaEdit, FaTrash } from "react-icons/f
 import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
 import ModalNota from "./ModalNota";
+import ListagemEspelho from "./ListagemEspelho"; // ✅ Novo componente
 
 export default function Cards() {
   const location = useLocation();
@@ -29,8 +30,11 @@ export default function Cards() {
   const [notaProgresso, setNotaProgresso] = useState({});
   const [menuOpenNota, setMenuOpenNota] = useState(null);
   const [menuOpenPilha, setMenuOpenPilha] = useState(null);
+  const [projetoOrigem, setProjetoOrigem] = useState(null); // ✅
+  const [notaOrigem, setNotaOrigem] = useState(null);       // ✅
 
   const [donoContainerId, setDonoContainerId] = useState(null);
+  const [isNotaRecebidos, setIsNotaRecebidos] = useState(false); // ✅
 
   // ✅ Função para atualizar a URL com o ID da nota
   const updateUrlWithNota = (notaId) => {
@@ -116,8 +120,13 @@ export default function Cards() {
         });
         setNotaProgresso(progressoInicial);
 
+        // ✅ Separa "Recebidos" das demais pilhas
+        const recebidos = pilhasData.filter(p => p.title === "Recebidos");
+        const outras = pilhasData.filter(p => p.title !== "Recebidos");
+        const pilhasOrdenadas = [...recebidos, ...outras];
+
         setColumns(
-          pilhasData.map((p) => ({
+          pilhasOrdenadas.map((p) => ({
             id: String(p.id),
             title: p.title,
             notas: p.notas || [],
@@ -143,23 +152,75 @@ export default function Cards() {
     const notaId = urlParams.get('nota');
     if (notaId && columns.length > 0) {
       let notaEncontrada = null;
+      let colunaEncontrada = null;
       for (const col of columns) {
         const nota = col.notas.find(n => String(n.id) === notaId);
         if (nota) {
           notaEncontrada = nota;
+          colunaEncontrada = col;
           break;
         }
       }
       if (notaEncontrada) {
         setNotaSelecionada(notaEncontrada);
-        // Garante que a URL está correta (ex: caso tenha ID inválido)
+        const isRecebidos = colunaEncontrada?.title === "Recebidos";
+        setIsNotaRecebidos(isRecebidos);
+
+        // ✅ Se for Recebidos, carregar dados de origem
+        if (isRecebidos) {
+          loadOrigemData(notaEncontrada.id);
+        } else {
+          setProjetoOrigem(null);
+          setNotaOrigem(null);
+        }
         updateUrlWithNota(notaId);
       } else {
-        // ✅ Nota não existe → limpa a URL
         navigate(location.pathname, { replace: true });
       }
+    } else {
+      setNotaSelecionada(null);
+      setIsNotaRecebidos(false);
+      setProjetoOrigem(null);
+      setNotaOrigem(null);
     }
   }, [columns, location.search, navigate]);
+
+  // ✅ Carregar dados de origem (projeto e nota original)
+  const loadOrigemData = async (notaEspelhoId) => {
+    try {
+      // Suponha que a nota espelho tenha campos: projeto_origem_id, nota_original_id
+      const { data: notaEspelho } = await supabase
+        .from("notas")
+        .select("projeto_origem_id, nota_original_id, nome")
+        .eq("id", notaEspelhoId)
+        .single();
+
+      if (notaEspelho?.projeto_origem_id) {
+        const { data: projeto } = await supabase
+          .from("projects")
+          .select("id, name")
+          .eq("id", notaEspelho.projeto_origem_id)
+          .single();
+        setProjetoOrigem(projeto || null);
+      }
+
+      if (notaEspelho?.nota_original_id) {
+        const { data: nota } = await supabase
+          .from("notas")
+          .select("id, nome")
+          .eq("id", notaEspelho.nota_original_id)
+          .single();
+        setNotaOrigem(nota || null);
+      } else {
+        // Caso não tenha nota_original_id, usar nome atual como fallback
+        setNotaOrigem({ id: notaEspelhoId, nome: notaEspelho?.nome || "Sem nome" });
+      }
+    } catch (err) {
+      console.error("Erro ao carregar dados de origem:", err);
+      setProjetoOrigem(null);
+      setNotaOrigem(null);
+    }
+  };
 
   const handleAddColumn = async () => {
     if (!entity) return;
@@ -224,6 +285,9 @@ export default function Cards() {
       if (["Atas", "Tarefas", "Lista", "Metas"].includes(newNota.tipo)) {
         setNotaSelecionada(newNota);
         updateUrlWithNota(newNota.id);
+        setIsNotaRecebidos(false);
+        setProjetoOrigem(null);
+        setNotaOrigem(null);
       }
     } catch (err) {
       console.error("Erro ao criar nota:", err);
@@ -245,6 +309,9 @@ export default function Cards() {
       setNotaProgresso(p => { const cp = { ...p }; delete cp[notaId]; return cp; });
       if (notaSelecionada?.id === notaId) {
         setNotaSelecionada(null);
+        setIsNotaRecebidos(false);
+        setProjetoOrigem(null);
+        setNotaOrigem(null);
         updateUrlWithNota(null);
       }
     }
@@ -296,6 +363,15 @@ export default function Cards() {
         if (error) throw error;
         if (notaSelecionada?.id === movedNote.id) {
           setNotaSelecionada(prev => ({ ...prev, pilha_id: destination.droppableId }));
+          // Atualiza isNotaRecebidos se mover para/fora de Recebidos
+          const destIsRecebidos = destination.droppableId === columns.find(c => c.title === "Recebidos")?.id;
+          setIsNotaRecebidos(destIsRecebidos);
+          if (destIsRecebidos) {
+            loadOrigemData(movedNote.id);
+          } else {
+            setProjetoOrigem(null);
+            setNotaOrigem(null);
+          }
         }
       } catch (err) {
         console.error("Erro ao mover nota:", err);
@@ -305,12 +381,30 @@ export default function Cards() {
   }, [columns, notaSelecionada]);
 
   const handleOpenNota = (nota) => {
+    // Encontrar a coluna da nota para verificar se é Recebidos
+    let isRecebidos = false;
+    for (const col of columns) {
+      if (col.notas.some(n => n.id === nota.id)) {
+        isRecebidos = col.title === "Recebidos";
+        break;
+      }
+    }
     setNotaSelecionada(nota);
+    setIsNotaRecebidos(isRecebidos);
+    if (isRecebidos) {
+      loadOrigemData(nota.id);
+    } else {
+      setProjetoOrigem(null);
+      setNotaOrigem(null);
+    }
     updateUrlWithNota(nota.id);
   };
 
   const handleCloseNota = () => {
     setNotaSelecionada(null);
+    setIsNotaRecebidos(false);
+    setProjetoOrigem(null);
+    setNotaOrigem(null);
     updateUrlWithNota(null);
   };
 
@@ -322,7 +416,6 @@ export default function Cards() {
         <button 
           className="btn-voltar" 
           onClick={() => {
-            // ✅ Correção principal: navegar diretamente para a URL do container correto
             if (donoContainerId) {
               navigate(`/containers/${donoContainerId}`);
             } else {
@@ -346,137 +439,197 @@ export default function Cards() {
 
       <DragDropContext onDragEnd={onDragEnd}>
         <div className="cards-body">
-          {columns.map((col) => (
-            <Droppable key={col.id} droppableId={col.id}>
-              {(provided) => (
-                <div className="cards-column" ref={provided.innerRef} {...provided.droppableProps}>
-                  <div className="column-header">
-                    {editingColumnId === col.id ? (
-                      <input
-                        type="text"
-                        value={columnTitleDraft}
-                        autoFocus
-                        onChange={(e) => setColumnTitleDraft(e.target.value)}
-                        onBlur={() => saveColumnTitle(col.id)}
-                        onKeyDown={(e) => e.key === "Enter" && saveColumnTitle(col.id)}
-                      />
-                    ) : (
-                      <h3 onDoubleClick={() => {
-                        setEditingColumnId(col.id);
-                        setColumnTitleDraft(col.title);
-                      }}>
-                        {col.title}
-                      </h3>
-                    )}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <button className="btn-add" onClick={() => setActiveColumnId(col.id)}>
-                        <FaPlus />
-                      </button>
-                      <div style={{ position: 'relative', display: 'inline-block' }}>
-                        <button
-                          className="column-menu-btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setMenuOpenPilha(menuOpenPilha === col.id ? null : col.id);
+          {columns.map((col) => {
+            const isRecebidos = col.title === "Recebidos";
+
+            return (
+              <Droppable key={col.id} droppableId={col.id}>
+                {(provided) => (
+                  <div
+                    className="cards-column"
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    style={{
+                      backgroundColor: isRecebidos ? "rgba(46, 125, 50, 0.08)" : "transparent",
+                      border: isRecebidos ? "1px solid rgba(46, 125, 50, 0.2)" : "none",
+                      borderRadius: "8px",
+                      padding: "8px",
+                    }}
+                  >
+                    <div className="column-header">
+                      {editingColumnId === col.id && !isRecebidos ? (
+                        <input
+                          type="text"
+                          value={columnTitleDraft}
+                          autoFocus
+                          onChange={(e) => setColumnTitleDraft(e.target.value)}
+                          onBlur={() => saveColumnTitle(col.id)}
+                          onKeyDown={(e) => e.key === "Enter" && saveColumnTitle(col.id)}
+                        />
+                      ) : (
+                        <h3
+                          style={{ cursor: isRecebidos ? "default" : "pointer" }}
+                          onDoubleClick={() => {
+                            if (!isRecebidos) {
+                              setEditingColumnId(col.id);
+                              setColumnTitleDraft(col.title);
+                            }
                           }}
                         >
-                          <FaEllipsisV />
-                        </button>
-                        {menuOpenPilha === col.id && (
-                          <div className="card-menu-dropdown" style={{ top: '100%', right: 0 }}>
-                            {col.notas.length === 0 ? (
-                              <button
-                                onClick={async () => {
-                                  setMenuOpenPilha(null);
-                                  await handleDeletePilha(col.id);
-                                }}
-                                style={{ color: '#e53e3e' }}
-                              >
-                                <FaTrash /> Excluir pilha
-                              </button>
-                            ) : (
-                              <button disabled style={{ color: '#aaa' }}>
-                                <FaTrash /> Pilha não vazia
-                              </button>
+                          {col.title}
+                        </h3>
+                      )}
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {!isRecebidos && (
+                          <button className="btn-add" onClick={() => setActiveColumnId(col.id)}>
+                            <FaPlus />
+                          </button>
+                        )}
+
+                        {!isRecebidos && (
+                          <div style={{ position: 'relative', display: 'inline-block' }}>
+                            <button
+                              className="column-menu-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMenuOpenPilha(menuOpenPilha === col.id ? null : col.id);
+                              }}
+                            >
+                              <FaEllipsisV />
+                            </button>
+                            {menuOpenPilha === col.id && (
+                              <div className="card-menu-dropdown" style={{ top: '100%', right: 0 }}>
+                                {col.notas.length === 0 ? (
+                                  <button
+                                    onClick={async () => {
+                                      setMenuOpenPilha(null);
+                                      await handleDeletePilha(col.id);
+                                    }}
+                                    style={{ color: '#e53e3e' }}
+                                  >
+                                    <FaTrash /> Excluir pilha
+                                  </button>
+                                ) : (
+                                  <button disabled style={{ color: '#aaa' }}>
+                                    <FaTrash /> Pilha não vazia
+                                  </button>
+                                )}
+                              </div>
                             )}
                           </div>
                         )}
                       </div>
                     </div>
-                  </div>
 
-                  <div className="cards-list">
-                    {col.notas.map((nota, index) => (
-                      <Draggable key={String(nota.id)} draggableId={String(nota.id)} index={index}>
-                        {(prov, snapshot) => (
-                          <div
-                            className={`card-item tipo-${(nota.tipo || "lista").toLowerCase()} ${snapshot.isDragging ? "dragging" : ""}`}
-                            ref={prov.innerRef}
-                            {...prov.draggableProps}
-                            {...prov.dragHandleProps}
-                            style={{ ...prov.draggableProps.style, userSelect: "none" }}
-                            onClick={() => handleOpenNota(nota)}
-                          >
-                            <div className="card-info">
-                              <div className="card-title-wrapper"><strong>{nota.nome}</strong></div>
-                              <p>
-                                {nota.tipo}
-                                {nota.tipo === "Atas" && notaProgresso[nota.id] !== undefined && (
-                                  <> - {notaProgresso[nota.id]}%</>
+                    <div className="cards-list">
+                      {col.notas.map((nota, index) => (
+                        <Draggable key={String(nota.id)} draggableId={String(nota.id)} index={index}>
+                          {(prov, snapshot) => (
+                            <div
+                              className={`card-item tipo-${(nota.tipo || "lista").toLowerCase()} ${snapshot.isDragging ? "dragging" : ""}`}
+                              ref={prov.innerRef}
+                              {...prov.draggableProps}
+                              {...prov.dragHandleProps}
+                              style={{ ...prov.draggableProps.style, userSelect: "none" }}
+                              onClick={() => handleOpenNota(nota)}
+                            >
+                              <div className="card-info">
+                                <div className="card-title-wrapper"><strong>{nota.nome}</strong></div>
+                                <p>
+                                  {nota.tipo}
+                                  {nota.tipo === "Atas" && notaProgresso[nota.id] !== undefined && (
+                                    <> - {notaProgresso[nota.id]}%</>
+                                  )}
+                                </p>
+                              </div>
+                              <div className="card-menu-wrapper" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  className="card-menu-btn"
+                                  onClick={() => setMenuOpenNota(menuOpenNota === nota.id ? null : nota.id)}
+                                >
+                                  <FaEllipsisV />
+                                </button>
+                                {menuOpenNota === nota.id && (
+                                  <div className="card-menu-dropdown">
+                                    <button onClick={() => handleEditNota(nota, col.id)}>
+                                      <FaEdit /> Editar
+                                    </button>
+                                    <button onClick={() => handleDeleteNota(nota.id, col.id)}>
+                                      <FaTrash /> Excluir
+                                    </button>
+                                  </div>
                                 )}
-                              </p>
+                              </div>
                             </div>
-                            <div className="card-menu-wrapper" onClick={(e) => e.stopPropagation()}>
-                              <button
-                                className="card-menu-btn"
-                                onClick={() => setMenuOpenNota(menuOpenNota === nota.id ? null : nota.id)}
-                              >
-                                <FaEllipsisV />
-                              </button>
-                              {menuOpenNota === nota.id && (
-                                <div className="card-menu-dropdown">
-                                  <button onClick={() => handleEditNota(nota, col.id)}>
-                                    <FaEdit /> Editar
-                                  </button>
-                                  <button onClick={() => handleDeleteNota(nota.id, col.id)}>
-                                    <FaTrash /> Excluir
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </Draggable>
-                    ))}
-                    {provided.placeholder}
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </div>
                   </div>
-                </div>
-              )}
-            </Droppable>
-          ))}
+                )}
+              </Droppable>
+            );
+          })}
         </div>
       </DragDropContext>
 
-      <ModalNota
-        showNovaNota={!!activeColumnId}
-        showEditarNota={!!notaEditData.id && !notaSelecionada}
-        showVisualizarNota={!!notaSelecionada}
-        onCloseNovaNota={() => setActiveColumnId(null)}
-        onCloseEditarNota={() => setNotaEditData({ id: null, nome: "", responsavel: "", pilhaId: null })}
-        onCloseVisualizarNota={handleCloseNota}
-        formData={formData}
-        setFormData={setFormData}
-        handleSaveTask={handleSaveTask}
-        notaEditData={notaEditData}
-        setNotaEditData={setNotaEditData}
-        saveEditedNota={saveEditedNota}
-        notaSelecionada={notaSelecionada}
-        project={{ ...entity, tipo: entity?.type === "project" ? "projeto" : "setor" }}
-        usuarioAtual={usuarioAtual}
-        usuarioId={usuarioId}
-        notaProgresso={notaProgresso}
-        setNotaProgresso={setNotaProgresso}
-      />
+      {/* ✅ Renderiza ListagemEspelho se a nota estiver em "Recebidos" */}
+      {isNotaRecebidos && notaSelecionada ? (
+        <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000 }}>
+          <div className="modal-content" style={{ 
+            background: 'white', 
+            margin: '20px auto', 
+            maxWidth: '1200px', 
+            maxHeight: '90vh', 
+            overflowY: 'auto',
+            borderRadius: '8px',
+            position: 'relative'
+          }}>
+            <button 
+              onClick={handleCloseNota}
+              style={{
+                position: 'absolute',
+                top: '10px',
+                right: '10px',
+                background: 'none',
+                border: 'none',
+                fontSize: '20px',
+                cursor: 'pointer'
+              }}
+            >
+              &times;
+            </button>
+            <ListagemEspelho
+              projetoOrigem={projetoOrigem}
+              notaOrigem={notaOrigem}
+              notaEspelhoId={notaSelecionada.id}
+            />
+          </div>
+        </div>
+      ) : (
+        <ModalNota
+          showNovaNota={!!activeColumnId}
+          showEditarNota={!!notaEditData.id && !notaSelecionada}
+          showVisualizarNota={!!notaSelecionada}
+          onCloseNovaNota={() => setActiveColumnId(null)}
+          onCloseEditarNota={() => setNotaEditData({ id: null, nome: "", responsavel: "", pilhaId: null })}
+          onCloseVisualizarNota={handleCloseNota}
+          formData={formData}
+          setFormData={setFormData}
+          handleSaveTask={handleSaveTask}
+          notaEditData={notaEditData}
+          setNotaEditData={setNotaEditData}
+          saveEditedNota={saveEditedNota}
+          notaSelecionada={notaSelecionada}
+          project={{ ...entity, tipo: entity?.type === "project" ? "projeto" : "setor" }}
+          usuarioAtual={usuarioAtual}
+          usuarioId={usuarioId}
+          notaProgresso={notaProgresso}
+          setNotaProgresso={setNotaProgresso}
+        />
+      )}
     </div>
   );
 }

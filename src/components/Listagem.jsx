@@ -372,6 +372,106 @@ export default function Listagem({ projetoAtual, notaAtual }) {
         }
       }
 
+      // ========= CRIA PILHA "RECEBIDOS" E NOTA ESPELHO NOS SETORES MENCIONADOS =========
+      const nicknamesMencionados = extrairMencaoNicknames(textoAtual);
+      if (nicknamesMencionados.length > 0) {
+        const { data: setoresDestino } = await supabase
+          .from("setores")
+          .select("id, nickname")
+          .in("nickname", nicknamesMencionados);
+
+        if (setoresDestino?.length > 0) {
+          for (const setor of setoresDestino) {
+            // 1. Garantir que a pilha "Recebidos" exista
+            const { data: pilhasRecebidos } = await supabase
+              .from("pilhas")
+              .select("id")
+              .eq("setor_id", setor.id)
+              .eq("title", "Recebidos")
+              .limit(1);
+
+            let pilhaRecebidosId;
+            if (!pilhasRecebidos || pilhasRecebidos.length === 0) {
+              const { data: novaPilha } = await supabase
+                .from("pilhas")
+                .insert({ title: "Recebidos", setor_id: setor.id })
+                .select("id")
+                .single();
+              pilhaRecebidosId = novaPilha.id;
+            } else {
+              pilhaRecebidosId = pilhasRecebidos[0].id;
+            }
+
+            // 2. Verificar se já existe nota espelho
+            const { data: notaExistente } = await supabase
+              .from("notas")
+              .select("id")
+              .eq("nome", notaAtual.nome)
+              .eq("pilha_id", pilhaRecebidosId)
+              .single();
+
+            let notaEspelhoId;
+            if (notaExistente) {
+              notaEspelhoId = notaExistente.id;
+              // Atualizar metadados de origem
+              await supabase
+                .from("notas")
+                .update({
+                  projeto_origem_id: projetoAtual.id,
+                  nota_original_id: notaAtual.id
+                })
+                .eq("id", notaEspelhoId);
+            } else {
+              // Criar nova nota espelho
+              const { data: novaNota } = await supabase
+                .from("notas")
+                .insert({
+                  nome: notaAtual.nome,
+                  tipo: "Lista",
+                  pilha_id: pilhaRecebidosId,
+                  projeto_origem_id: projetoAtual.id,
+                  nota_original_id: notaAtual.id
+                })
+                .select("id")
+                .single();
+              notaEspelhoId = novaNota.id;
+            }
+
+            // 3. Copiar todos os itens para a nota espelho
+            const { data: itensOriginais } = await supabase
+              .from("planilha_itens")
+              .select("*")
+              .eq("nota_id", notaAtual.id);
+
+            if (itensOriginais?.length > 0) {
+              // Limpar itens antigos (evitar duplicação)
+              await supabase.from("planilha_itens").delete().eq("nota_id", notaEspelhoId);
+
+              const itensParaInserir = itensOriginais.map(item => ({
+                projeto_id: projetoAtual.id,
+                nota_id: notaEspelhoId,
+                pilha_id: pilhaRecebidosId,
+                codigo: item.codigo,
+                descricao: item.descricao,
+                unidade: item.unidade,
+                quantidade: item.quantidade,
+                locacao: item.locacao,
+                eap: item.eap,
+                fornecedor: item.fornecedor,
+                direcionar_para: textoAtual,
+                criado_em: new Date().toISOString(),
+                grupo_envio: item.grupo_envio,      // ⬅️ mantém o grupo original!
+                data_envio: item.data_envio,        // ⬅️ mantém a data original do envio!
+                enviado_por: item.enviado_por
+              }));
+
+              await supabase.from("planilha_itens").insert(itensParaInserir);
+            }
+          }
+        }
+      }
+      // ===================================================================================
+
       setCodigoErro(new Set());
       setTextoAtual("");
       await carregarDados();
@@ -411,7 +511,7 @@ export default function Listagem({ projetoAtual, notaAtual }) {
           <input
             type="text"
             className="direcionar-para-input"
-            placeholder="Direcionar para (ex: @joao, @projeto_x)"
+            placeholder="Direcionar para..."
             value={textoAtual}
             onChange={handleDirecionarParaChange}
             onKeyPress={(e) => {
@@ -444,7 +544,7 @@ export default function Listagem({ projetoAtual, notaAtual }) {
           <button
             className="send-btn"
             onClick={handleSave}
-            disabled={statusEnvio === "enviando"}
+            disabled={statusEnvio === "enviando" || !textoAtual.trim()}
           >
             <FaPaperPlane style={{ marginRight: 6 }} /> Enviar
           </button>
@@ -576,14 +676,7 @@ export default function Listagem({ projetoAtual, notaAtual }) {
                       <div className="button-group">
                         {isEditavel && (
                           <button
-                            className="add-supabase-btn"
-                            onClick={() => alert("Funcionalidade de adicionar insumo ainda em desenvolvimento")}
-                          >
-                            <FaPlus />
-                          </button>
-                        )}
-                        {isEditavel && (
-                          <button className="remove-btn" onClick={() => removeRow(idx)}>
+                            className="remove-btn" onClick={() => removeRow(idx)}>
                             <FaTimes />
                           </button>
                         )}

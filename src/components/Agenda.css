@@ -415,3 +415,56 @@
   justify-content: center;
   width: 100%;
 }
+
+/* Nome da nota com efeito hover */
+.project-name-hover {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: inherit;
+  transition: color 0.2s, background-color 0.2s;
+}
+
+.project-name-hover:hover {
+  color: #1976d2;
+  background-color: rgba(25, 118, 210, 0.04);
+  cursor: pointer;
+}
+
+/* Botão de excluir */
+.agenda-project-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+  font-size: 14px;
+  position: relative;
+  width: 20%;
+}
+
+.agenda-project-item span {
+  font-style: italic;
+  flex: 1;
+  color: #0d1b2a;
+  text-align: left;
+}
+
+.agenda-project-item .delete-icon {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  color: #c0392b;
+  cursor: pointer;
+}
+
+.agenda-project-item:hover {
+  background: #f6e1a7;
+}
+
+.agenda-project-item:hover .delete-icon {
+  opacity: 1;
+}

@@ -14,7 +14,8 @@ const Agenda = ({ user, onClose }) => {
   const [editingItemId, setEditingItemId] = useState(null);
   const [editingItemType, setEditingItemType] = useState(null);
   const [editingDate, setEditingDate] = useState('');
-  const [hideSemData, setHideSemData] = useState(true); // ✅ Começa oculto
+  const [hideSemData, setHideSemData] = useState(true);
+  const [hoveredNotaId, setHoveredNotaId] = useState(null);
 
   const fetchData = useCallback(async () => {
     if (!user?.id) {
@@ -52,10 +53,9 @@ const Agenda = ({ user, onClose }) => {
             let atasMap = {};
             const projetoIds = new Set();
             const pilhaIds = new Set();
-            const notaIds = new Set(); // ✅ Coletar IDs das notas
+            const notaIds = new Set();
 
             if (ataIds.length > 0) {
-              // ✅ Buscar campos corretos: nota_id, pilha_id, projeto_id, setor_id
               const { data: atas, error: err3 } = await supabase
                 .from("atas")
                 .select("id, nota_id, pilha_id, projeto_id, setor_id")
@@ -65,7 +65,7 @@ const Agenda = ({ user, onClose }) => {
               if (Array.isArray(atas)) {
                 atas.forEach(ata => {
                   atasMap[ata.id] = {
-                    nota_id: ata.nota_id, // ✅ ID obrigatório
+                    nota_id: ata.nota_id,
                     pilha_id: ata.pilha_id,
                     projeto_id: ata.projeto_id,
                     setor_id: ata.setor_id,
@@ -77,7 +77,6 @@ const Agenda = ({ user, onClose }) => {
               }
             }
 
-            // ✅ Buscar nomes das notas
             let notasMap = {};
             if (notaIds.size > 0) {
               const { data: notas, error: errNotas } = await supabase
@@ -402,6 +401,36 @@ const Agenda = ({ user, onClose }) => {
     setEditingDate('');
   };
 
+  // Função para excluir da agenda
+  const handleExcluirDaAgenda = async (item) => {
+    if (window.confirm(`Deseja remover "${item.tipo === 'objetivo' ? item.texto : item.conteudo}" da agenda?`)) {
+      let error = null;
+
+      if (item.tipo === 'objetivo') {
+        ({ error } = await supabase
+          .from("ata_objetivos")
+          .delete()
+          .eq("id", item.id));
+      } else {
+        ({ error } = await supabase
+          .from("comentarios")
+          .update({ agendado_por: null })
+          .eq("id", item.id));
+      }
+
+      if (error) {
+        console.error("Erro ao excluir da agenda:", error);
+        alert("Erro ao remover item da agenda.");
+      } else {
+        if (item.tipo === 'objetivo') {
+          setObjetivosCompletos(prev => prev.filter(obj => obj.id !== item.id));
+        } else {
+          setComentariosAgendados(prev => prev.filter(com => com.id !== item.id));
+        }
+      }
+    }
+  };
+
   // =============== Agrupamento por ano/mês ===============
   const itensComData = [];
   const itensSemData = [];
@@ -422,17 +451,14 @@ const Agenda = ({ user, onClose }) => {
     }
   });
 
-  // Extrair anos únicos com itens
   const anosComItens = [...new Set(
     itensComData.map(item => parseInt(item.data_ref.split('-')[0], 10))
   )].sort((a, b) => a - b);
 
   if (anosComItens.length > 0 && !anosComItens.includes(selectedYear)) {
-    // Se o ano selecionado não tem dados, ajusta para o primeiro ano disponível
     setSelectedYear(anosComItens[0]);
   }
 
-  // Agrupar por data
   const itensPorData = {};
   itensComData.forEach(item => {
     if (!itensPorData[item.data_ref]) itensPorData[item.data_ref] = [];
@@ -514,7 +540,6 @@ const Agenda = ({ user, onClose }) => {
               </div>
 
               {/* Itens com data no mês/ano selecionado */}
-
               {diasDoMesSelecionado.length > 0 ? (
                 diasDoMesSelecionado.map(dateKey => {
                   const itens = itensPorData[dateKey];
@@ -532,7 +557,36 @@ const Agenda = ({ user, onClose }) => {
                         <div className="day-header">
                           <div>
                             <div className="date">{getFullDateLabel(dateKey)}</div>
-                            <div className="project">{ref.nomeNota}</div>
+                            {/* ✅ Nome da nota com estilo do sidebar */}
+                            <div className="project">
+                              <div
+                                className="agenda-project-item"
+                                onMouseEnter={() => setHoveredNotaId(ref._chaveNota)}
+                                onMouseLeave={() => setHoveredNotaId(null)}
+                              >
+                                <span>{ref.nomeNota}</span>
+                                {hoveredNotaId === ref._chaveNota && (
+                                  <svg
+                                    className="delete-icon"
+                                    stroke="currentColor"
+                                    fill="currentColor"
+                                    strokeWidth="0"
+                                    viewBox="0 0 448 512"
+                                    height="1em"
+                                    width="1em"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleExcluirDaAgenda(grupo[0]);
+                                    }}
+                                    title="Remover da agenda"
+                                    aria-label="Remover da agenda"
+                                  >
+                                    <path d="M432 32H312l-9.4-18.7A24 24 0 0 0 281.1 0H166.8a23.72 23.72 0 0 0-21.4 13.3L136 32H16A16 16 0 0 0 0 48v32a16 16 0 0 0 16 16h416a16 16 0 0 0 16-16V48a16 16 0 0 0-16-16zM53.2 467a48 48 0 0 0 47.9 45h245.8a48 48 0 0 0 47.9-45L416 128H32z"></path>
+                                  </svg>
+                                )}
+                              </div>
+                            </div>
                             <div className="project-sub">
                               {ref.nomePilha} • {ref.nomeProjeto} ({ref.nomeDono} • {ref.nomeContainer})
                             </div>
@@ -626,7 +680,36 @@ const Agenda = ({ user, onClose }) => {
                                     />
                                   </div>
                                 )}
-                                <div className="project">{item.nomeNota}</div>
+                                {/* ✅ Nome da nota com estilo do sidebar (sem data) */}
+                                <div className="project">
+                                  <div
+                                    className="agenda-project-item"
+                                    onMouseEnter={() => setHoveredNotaId(item._chaveNota)}
+                                    onMouseLeave={() => setHoveredNotaId(null)}
+                                  >
+                                    <span>{item.nomeNota}</span>
+                                    {hoveredNotaId === item._chaveNota && (
+                                      <svg
+                                        className="delete-icon"
+                                        stroke="currentColor"
+                                        fill="currentColor"
+                                        strokeWidth="0"
+                                        viewBox="0 0 448 512"
+                                        height="1em"
+                                        width="1em"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleExcluirDaAgenda(item);
+                                        }}
+                                        title="Remover da agenda"
+                                        aria-label="Remover da agenda"
+                                      >
+                                        <path d="M432 32H312l-9.4-18.7A24 24 0 0 0 281.1 0H166.8a23.72 23.72 0 0 0-21.4 13.3L136 32H16A16 16 0 0 0 0 48v32a16 16 0 0 0 16 16h416a16 16 0 0 0 16-16V48a16 16 0 0 0-16-16zM53.2 467a48 48 0 0 0 47.9 45h245.8a48 48 0 0 0 47.9-45L416 128H32z"></path>
+                                      </svg>
+                                    )}
+                                  </div>
+                                </div>
                                 <div className="project-sub">
                                   {item.nomePilha} • {item.nomeProjeto} ({item.nomeDono} • {item.nomeContainer})
                                 </div>
