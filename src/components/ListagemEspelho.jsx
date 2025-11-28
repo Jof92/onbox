@@ -4,11 +4,11 @@ import { supabase } from "../supabaseClient";
 import "./Listagem.css";
 import "./ListagemEspelho.css";
 import "./loader.css";
-import { FaPaperPlane, FaComment, FaPlus } from "react-icons/fa";
+import { FaPaperPlane, FaComment, FaPlus, FaTimes} from "react-icons/fa";
 import Check from "./Check";
 import Loading from "./Loading";
 
-export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelhoId }) {
+export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelhoId, onClose }) {
   const [rows, setRows] = useState([]);
   const [comentarios, setComentarios] = useState({});
   const [comentarioEditandoId, setComentarioEditandoId] = useState(null);
@@ -70,7 +70,6 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
         data_envio: item.data_envio || item.criado_em,
         enviado_por: item.enviado_por || "Usuário",
         isCriar: (item.codigo || "").toLowerCase() === "criar",
-        // Apenas para legibilidade; não usado no render, mas mantido
         jaCriado: (item.codigo || "").toLowerCase() !== "criar" && !!item.codigo?.trim(),
       }));
 
@@ -105,7 +104,6 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
 
     const novoValor = !row.selecionado;
 
-    // Atualizar estado local imediatamente (UX responsivo)
     setRows(prev => prev.map(r => (r.id === id ? { ...r, selecionado: novoValor } : r)));
 
     try {
@@ -118,7 +116,6 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
     } catch (err) {
       console.error("Erro ao salvar seleção:", err);
       alert("Erro ao salvar a marcação.");
-      // Reverter em caso de falha
       setRows(prev => prev.map(r => (r.id === id ? { ...r, selecionado: !novoValor } : r)));
     }
   };
@@ -154,7 +151,6 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
     }
 
     try {
-      // 1. Inserir na tabela `itens`
       const { error: insertError } = await supabase
         .from("itens")
         .insert({
@@ -165,7 +161,6 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
 
       if (insertError) throw insertError;
 
-      // 2. ⚠️ ATUALIZAR A LINHA EM `planilha_itens` com os novos dados
       const { error: updateError } = await supabase
         .from("planilha_itens")
         .update({
@@ -177,7 +172,6 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
 
       if (updateError) throw updateError;
 
-      // 3. Atualizar estado local para refletir mudança imediata
       setRows(prev =>
         prev.map(r =>
           r.id === row.id
@@ -193,7 +187,6 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
         )
       );
 
-      // 4. Atualizar lista de unidades
       const { data: unidadesAtualizadas } = await supabase.from("itens").select("unidade");
       setUnidadesDisponiveis([...new Set(unidadesAtualizadas?.map(u => u.unidade).filter(Boolean) || [])]);
 
@@ -254,6 +247,15 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
             <span className="nota-name">{notaOrigem?.nome || "Sem nota"}</span>
           </div>
         </div>
+        {onClose && (
+          <button
+            className="listagem-close-btn"
+            onClick={onClose}
+            aria-label="Fechar"
+          >
+            <FaTimes />
+          </button>
+        )}
       </div>
 
       <div className="action-buttons" style={{ justifyContent: 'flex-end' }}>
@@ -290,7 +292,7 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
               const currentGroup = row.grupo_envio;
               const nextRow = rows[idx + 1];
               const isLastInGroup = !nextRow || nextRow.grupo_envio !== currentGroup;
-              const isDisabled = !row.isCriar; // ← linha desativada se NÃO for "criar"
+              const isDisabled = !row.isCriar;
 
               return (
                 <React.Fragment key={row.id ?? idx}>

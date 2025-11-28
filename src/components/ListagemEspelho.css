@@ -100,3 +100,24 @@
 .linha-selecionada {
   background-color: #d4edda !important; /* verde claro */
 }
+
+.listagem-close-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.listagem-close-btn svg {
+  color: #666;
+  font-size: 1.4rem;
+  transition: color 0.2s ease;
+}
+
+.listagem-close-btn:hover svg {
+  color: #ff4d4d; /* vermelho (ou a cor que preferir) */
+}

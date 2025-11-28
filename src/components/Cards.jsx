@@ -263,16 +263,32 @@ export default function Cards() {
     }
   };
 
+  // ✅ ✅ ✅ FUNÇÃO CORRIGIDA: AGORA INCLUI `responsavel: usuarioId` AO CRIAR NOTA
   const handleSaveTask = async () => {
     if (!formData.nome.trim() || !activeColumnId) {
       console.warn("Dados inválidos para criar nota", { nome: formData.nome, pilha: activeColumnId });
       return;
     }
+
+    // Garante que o usuário esteja logado
+    if (!usuarioId) {
+      alert("Você precisa estar logado para criar uma nota.");
+      return;
+    }
+
     try {
       const { nome, tipo } = formData;
+
       const { data: newNota, error } = await supabase
         .from("notas")
-        .insert([{ nome, tipo, pilha_id: activeColumnId }])
+        .insert([
+          {
+            nome,
+            tipo,
+            pilha_id: activeColumnId,
+            responsavel: usuarioId, // ← ← ← ESSE É O PONTO CRÍTICO!
+          },
+        ])
         .select()
         .single();
 
@@ -314,6 +330,9 @@ export default function Cards() {
         setNotaOrigem(null);
         updateUrlWithNota(null);
       }
+    } else {
+      console.error("Erro ao excluir nota:", error);
+      alert("Não foi possível excluir a nota. Você só pode excluir notas que criou.");
     }
   };
 
@@ -577,34 +596,13 @@ export default function Cards() {
 
       {/* ✅ Renderiza ListagemEspelho se a nota estiver em "Recebidos" */}
       {isNotaRecebidos && notaSelecionada ? (
-        <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000 }}>
-          <div className="modal-content" style={{ 
-            background: 'white', 
-            margin: '20px auto', 
-            maxWidth: '1200px', 
-            maxHeight: '90vh', 
-            overflowY: 'auto',
-            borderRadius: '8px',
-            position: 'relative'
-          }}>
-            <button 
-              onClick={handleCloseNota}
-              style={{
-                position: 'absolute',
-                top: '10px',
-                right: '10px',
-                background: 'none',
-                border: 'none',
-                fontSize: '20px',
-                cursor: 'pointer'
-              }}
-            >
-              &times;
-            </button>
+        <div className="modal-overlay">
+          <div className="modal-content listagem-espelho-modal">
             <ListagemEspelho
               projetoOrigem={projetoOrigem}
               notaOrigem={notaOrigem}
               notaEspelhoId={notaSelecionada.id}
+              onClose={handleCloseNota}
             />
           </div>
         </div>
