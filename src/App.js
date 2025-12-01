@@ -16,7 +16,7 @@ export default function App() {
   const [projects, setProjects] = useState([]);
   const [showLoginPanel, setShowLoginPanel] = useState(false);
   const [hasOverdueToday, setHasOverdueToday] = useState(false);
-  const [glowDismissed, setGlowDismissed] = useState(false); // Controle para descartar glow
+  const [glowDismissed, setGlowDismissed] = useState(false);
 
   // === Monitorar sessão do usuário ===
   useEffect(() => {
@@ -56,17 +56,26 @@ export default function App() {
       }
     };
     fetchProfile();
-  }, [session, session?.user?.id]);
+  }, [session]);
 
-  // === Verificar se há itens atrasados na agenda ===
+  // === Verificar se existe ALGUMA tarefa que venceu ONTEM (-1 dia) ===
   useEffect(() => {
-    const checkOverdueItems = async () => {
+    const checkIfOverdueYesterday = async () => {
       if (!session?.user?.id) {
         setHasOverdueToday(false);
         return;
       }
 
       try {
+        // Calcular a data de ONTEM no formato YYYY-MM-DD
+        const hoje = new Date();
+        const ontem = new Date(hoje);
+        ontem.setDate(hoje.getDate() - 1);
+        const ontemStr = ontem.toISOString().split('T')[0]; // Ex: "2025-12-01"
+
+        let hasOverdue = false;
+
+        // === 1. Verificar objetivos com data_entrega = ontemStr ===
         const { data: responsaveis, error: err1 } = await supabase
           .from("ata_objetivos_responsaveis_enriquecidos")
           .select("ata_objetivo_id")
@@ -74,50 +83,56 @@ export default function App() {
 
         if (err1) throw err1;
 
-        let objetivoIds = [];
         if (responsaveis?.length) {
-          objetivoIds = responsaveis.map(r => r.ata_objetivo_id).filter(Boolean);
+          const objetivoIds = responsaveis
+            .map(r => r.ata_objetivo_id)
+            .filter(Boolean);
+
+          if (objetivoIds.length > 0) {
+            const { data: objetivos, error: err2 } = await supabase
+              .from("ata_objetivos")
+              .select("data_entrega, concluido, texto")
+              .in("id", objetivoIds)
+              .eq("data_entrega", ontemStr); // 🔍 Filtra só os de ONTEM
+
+            if (err2) throw err2;
+
+            // Verifica se há algum objetivo NÃO concluído e NÃO excluído
+            const hasActiveOverdueObjetivo = objetivos?.some(obj =>
+              !obj.concluido && 
+              obj.texto && 
+              !obj.texto.startsWith("[EXCLUIDO]")
+            );
+
+            if (hasActiveOverdueObjetivo) {
+              hasOverdue = true;
+            }
+          }
         }
 
-        let allItems = [];
+        // === 2. Verificar comentários com data_entrega = ontemStr (se ainda não encontrou) ===
+        if (!hasOverdue) {
+          const { data: comentarios, error: err3 } = await supabase
+            .from("comentarios")
+            .select("id") // só precisamos saber se existe
+            .eq("agendado_por", session.user.id)
+            .eq("data_entrega", ontemStr); // 🔍 Só os de ONTEM
 
-        if (objetivoIds.length > 0) {
-          const { data: objetivos, error: err2 } = await supabase
-            .from("ata_objetivos")
-            .select("data_entrega, concluido")
-            .in("id", objetivoIds);
-          if (err2) throw err2;
-          allItems.push(...(objetivos || []));
+          if (err3) {
+            console.warn("Erro ao buscar comentários de ontem:", err3);
+          } else if (comentarios?.length > 0) {
+            hasOverdue = true; // comentários não têm "exclusão lógica" além de remover o agendado_por
+          }
         }
-
-        const { data: comentarios, error: err3 } = await supabase
-          .from("comentarios")
-          .select("data_entrega")
-          .eq("agendado_por", session.user.id);
-        if (err3) console.warn("Erro ao buscar comentários:", err3);
-        if (comentarios?.length) {
-          allItems.push(...comentarios);
-        }
-
-        const hoje = new Date();
-        hoje.setHours(0, 0, 0, 0);
-
-        const hasOverdue = allItems.some(item => {
-          if (!item.data_entrega || item.concluido) return false;
-          const [y, m, d] = item.data_entrega.split('-').map(Number);
-          const dataItem = new Date(y, m - 1, d);
-          dataItem.setHours(0, 0, 0, 0);
-          return dataItem < hoje;
-        });
 
         setHasOverdueToday(hasOverdue);
       } catch (err) {
-        console.error("Erro ao verificar agenda:", err);
+        console.error("Erro ao verificar tarefas vencidas ontem:", err);
         setHasOverdueToday(false);
       }
     };
 
-    checkOverdueItems();
+    checkIfOverdueYesterday();
   }, [session?.user?.id]);
 
   // === Fechar painel de login com ESC ===
@@ -137,9 +152,10 @@ export default function App() {
     await supabase.auth.signOut();
     setSession(null);
     setProfile(null);
+    setHasOverdueToday(false);
+    setGlowDismissed(false);
   };
 
-  // Glow só aparece se não foi descartado
   const showGlow = session && !glowDismissed;
 
   return (

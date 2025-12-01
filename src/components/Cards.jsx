@@ -222,6 +222,36 @@ export default function Cards() {
     }
   };
 
+  // ✅ FECHAR MENU DE NOTA AO CLICAR FORA
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (
+        menuOpenNota &&
+        !e.target.closest('.card-menu-dropdown') &&
+        !e.target.closest('.card-menu-btn')
+      ) {
+        setMenuOpenNota(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [menuOpenNota]);
+
+  // ✅ FECHAR MENU DE PILHA AO CLICAR FORA
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (
+        menuOpenPilha &&
+        !e.target.closest('.card-menu-dropdown') &&
+        !e.target.closest('.column-menu-btn')
+      ) {
+        setMenuOpenPilha(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [menuOpenPilha]);
+
   const handleAddColumn = async () => {
     if (!entity) return;
     const newPilhaData = { title: "Nova Pilha" };

@@ -17,6 +17,17 @@ const Agenda = ({ user, onClose }) => {
   const [hideSemData, setHideSemData] = useState(true);
   const [hoveredNotaId, setHoveredNotaId] = useState(null);
 
+  // Função para normalizar texto (usada para deduplicação)
+  const normalizarTexto = (str) => {
+    if (!str) return "";
+    return str
+      .toLowerCase()
+      .normalize("NFD") // Separa acentos (ex: "á" → "a" + "´")
+      .replace(/[\u0300-\u036f]/g, "") // Remove os acentos
+      .replace(/[^\w]/g, "") // Remove tudo que não é letra/número
+      .trim();
+  };
+
   const fetchData = useCallback(async () => {
     if (!user?.id) {
       setError("Usuário não autenticado.");
@@ -49,7 +60,18 @@ const Agenda = ({ user, onClose }) => {
           if (err2) throw err2;
 
           if (objetivos && Array.isArray(objetivos)) {
-            const ataIds = [...new Set(objetivos.map(o => o.ata_id).filter(id => id != null))];
+            // 🔒 DEDUPLICAÇÃO POR CONTEÚDO NORMALIZADO
+            const mapaUnicos = new Map(); // chave: texto_normalizado → objetivo mais recente (maior id)
+            objetivos.forEach(obj => {
+              if (obj.texto?.startsWith("[EXCLUIDO]")) return; // ignora excluídos
+              const norm = normalizarTexto(obj.texto);
+              if (!mapaUnicos.has(norm) || obj.id > mapaUnicos.get(norm).id) {
+                mapaUnicos.set(norm, obj);
+              }
+            });
+            const objetivosUnicos = Array.from(mapaUnicos.values());
+
+            const ataIds = [...new Set(objetivosUnicos.map(o => o.ata_id).filter(id => id != null))];
             let atasMap = {};
             const projetoIds = new Set();
             const pilhaIds = new Set();
@@ -135,7 +157,7 @@ const Agenda = ({ user, onClose }) => {
               }
             }
 
-            objetivosCompletos = objetivos.map(obj => {
+            objetivosCompletos = objetivosUnicos.map(obj => {
               const ata = atasMap[obj.ata_id] || {};
               const projeto = ata.projeto_id ? projetosMap[ata.projeto_id] : null;
               const dono = projeto?.user_id ? donosMap[projeto.user_id] : null;
@@ -233,6 +255,7 @@ const Agenda = ({ user, onClose }) => {
           }
         }
 
+        // 🔒 Comentários não precisam de deduplicação por agora (gerenciados 1:1)
         comentariosCompletos = comentarios.map(com => {
           const nota = notasMap[com.nota_id] || {};
           const pilha = nota.pilha_id ? pilhasNotasMap[nota.pilha_id] : null;
@@ -273,22 +296,20 @@ const Agenda = ({ user, onClose }) => {
     fetchData();
   }, [fetchData]);
 
-  // =============== Escutar exclusões em tempo real ===============
+  // =============== Escutar mudanças em tempo real (DELETE + UPDATE) ===============
   useEffect(() => {
     if (!user?.id) return;
 
     const channelObjetivos = supabase
-      .channel('agenda-objetivos-delete')
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'ata_objetivos' }, () => {
-        fetchData();
-      })
+      .channel('agenda-objetivos-changes')
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'ata_objetivos' }, () => fetchData())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ata_objetivos' }, () => fetchData())
       .subscribe();
 
     const channelComentarios = supabase
-      .channel('agenda-comentarios-delete')
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'comentarios' }, () => {
-        fetchData();
-      })
+      .channel('agenda-comentarios-changes')
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'comentarios' }, () => fetchData())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'comentarios' }, () => fetchData())
       .subscribe();
 
     return () => {
@@ -326,7 +347,7 @@ const Agenda = ({ user, onClose }) => {
 
   const getStatusLabel = (dias, isConcluido) => {
     if (isConcluido) return "✓";
-    if (dias === null) return "?";
+    if (dias === null) return "";
     if (dias < 0) return `${dias} DIAS`;
     if (dias === 0) return "HOJE";
     return `${dias} DIAS`;
@@ -407,9 +428,10 @@ const Agenda = ({ user, onClose }) => {
       let error = null;
 
       if (item.tipo === 'objetivo') {
+        // Marcar como excluído logicamente (não deletar fisicamente)
         ({ error } = await supabase
           .from("ata_objetivos")
-          .delete()
+          .update({ texto: `[EXCLUIDO] ${item.texto}` })
           .eq("id", item.id));
       } else {
         ({ error } = await supabase
@@ -557,7 +579,6 @@ const Agenda = ({ user, onClose }) => {
                         <div className="day-header">
                           <div>
                             <div className="date">{getFullDateLabel(dateKey)}</div>
-                            {/* ✅ Nome da nota com estilo do sidebar */}
                             <div className="project">
                               <div
                                 className="agenda-project-item"
@@ -654,17 +675,19 @@ const Agenda = ({ user, onClose }) => {
                     <>
                       {itensSemData.map(item => {
                         const isConcluido = item.tipo === 'objetivo' && item.concluido;
+                        const isEditing = editingItemId === item.id && editingItemType === item.tipo;
+
                         return (
                           <article key={`${item.tipo}-${item.id}`} className="day" data-month="none" style={{ marginTop: '14px' }}>
                             <div className="day-header">
                               <div>
-                                {editingItemId === item.id && editingItemType === item.tipo ? (
+                                {isEditing ? (
                                   <div className="date-edit-row">
                                     <input
                                       type="date"
                                       value={editingDate}
-                                      readOnly
-                                      onChange={e => setEditingDate(e.target.value)}
+                                      onChange={(e) => setEditingDate(e.target.value)}
+                                      // Garante que o campo aceite 4 dígitos no ano (padrão HTML5)
                                     />
                                     <button onClick={handleSave}>Salvar</button>
                                     <button onClick={handleCancel}>Cancelar</button>
@@ -677,10 +700,10 @@ const Agenda = ({ user, onClose }) => {
                                       value=""
                                       onClick={() => handleDateClick(item)}
                                       className="empty-date-input"
+                                      placeholder="Adicionar data"
                                     />
                                   </div>
                                 )}
-                                {/* ✅ Nome da nota com estilo do sidebar (sem data) */}
                                 <div className="project">
                                   <div
                                     className="agenda-project-item"

@@ -15,7 +15,8 @@ export default function Collab({ onClose, user, onOpenTask }) {
   const [removendo, setRemovendo] = useState(null);
   const [loadingNotificacoes, setLoadingNotificacoes] = useState(true);
   const [loadingIntegrantes, setLoadingIntegrantes] = useState(true);
-  const [activeTab, setActiveTab] = useState("convites-recebidos");
+  // ✅ Aba inicial alterada para "notificacoes"
+  const [activeTab, setActiveTab] = useState("notificacoes");
 
   // 🔔 Buscar convites recebidos e menções separadamente
   const fetchNotificacoes = useCallback(async () => {
@@ -66,7 +67,8 @@ export default function Collab({ onClose, user, onOpenTask }) {
           nota:notas(id, nome),
           projeto:projects(id, name)
         `)
-        .eq("user_id", user.id);
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false }); // ✅ Mais recente primeiro
 
       let mencoesFormatadas = [];
       if (!mencaoError && notificacoesMencoes?.length) {
@@ -256,17 +258,11 @@ export default function Collab({ onClose, user, onOpenTask }) {
         <div className="collab-header">
           <h2>Colaborações</h2>
           <div className="collab-tabs">
-            <button
-              className={`tab-btn ${activeTab === "convites-recebidos" ? "active" : ""}`}
-              onClick={() => setActiveTab("convites-recebidos")}
-              aria-label="Convites recebidos"
-            >
-              <FaArchive className="icon" /> {/* ✅ Ícone válido no react-icons */}
-            </button>
+            {/* ✅ Nova ordem dos botões */}
             <button
               className={`tab-btn ${activeTab === "notificacoes" ? "active" : ""}`}
               onClick={() => setActiveTab("notificacoes")}
-              aria-label="Notificações"
+              aria-label="Menções"
             >
               <FaBell className="icon" />
             </button>
@@ -277,10 +273,17 @@ export default function Collab({ onClose, user, onOpenTask }) {
             >
               <FaUserPlus className="icon" />
             </button>
+            <button
+              className={`tab-btn ${activeTab === "convites-recebidos" ? "active" : ""}`}
+              onClick={() => setActiveTab("convites-recebidos")}
+              aria-label="Convites recebidos"
+            >
+              <FaArchive className="icon" />
+            </button>
           </div>
         </div>
 
-        {/* Aba: Convites Recebidos — com avatar do remetente antes do nome */}
+        {/* Aba: Convites Recebidos */}
         {activeTab === "convites-recebidos" && (
           <div className="collab-section">
             <h3>Convites Recebidos</h3>
@@ -326,7 +329,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
           </div>
         )}
 
-        {/* Aba: Notificações (Menções) */}
+        {/* Aba: Notificações (Menções) — ✅ Agora em ordem: mais recente no topo */}
         {activeTab === "notificacoes" && (
           <div className="collab-section">
             <h3>Menções</h3>
