@@ -35,6 +35,7 @@ export default function ModalNota({
   usuarioId,
   notaProgresso,
   setNotaProgresso,
+  donoContainerId,
 }) {
   const handleProgressoChange = useCallback((progresso) => {
     if (notaSelecionada?.id) {
@@ -165,6 +166,7 @@ export default function ModalNota({
                   <Listagem
                     projetoAtual={project}
                     notaAtual={notaSelecionada}
+                    containerAtual={{ id: donoContainerId }} // 👈 IMPORTANTE!
                     usuarioAtual={usuarioAtual}
                     onClose={onCloseVisualizarNota}
                   />

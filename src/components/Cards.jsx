@@ -656,6 +656,7 @@ export default function Cards() {
           usuarioId={usuarioId}
           notaProgresso={notaProgresso}
           setNotaProgresso={setNotaProgresso}
+          donoContainerId={donoContainerId}
         />
       )}
     </div>

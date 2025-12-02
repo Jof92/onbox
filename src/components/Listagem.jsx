@@ -5,25 +5,23 @@ import "./Listagem.css";
 import "./loader.css";
 import { FaPlus, FaTimes, FaPaperPlane } from "react-icons/fa";
 import Check from "./Check";
-import Loading from "./Loading"; // Apenas para carregamento inicial
+import Loading from "./Loading";
 
-export default function Listagem({ projetoAtual, notaAtual }) {
+export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
   const [rows, setRows] = useState([]);
-  // eslint-disable-next-line no-unused-vars
   const [ultimaAlteracao, setUltimaAlteracao] = useState("");
   const [locacoes, setLocacoes] = useState([]);
   const [eaps, setEaps] = useState([]);
   const [unidadesDisponiveis, setUnidadesDisponiveis] = useState([]);
   const [nomeUsuarioLogado, setNomeUsuarioLogado] = useState("Usuário");
   const [codigoErro, setCodigoErro] = useState(new Set());
-  const [textoAtual, setTextoAtual] = useState("");
-  const [sugestoes, setSugestoes] = useState([]);
-  const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
-  const [posicaoCaret, setPosicaoCaret] = useState(0);
+  const [setoresContainer, setSetoresContainer] = useState([]);
+  const [setorSelecionado, setSetorSelecionado] = useState("");
   const [userIdLogado, setUserIdLogado] = useState("");
-  const [statusEnvio, setStatusEnvio] = useState(null); // 'enviando', 'sucesso'
-  const [loading, setLoading] = useState(true); // Apenas para carregamento inicial
+  const [statusEnvio, setStatusEnvio] = useState(null);
+  const [loading, setLoading] = useState(true);
 
+  // Carrega perfil do usuário logado (remetente)
   useEffect(() => {
     const fetchUserProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -41,25 +39,51 @@ export default function Listagem({ projetoAtual, notaAtual }) {
     fetchUserProfile();
   }, []);
 
+  // ✅ Carrega setores do CONTAINER ATUAL
+  useEffect(() => {
+    if (!containerAtual?.id) {
+      setSetoresContainer([]);
+      return;
+    }
+
+    const carregarSetores = async () => {
+      try {
+        const { data } = await supabase
+          .from("setores")
+          .select("id, name, nickname")
+          .eq("user_id", containerAtual.id)
+          .order("nickname");
+
+        setSetoresContainer(data || []);
+      } catch (err) {
+        console.error("Erro ao carregar setores do container:", err);
+        setSetoresContainer([]);
+      }
+    };
+
+    carregarSetores();
+  }, [containerAtual?.id]);
+
   const registrarAlteracao = (autor = nomeUsuarioLogado) => {
     const agora = new Date();
     setUltimaAlteracao(`${autor} alterou em ${agora.toLocaleDateString()} ${agora.toLocaleTimeString()}`);
   };
 
-  const sortRowsByCreatedDesc = (arr) =>
-    [...arr].sort((a, b) => {
-      const ta = a?.criado_em ? new Date(a.criado_em).getTime() : 0;
-      const tb = b?.criado_em ? new Date(b.criado_em).getTime() : 0;
-      return tb - ta;
-    });
-
   const carregarDados = async () => {
     setLoading(true);
     try {
       if (!projetoAtual?.id || !notaAtual?.id) {
-        setRows(Array.from({ length: 10 }, () => ({
-          codigo: "", descricao: "", unidade: "", quantidade: "", locacao: "", eap: "", fornecedor: ""
-        })));
+        // Lista vazia: cria 1 item inicial com ordem = 1
+        setRows([{
+          codigo: "",
+          descricao: "",
+          unidade: "",
+          quantidade: "",
+          locacao: "",
+          eap: "",
+          fornecedor: "",
+          ordem: 1,
+        }]);
         return;
       }
 
@@ -67,7 +91,7 @@ export default function Listagem({ projetoAtual, notaAtual }) {
         supabase.from("pavimentos").select("name").eq("project_id", projetoAtual.id),
         supabase.from("eap").select("name").eq("project_id", projetoAtual.id),
         supabase.from("itens").select("unidade"),
-        supabase.from("planilha_itens").select("*").eq("nota_id", notaAtual.id).order("criado_em", { ascending: false })
+        supabase.from("planilha_itens").select("*").eq("nota_id", notaAtual.id).order("ordem", { ascending: true })
       ]);
 
       if (itensErr) throw itensErr;
@@ -89,17 +113,26 @@ export default function Listagem({ projetoAtual, notaAtual }) {
           criado_em: item.criado_em || null,
           grupo_envio: item.grupo_envio || "antigo",
           data_envio: item.data_envio || item.criado_em,
-          enviado_por: item.enviado_por || "Usuário"
+          enviado_por: item.enviado_por || "Usuário",
+          ordem: item.ordem || 0,
         }));
-        setRows(sortRowsByCreatedDesc(mapped));
+        setRows(mapped);
       } else {
-        setRows(Array.from({ length: 10 }, () => ({
-          codigo: "", descricao: "", unidade: "", quantidade: "", locacao: "", eap: "", fornecedor: ""
-        })));
+        setRows([{
+          codigo: "",
+          descricao: "",
+          unidade: "",
+          quantidade: "",
+          locacao: "",
+          eap: "",
+          fornecedor: "",
+          ordem: 1,
+        }]);
       }
 
       registrarAlteracao();
     } catch (err) {
+      console.error("Erro ao carregar dados:", err);
       alert("Erro ao carregar os dados da lista.");
     } finally {
       setLoading(false);
@@ -159,8 +192,23 @@ export default function Listagem({ projetoAtual, notaAtual }) {
   };
 
   const addRow = () => {
-    const novaLinha = { codigo: "", descricao: "", unidade: "", quantidade: "", locacao: "", eap: "", fornecedor: "", criado_em: new Date().toISOString() };
-    setRows(prev => sortRowsByCreatedDesc([...prev, novaLinha]));
+    const ultimaOrdem = rows.length > 0 
+      ? Math.max(...rows.map(r => r.ordem || 0)) 
+      : 0;
+    
+    const novaLinha = {
+      codigo: "",
+      descricao: "",
+      unidade: "",
+      quantidade: "",
+      locacao: "",
+      eap: "",
+      fornecedor: "",
+      criado_em: new Date().toISOString(),
+      ordem: ultimaOrdem + 1,
+    };
+
+    setRows(prev => [...prev, novaLinha]);
     registrarAlteracao();
   };
 
@@ -180,105 +228,13 @@ export default function Listagem({ projetoAtual, notaAtual }) {
     }
   };
 
-  const extrairMencaoNicknames = (texto) => [...new Set([...texto.matchAll(/@([^\s@]+)/g)].map(m => m[1]))];
-
-  const buscarSugestoes = async (termo) => {
-    if (!termo.trim() || !userIdLogado) {
-      setSugestoes([]);
-      return;
-    }
-
-    try {
-      const todasSugestoes = [];
-
-      const { data: convites } = await supabase
-        .from("convites")
-        .select("remetente_id")
-        .eq("user_id", userIdLogado)
-        .eq("status", "aceito");
-
-      if (convites?.length) {
-        const remetenteIds = convites.map(c => c.remetente_id);
-        const { data: perfis } = await supabase
-          .from("profiles")
-          .select("id, nome, nickname")
-          .in("id", remetenteIds)
-          .ilike("nickname", `%${termo}%`)
-          .limit(3);
-
-        todasSugestoes.push(...(perfis?.map(p => ({ id: p.id, tipo: "perfil", display: p.nickname || p.nome })) || []));
-      }
-
-      const { data: projetos } = await supabase
-        .from("projects")
-        .select("id, name, nickname")
-        .eq("user_id", userIdLogado)
-        .ilike("nickname", `%${termo}%`)
-        .limit(3);
-      todasSugestoes.push(...(projetos?.map(p => ({ id: p.id, tipo: "projeto", display: p.nickname || p.name })) || []));
-
-      const { data: setores } = await supabase
-        .from("setores")
-        .select("id, name, nickname")
-        .eq("user_id", userIdLogado)
-        .ilike("nickname", `%${termo}%`)
-        .limit(3);
-      todasSugestoes.push(...(setores?.map(s => ({ id: s.id, tipo: "setor", display: s.nickname || s.name })) || []));
-
-      setSugestoes(todasSugestoes);
-    } catch (err) {
-      setSugestoes([]);
-    }
-  };
-
-  const inserirMencoes = (sugestao) => {
-    const prefixo = textoAtual.substring(0, posicaoCaret);
-    const sufixo = textoAtual.substring(posicaoCaret);
-    const ultimaArroba = prefixo.lastIndexOf("@");
-
-    if (ultimaArroba === -1) return;
-
-    const novoTexto = prefixo.substring(0, ultimaArroba + 1) + sugestao.display + " " + sufixo;
-    setTextoAtual(novoTexto);
-    setMostrarSugestoes(false);
-    setSugestoes([]);
-
-    setTimeout(() => {
-      const input = document.querySelector('.direcionar-para-input');
-      if (input) {
-        input.focus();
-        input.setSelectionRange(novoTexto.length, novoTexto.length);
-      }
-    }, 0);
-  };
-
-  const handleDirecionarParaChange = (e) => {
-    const valor = e.target.value;
-    setTextoAtual(valor);
-
-    const posicaoCursor = e.target.selectionStart;
-    const textoAntesCursor = valor.substring(0, posicaoCursor);
-    const ultimaArroba = textoAntesCursor.lastIndexOf("@");
-
-    if (ultimaArroba !== -1) {
-      const termo = textoAntesCursor.substring(ultimaArroba + 1).trim();
-      if (termo) {
-        setPosicaoCaret(posicaoCursor);
-        setMostrarSugestoes(true);
-        buscarSugestoes(termo);
-      } else {
-        setMostrarSugestoes(false);
-        setSugestoes([]);
-      }
-    } else {
-      setMostrarSugestoes(false);
-      setSugestoes([]);
-    }
+  const handleSetorChange = (e) => {
+    setSetorSelecionado(e.target.value);
   };
 
   const handleSave = async () => {
-    if (!notaAtual?.id || !projetoAtual?.id) {
-      alert("Projeto ou nota não selecionados. Não é possível salvar.");
+    if (!notaAtual?.id || !projetoAtual?.id || !setorSelecionado) {
+      alert("Selecione um setor para enviar a listagem.");
       return;
     }
 
@@ -291,6 +247,7 @@ export default function Listagem({ projetoAtual, notaAtual }) {
       const linhasValidas = rows.filter(r => r.codigo?.trim() || r.descricao?.trim() || r.quantidade);
       const existentes = linhasValidas.filter(r => r.id);
       const novos = linhasValidas.filter(r => !r.id);
+      const setoresParaEnvio = [setorSelecionado];
 
       if (existentes.length) {
         await Promise.all(existentes.map(async (it) => {
@@ -302,7 +259,8 @@ export default function Listagem({ projetoAtual, notaAtual }) {
             locacao: it.locacao || null,
             eap: it.eap || null,
             fornecedor: it.fornecedor || null,
-            direcionar_para: textoAtual
+            direcionar_para: JSON.stringify(setoresParaEnvio),
+            ordem: it.ordem,
           }).eq("id", it.id);
           if (error) throw error;
         }));
@@ -319,51 +277,28 @@ export default function Listagem({ projetoAtual, notaAtual }) {
           locacao: it.locacao || null,
           eap: it.eap || null,
           fornecedor: it.fornecedor || null,
-          direcionar_para: textoAtual,
+          direcionar_para: JSON.stringify(setoresParaEnvio),
           grupo_envio: grupoEnvio,
           data_envio: dataEnvio,
           enviado_por: remetente,
-          criado_em: new Date().toISOString()
+          criado_em: new Date().toISOString(),
+          ordem: it.ordem,
         }));
         const { error } = await supabase.from("planilha_itens").insert(inserts);
         if (error) throw error;
       }
 
-      let notificacoesParaInserir = [];
-      if (textoAtual.trim()) {
-        const nicknamesMencionados = extrairMencaoNicknames(textoAtual);
-        if (nicknamesMencionados.length > 0) {
-          const { data: perfis } = await supabase
-            .from("profiles")
-            .select("id, nickname")
-            .in("nickname", nicknamesMencionados);
-
-          if (perfis?.length) {
-            const { data: convitesAceitos } = await supabase
-              .from("convites")
-              .select("remetente_id")
-              .eq("user_id", userIdLogado)
-              .eq("status", "aceito");
-
-            const remetenteIdsValidos = convitesAceitos?.map(c => c.remetente_id) || [];
-            const destinatariosValidos = perfis.filter(p => remetenteIdsValidos.includes(p.id));
-
-            if (destinatariosValidos.length > 0) {
-              const mensagemBase = `${remetente} enviou uma atualização da listagem da nota "${notaAtual.nome}" do projeto "${projetoAtual.name}"`;
-              notificacoesParaInserir = destinatariosValidos.map(dest => ({
-                user_id: dest.id,
-                remetente_id: userIdLogado,
-                mensagem: mensagemBase,
-                projeto_id: projetoAtual.id,
-                nota_id: notaAtual.id,
-                lido: false,
-                created_at: new Date().toISOString(),
-                tipo: "menção"
-              }));
-            }
-          }
-        }
-      }
+      // ===== NOTIFICAÇÕES =====
+      const notificacoesParaInserir = setoresParaEnvio.map(setorId => ({
+        user_id: userIdLogado,
+        remetente_id: userIdLogado,
+        mensagem: `${remetente} enviou a listagem da nota "${notaAtual.nome}"`,
+        projeto_id: projetoAtual.id,
+        nota_id: notaAtual.id,
+        lido: false,
+        created_at: new Date().toISOString(),
+        tipo: "listagem_enviada"
+      }));
 
       if (notificacoesParaInserir.length > 0) {
         const { error: notifError } = await supabase.from("notificacoes").insert(notificacoesParaInserir);
@@ -372,121 +307,104 @@ export default function Listagem({ projetoAtual, notaAtual }) {
         }
       }
 
-      // ========= CRIA PILHA "RECEBIDOS" E NOTA ESPELHO NOS SETORES MENCIONADOS =========
-      const nicknamesMencionados = extrairMencaoNicknames(textoAtual);
-      if (nicknamesMencionados.length > 0) {
-        const { data: setoresDestino } = await supabase
-          .from("setores")
-          .select("id, nickname")
-          .in("nickname", nicknamesMencionados);
+      // ===== CRIA PILHA "RECEBIDOS" E NOTA ESPELHO =====
+      const setorId = setorSelecionado;
+      const { data: pilhasRecebidos } = await supabase
+        .from("pilhas")
+        .select("id")
+        .eq("setor_id", setorId)
+        .eq("title", "Recebidos")
+        .limit(1);
 
-        if (setoresDestino?.length > 0) {
-          for (const setor of setoresDestino) {
-            // 1. Garantir que a pilha "Recebidos" exista
-            const { data: pilhasRecebidos } = await supabase
-              .from("pilhas")
-              .select("id")
-              .eq("setor_id", setor.id)
-              .eq("title", "Recebidos")
-              .limit(1);
-
-            let pilhaRecebidosId;
-            if (!pilhasRecebidos || pilhasRecebidos.length === 0) {
-              const { data: novaPilha } = await supabase
-                .from("pilhas")
-                .insert({ title: "Recebidos", setor_id: setor.id })
-                .select("id")
-                .single();
-              pilhaRecebidosId = novaPilha.id;
-            } else {
-              pilhaRecebidosId = pilhasRecebidos[0].id;
-            }
-
-            // 2. Verificar se já existe nota espelho
-            const { data: notaExistente } = await supabase
-              .from("notas")
-              .select("id")
-              .eq("nome", notaAtual.nome)
-              .eq("pilha_id", pilhaRecebidosId)
-              .single();
-
-            let notaEspelhoId;
-            if (notaExistente) {
-              notaEspelhoId = notaExistente.id;
-              // Atualizar metadados de origem
-              await supabase
-                .from("notas")
-                .update({
-                  projeto_origem_id: projetoAtual.id,
-                  nota_original_id: notaAtual.id
-                })
-                .eq("id", notaEspelhoId);
-            } else {
-              // Criar nova nota espelho
-              const { data: novaNota } = await supabase
-                .from("notas")
-                .insert({
-                  nome: notaAtual.nome,
-                  tipo: "Lista",
-                  pilha_id: pilhaRecebidosId,
-                  projeto_origem_id: projetoAtual.id,
-                  nota_original_id: notaAtual.id
-                })
-                .select("id")
-                .single();
-              notaEspelhoId = novaNota.id;
-            }
-
-            // 3. Copiar todos os itens para a nota espelho
-            const { data: itensOriginais } = await supabase
-              .from("planilha_itens")
-              .select("*")
-              .eq("nota_id", notaAtual.id);
-
-            if (itensOriginais?.length > 0) {
-              // Limpar itens antigos (evitar duplicação)
-              await supabase.from("planilha_itens").delete().eq("nota_id", notaEspelhoId);
-
-              const itensParaInserir = itensOriginais.map(item => ({
-                projeto_id: projetoAtual.id,
-                nota_id: notaEspelhoId,
-                pilha_id: pilhaRecebidosId,
-                codigo: item.codigo,
-                descricao: item.descricao,
-                unidade: item.unidade,
-                quantidade: item.quantidade,
-                locacao: item.locacao,
-                eap: item.eap,
-                fornecedor: item.fornecedor,
-                direcionar_para: textoAtual,
-                criado_em: new Date().toISOString(),
-                grupo_envio: item.grupo_envio,      // ⬅️ mantém o grupo original!
-                data_envio: item.data_envio,        // ⬅️ mantém a data original do envio!
-                enviado_por: item.enviado_por
-              }));
-
-              await supabase.from("planilha_itens").insert(itensParaInserir);
-            }
-          }
-        }
+      let pilhaRecebidosId;
+      if (!pilhasRecebidos || pilhasRecebidos.length === 0) {
+        const { data: novaPilha } = await supabase
+          .from("pilhas")
+          .insert({ title: "Recebidos", setor_id: setorId })
+          .select("id")
+          .single();
+        pilhaRecebidosId = novaPilha.id;
+      } else {
+        pilhaRecebidosId = pilhasRecebidos[0].id;
       }
-      // ===================================================================================
+
+      const { data: notaExistente } = await supabase
+        .from("notas")
+        .select("id")
+        .eq("nome", notaAtual.nome)
+        .eq("pilha_id", pilhaRecebidosId)
+        .single();
+
+      let notaEspelhoId;
+      if (notaExistente) {
+        notaEspelhoId = notaExistente.id;
+        await supabase
+          .from("notas")
+          .update({
+            projeto_origem_id: projetoAtual.id,
+            nota_original_id: notaAtual.id
+          })
+          .eq("id", notaEspelhoId);
+      } else {
+        const { data: novaNota } = await supabase
+          .from("notas")
+          .insert({
+            nome: notaAtual.nome,
+            tipo: "Lista",
+            pilha_id: pilhaRecebidosId,
+            projeto_origem_id: projetoAtual.id,
+            nota_original_id: notaAtual.id
+          })
+          .select("id")
+          .single();
+        notaEspelhoId = novaNota.id;
+      }
+
+      const { data: itensOriginais } = await supabase
+        .from("planilha_itens")
+        .select("*")
+        .eq("nota_id", notaAtual.id)
+        .order("ordem", { ascending: true });
+
+      if (itensOriginais?.length > 0) {
+        await supabase.from("planilha_itens").delete().eq("nota_id", notaEspelhoId);
+
+        const itensParaInserir = itensOriginais.map(item => ({
+          projeto_id: projetoAtual.id,
+          nota_id: notaEspelhoId,
+          pilha_id: pilhaRecebidosId,
+          codigo: item.codigo,
+          descricao: item.descricao,
+          unidade: item.unidade,
+          quantidade: item.quantidade,
+          locacao: item.locacao,
+          eap: item.eap,
+          fornecedor: item.fornecedor,
+          direcionar_para: item.direcionar_para,
+          criado_em: new Date().toISOString(),
+          grupo_envio: item.grupo_envio,
+          data_envio: item.data_envio,
+          enviado_por: item.enviado_por,
+          ordem: item.ordem,
+        }));
+
+        await supabase.from("planilha_itens").insert(itensParaInserir);
+      }
 
       setCodigoErro(new Set());
-      setTextoAtual("");
+      setSetorSelecionado("");
       await carregarDados();
 
       setStatusEnvio("sucesso");
       setTimeout(() => setStatusEnvio(null), 2000);
-
       registrarAlteracao();
     } catch (err) {
+      console.error("Erro ao salvar listagem:", err);
       alert("Erro ao salvar lista.");
       setStatusEnvio(null);
     }
   };
 
-  // ✅ Exibe Loading apenas no carregamento inicial
   if (loading) {
     return (
       <div className="listagem-card">
@@ -494,6 +412,9 @@ export default function Listagem({ projetoAtual, notaAtual }) {
       </div>
     );
   }
+
+  // ✅ Inverte apenas para exibição — estado interno permanece em ordem cronológica
+  const rowsParaExibir = [...rows].reverse();
 
   return (
     <div className="listagem-card">
@@ -508,49 +429,30 @@ export default function Listagem({ projetoAtual, notaAtual }) {
         <button className="add-row-btn" onClick={addRow}><FaPlus /> Adicionar linha</button>
 
         <div style={{ position: "relative", maxWidth: "300px" }}>
-          <input
-            type="text"
+          <select
+            value={setorSelecionado}
+            onChange={handleSetorChange}
             className="direcionar-para-input"
-            placeholder="Direcionar para..."
-            value={textoAtual}
-            onChange={handleDirecionarParaChange}
-            onKeyPress={(e) => {
-              if (e.key === "Enter" && mostrarSugestoes && sugestoes.length > 0) {
-                e.preventDefault();
-                inserirMencoes(sugestoes[0]);
-              }
-            }}
-            onBlur={() => setTimeout(() => setMostrarSugestoes(false), 200)}
-          />
-
-          {mostrarSugestoes && sugestoes.length > 0 && (
-            <div className="sugestoes-dropdown">
-              {sugestoes.map((sug, idx) => (
-                <div
-                  key={idx}
-                  className="sugestao-item"
-                  onClick={() => inserirMencoes(sug)}
-                  onMouseDown={(e) => e.preventDefault()}
-                >
-                  <span>{sug.display}</span>
-                  <small>({sug.tipo})</small>
-                </div>
-              ))}
-            </div>
-          )}
+            style={{ height: "auto", minHeight: "40px" }}
+          >
+            <option value="">Selecione um setor</option>
+            {setoresContainer.map((setor) => (
+              <option key={setor.id} value={setor.id}>
+                {setor.nickname || setor.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="send-action-wrapper">
           <button
             className="send-btn"
             onClick={handleSave}
-            disabled={statusEnvio === "enviando" || !textoAtual.trim()}
+            disabled={statusEnvio === "enviando" || !setorSelecionado}
           >
             <FaPaperPlane style={{ marginRight: 6 }} /> Enviar
           </button>
-          {statusEnvio === "enviando" && (
-            <span className="loader-inline"></span>
-          )}
+          {statusEnvio === "enviando" && <span className="loader-inline"></span>}
           {statusEnvio === "sucesso" && <Check />}
         </div>
       </div>
@@ -571,37 +473,39 @@ export default function Listagem({ projetoAtual, notaAtual }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, idx) => {
+            {rowsParaExibir.map((row, visualIdx) => {
               const isCriar = row.codigo?.toLowerCase() === "criar";
               const isEditavel = !row.id || (row.data_envio && (Date.now() - new Date(row.data_envio).getTime()) < 60 * 60 * 1000);
               const isLinhaCongelada = !isEditavel;
-              const currentGroup = row.grupo_envio;
-              const nextRow = rows[idx + 1];
-              const isLastInGroup = !nextRow || nextRow.grupo_envio !== currentGroup;
+              const nextRow = rowsParaExibir[visualIdx + 1];
+              const isLastInGroup = !nextRow || nextRow.grupo_envio !== row.grupo_envio;
+
+              // Encontra o índice original no estado (não invertido)
+              const indexOriginal = rows.findIndex(r => r.ordem === row.ordem);
 
               return (
-                <React.Fragment key={row.id ?? idx}>
+                <React.Fragment key={row.id ?? visualIdx}>
                   <tr className={isLinhaCongelada ? "linha-congelada" : ""}>
-                    <td>{idx + 1}</td>
+                    <td>{row.ordem}</td>
                     <td>
                       <input
                         type="text"
                         value={row.codigo}
                         onChange={(e) => {
-                          handleInputChange(idx, "codigo", e.target.value);
-                          if (codigoErro.has(idx)) {
+                          handleInputChange(indexOriginal, "codigo", e.target.value);
+                          if (codigoErro.has(indexOriginal)) {
                             setCodigoErro(prev => {
                               const novo = new Set(prev);
-                              novo.delete(idx);
+                              novo.delete(indexOriginal);
                               return novo;
                             });
                           }
                         }}
-                        onBlur={() => buscarItemPorCodigo(idx, row.codigo)}
-                        onKeyPress={(e) => handleCodigoEnter(e, idx, row.codigo)}
+                        onBlur={() => buscarItemPorCodigo(indexOriginal, row.codigo)}
+                        onKeyPress={(e) => handleCodigoEnter(e, indexOriginal, row.codigo)}
                         placeholder="Código"
                         disabled={isLinhaCongelada}
-                        className={codigoErro.has(idx) ? "codigo-invalido" : ""}
+                        className={codigoErro.has(indexOriginal) ? "codigo-invalido" : ""}
                       />
                     </td>
                     <td>
@@ -609,7 +513,7 @@ export default function Listagem({ projetoAtual, notaAtual }) {
                         <input
                           type="text"
                           value={row.descricao || ""}
-                          onChange={(e) => handleInputChange(idx, "descricao", e.target.value)}
+                          onChange={(e) => handleInputChange(indexOriginal, "descricao", e.target.value)}
                           placeholder="Descrição do novo item"
                         />
                       ) : (
@@ -620,7 +524,7 @@ export default function Listagem({ projetoAtual, notaAtual }) {
                       {isCriar && isEditavel ? (
                         <select
                           value={row.unidade || ""}
-                          onChange={(e) => handleInputChange(idx, "unidade", e.target.value)}
+                          onChange={(e) => handleInputChange(indexOriginal, "unidade", e.target.value)}
                         >
                           <option value="">(selecionar)</option>
                           {unidadesDisponiveis.map((un, i) => (
@@ -635,7 +539,7 @@ export default function Listagem({ projetoAtual, notaAtual }) {
                       <input
                         type="number"
                         value={row.quantidade ?? ""}
-                        onChange={(e) => handleInputChange(idx, "quantidade", e.target.value)}
+                        onChange={(e) => handleInputChange(indexOriginal, "quantidade", e.target.value)}
                         min="0"
                         step="any"
                         disabled={isLinhaCongelada}
@@ -645,7 +549,7 @@ export default function Listagem({ projetoAtual, notaAtual }) {
                       {isEditavel ? (
                         <select
                           value={row.locacao || ""}
-                          onChange={(e) => handleInputChange(idx, "locacao", e.target.value)}
+                          onChange={(e) => handleInputChange(indexOriginal, "locacao", e.target.value)}
                         >
                           <option value="">(selecionar)</option>
                           {locacoes.map((loc, i) => (
@@ -660,7 +564,7 @@ export default function Listagem({ projetoAtual, notaAtual }) {
                       {isEditavel ? (
                         <select
                           value={row.eap || ""}
-                          onChange={(e) => handleInputChange(idx, "eap", e.target.value)}
+                          onChange={(e) => handleInputChange(indexOriginal, "eap", e.target.value)}
                         >
                           <option value="">(selecionar)</option>
                           {eaps.map((eap, i) => (
@@ -676,7 +580,9 @@ export default function Listagem({ projetoAtual, notaAtual }) {
                       <div className="button-group">
                         {isEditavel && (
                           <button
-                            className="remove-btn" onClick={() => removeRow(idx)}>
+                            className="remove-btn"
+                            onClick={() => removeRow(indexOriginal)}
+                          >
                             <FaTimes />
                           </button>
                         )}
@@ -684,7 +590,7 @@ export default function Listagem({ projetoAtual, notaAtual }) {
                     </td>
                   </tr>
 
-                  {isLastInGroup && idx < rows.length - 1 && (
+                  {isLastInGroup && visualIdx < rowsParaExibir.length - 1 && (
                     <tr className="delimiter-row">
                       <td colSpan="9">
                         <div className="envio-delimiter">

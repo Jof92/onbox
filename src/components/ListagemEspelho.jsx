@@ -4,7 +4,7 @@ import { supabase } from "../supabaseClient";
 import "./Listagem.css";
 import "./ListagemEspelho.css";
 import "./loader.css";
-import { FaPaperPlane, FaComment, FaPlus, FaTimes} from "react-icons/fa";
+import { FaPaperPlane, FaComment, FaPlus, FaTimes } from "react-icons/fa";
 import Check from "./Check";
 import Loading from "./Loading";
 
@@ -46,12 +46,12 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
       const { data: unidadesData } = await supabase.from("itens").select("unidade");
       setUnidadesDisponiveis([...new Set(unidadesData?.map(u => u.unidade).filter(Boolean) || [])]);
 
-      // Carregar itens da nota espelho
+      // Carregar itens ordenados por ordem ASC (1, 2, 3...)
       const { data: itensSalvos, error } = await supabase
         .from("planilha_itens")
         .select("*")
         .eq("nota_id", notaEspelhoId)
-        .order("criado_em", { ascending: false });
+        .order("ordem", { ascending: true });
 
       if (error) throw error;
 
@@ -71,18 +71,13 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
         enviado_por: item.enviado_por || "Usuário",
         isCriar: (item.codigo || "").toLowerCase() === "criar",
         jaCriado: (item.codigo || "").toLowerCase() !== "criar" && !!item.codigo?.trim(),
+        ordem: item.ordem || 0,
       }));
 
-      const sorted = mapped.sort((a, b) => {
-        const ta = a.criado_em ? new Date(a.criado_em).getTime() : 0;
-        const tb = b.criado_em ? new Date(b.criado_em).getTime() : 0;
-        return tb - ta;
-      });
-
-      setRows(sorted);
+      setRows(mapped);
 
       const comentariosIniciais = {};
-      sorted.forEach(item => {
+      mapped.forEach(item => {
         comentariosIniciais[item.id] = item.comentario || "";
       });
       setComentarios(comentariosIniciais);
@@ -238,6 +233,9 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
     );
   }
 
+  // ✅ Inverte a exibição: mais recente (maior ordem) no topo
+  const rowsParaExibir = [...rows].reverse();
+
   return (
     <div className="listagem-card">
       <div className="listagem-header-container">
@@ -288,14 +286,14 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, idx) => {
+            {rowsParaExibir.map((row, visualIdx) => {
               const currentGroup = row.grupo_envio;
-              const nextRow = rows[idx + 1];
+              const nextRow = rowsParaExibir[visualIdx + 1];
               const isLastInGroup = !nextRow || nextRow.grupo_envio !== currentGroup;
               const isDisabled = !row.isCriar;
 
               return (
-                <React.Fragment key={row.id ?? idx}>
+                <React.Fragment key={row.id ?? visualIdx}>
                   <tr className={row.selecionado ? "linha-selecionada" : ""}>
                     <td>
                       <input
@@ -305,7 +303,7 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
                         disabled={isDisabled}
                       />
                     </td>
-                    <td>{idx + 1}</td>
+                    <td>{row.ordem}</td> {/* ✅ Mostra a ordem real, não o índice */}
                     <td>
                       {row.isCriar ? (
                         <input
@@ -401,7 +399,7 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
                     </td>
                   </tr>
 
-                  {isLastInGroup && idx < rows.length - 1 && (
+                  {isLastInGroup && visualIdx < rowsParaExibir.length - 1 && (
                     <tr className="delimiter-row">
                       <td colSpan="9">
                         <div className="envio-delimiter">
