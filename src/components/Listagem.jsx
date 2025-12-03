@@ -21,7 +21,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
   const [statusEnvio, setStatusEnvio] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Carrega perfil do usuário logado (remetente)
+  // Carrega perfil do usuário logado
   useEffect(() => {
     const fetchUserProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -39,7 +39,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
     fetchUserProfile();
   }, []);
 
-  // ✅ Carrega setores do CONTAINER ATUAL
+  // Carrega setores do container atual
   useEffect(() => {
     if (!containerAtual?.id) {
       setSetoresContainer([]);
@@ -69,11 +69,9 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
     setUltimaAlteracao(`${autor} alterou em ${agora.toLocaleDateString()} ${agora.toLocaleTimeString()}`);
   };
 
-  const carregarDados = async () => {
-    setLoading(true);
+  const carregarDadosDoBanco = async () => {
     try {
       if (!projetoAtual?.id || !notaAtual?.id) {
-        // Lista vazia: cria 1 item inicial com ordem = 1
         setRows([{
           codigo: "",
           descricao: "",
@@ -134,15 +132,67 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
     } catch (err) {
       console.error("Erro ao carregar dados:", err);
       alert("Erro ao carregar os dados da lista.");
-    } finally {
-      setLoading(false);
     }
   };
 
+  // ✅ Carrega rascunho do localStorage ou do banco
   useEffect(() => {
-    carregarDados();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const carregarRascunhoOuBanco = async () => {
+      setLoading(true);
+
+      // Caso não haja nota/projeto, inicializa vazio
+      if (!projetoAtual?.id || !notaAtual?.id) {
+        setRows([{
+          codigo: "",
+          descricao: "",
+          unidade: "",
+          quantidade: "",
+          locacao: "",
+          eap: "",
+          fornecedor: "",
+          ordem: 1,
+        }]);
+        setLoading(false);
+        return;
+      }
+
+      const draftKey = `listagem_draft_${notaAtual.id}`;
+      const draftStr = localStorage.getItem(draftKey);
+
+      if (draftStr) {
+        try {
+          const draft = JSON.parse(draftStr);
+          // Opcional: só restaura se for recente (< 7 dias)
+          if (draft.rows && draft.timestamp > Date.now() - 7 * 24 * 60 * 60 * 1000) {
+            setRows(draft.rows);
+            setUltimaAlteracao(draft.ultimaAlteracao || "");
+            setLoading(false);
+            return;
+          }
+        } catch (e) {
+          console.warn("Rascunho inválido, ignorando.");
+        }
+      }
+
+      // Caso contrário, carrega do banco
+      await carregarDadosDoBanco();
+      setLoading(false);
+    };
+
+    carregarRascunhoOuBanco();
   }, [projetoAtual, notaAtual]);
+
+  // ✅ Salva rascunho no localStorage a cada alteração
+  useEffect(() => {
+    if (notaAtual?.id && rows.length > 0) {
+      const draft = {
+        rows,
+        ultimaAlteracao,
+        timestamp: Date.now(),
+      };
+      localStorage.setItem(`listagem_draft_${notaAtual.id}`, JSON.stringify(draft));
+    }
+  }, [rows, ultimaAlteracao, notaAtual?.id]);
 
   const buscarItemPorCodigo = async (index, codigo) => {
     if (!codigo?.trim() || codigo.toLowerCase() === "criar") {
@@ -192,10 +242,10 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
   };
 
   const addRow = () => {
-    const ultimaOrdem = rows.length > 0 
-      ? Math.max(...rows.map(r => r.ordem || 0)) 
+    const ultimaOrdem = rows.length > 0
+      ? Math.max(...rows.map(r => r.ordem || 0))
       : 0;
-    
+
     const novaLinha = {
       codigo: "",
       descricao: "",
@@ -223,7 +273,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
         if (error) throw error;
       } catch (err) {
         alert("Erro ao excluir item: " + (err.message || "Erro desconhecido"));
-        await carregarDados();
+        await carregarDadosDoBanco();
       }
     }
   };
@@ -391,9 +441,12 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
         await supabase.from("planilha_itens").insert(itensParaInserir);
       }
 
+      // ✅ Limpa rascunho após salvar com sucesso
+      localStorage.removeItem(`listagem_draft_${notaAtual.id}`);
+
       setCodigoErro(new Set());
       setSetorSelecionado("");
-      await carregarDados();
+      await carregarDadosDoBanco();
 
       setStatusEnvio("sucesso");
       setTimeout(() => setStatusEnvio(null), 2000);
@@ -413,7 +466,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
     );
   }
 
-  // ✅ Inverte apenas para exibição — estado interno permanece em ordem cronológica
+  // Inverte apenas para exibição
   const rowsParaExibir = [...rows].reverse();
 
   return (
@@ -480,7 +533,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
               const nextRow = rowsParaExibir[visualIdx + 1];
               const isLastInGroup = !nextRow || nextRow.grupo_envio !== row.grupo_envio;
 
-              // Encontra o índice original no estado (não invertido)
               const indexOriginal = rows.findIndex(r => r.ordem === row.ordem);
 
               return (

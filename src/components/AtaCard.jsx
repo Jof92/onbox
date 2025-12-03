@@ -210,81 +210,69 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     if (projetoAtual?.id && notaAtual?.id) fetchAta();
   }, [projetoAtual?.id, notaAtual?.id, fetchAta]);
 
-  // 🔍 Buscar participantes com @ — inclui VOCÊ e membros do container
-  const handleParticipanteChange = (e) => {
+  // 🔍 Buscar participantes com @ — membros do CONTAINER ATUAL (projetoAtual.id)
+  const handleParticipanteChange = async (e) => {
     const v = e.target.value;
     setParticipanteInput(v);
 
-    if (v.startsWith("@") && v.length > 1 && usuarioId) {
+    // Só busca se tiver @ + algo + e existir container (projetoAtual.id)
+    if (v.startsWith("@") && v.length > 1 && projetoAtual?.id) {
       const termo = v.slice(1).toLowerCase();
 
-      // Buscar seu próprio perfil
-      const fetchMeuPerfil = supabase
-        .from("profiles")
-        .select("id, nickname, nome, funcao")
-        .eq("id", usuarioId)
-        .single();
+      try {
+        // ✅ Mesmo container usado no Listagem.jsx: projetoAtual.id
+        const { data: convites, error: convitesError } = await supabase
+          .from("convites")
+          .select("user_id")
+          .eq("container_id", projetoAtual.id)  // <-- aqui está a chave
+          .eq("status", "aceito");
 
-      // Buscar membros do container (convites aceitos)
-      const fetchConvites = supabase
-        .from("convites")
-        .select("user_id")
-        .eq("container_id", usuarioId)
-        .eq("status", "aceito");
-
-      Promise.all([fetchMeuPerfil, fetchConvites])
-        .then(async ([meuPerfilRes, convitesRes]) => {
-          const sugestoes = [];
-
-          // Adicionar seu próprio perfil se corresponder
-          if (meuPerfilRes.data) {
-            const eu = meuPerfilRes.data;
-            if (
-              (eu.nickname?.toLowerCase().includes(termo)) ||
-              (eu.nome?.toLowerCase().includes(termo))
-            ) {
-              sugestoes.push(eu);
-            }
-          }
-
-          // Adicionar outros membros do container
-          if (!convitesRes.error && convitesRes.data?.length > 0) {
-            const userIds = convitesRes.data
-              .map(c => c.user_id)
-              .filter(id => id && id !== usuarioId); // evita duplicar você
-
-            if (userIds.length > 0) {
-              const { data: profiles, error: profilesError } = await supabase
-                .from("profiles")
-                .select("id, nickname, nome, funcao")
-                .in("id", userIds);
-
-              if (!profilesError && profiles) {
-                const filtrados = profiles.filter(p =>
-                  (p.nickname?.toLowerCase().includes(termo)) ||
-                  (p.nome?.toLowerCase().includes(termo))
-                );
-                sugestoes.push(...filtrados);
-              }
-            }
-          }
-
-          // Remover duplicatas por ID
-          const ids = new Set();
-          const unicos = [];
-          for (const p of sugestoes) {
-            if (!ids.has(p.id)) {
-              ids.add(p.id);
-              unicos.push(p);
-            }
-          }
-
-          setSugestoesParticipantes(unicos.slice(0, 10));
-        })
-        .catch(err => {
-          console.error("Erro ao buscar sugestões de participantes:", err);
+        if (convitesError) {
+          console.error("Erro ao buscar convites do container:", convitesError);
           setSugestoesParticipantes([]);
+          return;
+        }
+
+        const userIds = convites
+          .map(c => c.user_id)
+          .filter(id => id); // remove null/undefined
+
+        if (userIds.length === 0) {
+          setSugestoesParticipantes([]);
+          return;
+        }
+
+        // Buscar profiles desses membros
+        const { data: profiles, error: profilesError } = await supabase
+          .from("profiles")
+          .select("id, nickname, nome, funcao")
+          .in("id", userIds);
+
+        if (profilesError) {
+          console.error("Erro ao buscar perfis:", profilesError);
+          setSugestoesParticipantes([]);
+          return;
+        }
+
+        // Filtrar por nickname ou nome
+        const sugestoes = profiles.filter(p =>
+          (p.nickname?.toLowerCase().includes(termo)) ||
+          (p.nome?.toLowerCase().includes(termo))
+        );
+
+        // Remover duplicatas (embora improvável)
+        const seen = new Set();
+        const unicos = sugestoes.filter(p => {
+          if (seen.has(p.id)) return false;
+          seen.add(p.id);
+          return true;
         });
+
+        setSugestoesParticipantes(unicos.slice(0, 10));
+      } catch (err) {
+        console.error("Erro inesperado ao buscar participantes:", err);
+        setSugestoesParticipantes([]);
+      }
     } else {
       setSugestoesParticipantes([]);
     }
