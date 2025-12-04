@@ -15,7 +15,6 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
   const [nomeUsuarioLogado, setNomeUsuarioLogado] = useState("Usuário");
   const [statusEnvio, setStatusEnvio] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [unidadesDisponiveis, setUnidadesDisponiveis] = useState([]);
 
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -40,9 +39,6 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
         return;
       }
 
-      const { data: unidadesData } = await supabase.from("itens").select("unidade");
-      setUnidadesDisponiveis([...new Set(unidadesData?.map(u => u.unidade).filter(Boolean) || [])]);
-
       const { data: itensSalvos, error } = await supabase
         .from("planilha_itens")
         .select("*")
@@ -66,7 +62,6 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
         data_envio: item.data_envio || item.criado_em,
         enviado_por: item.enviado_por || "Usuário",
         isCriar: (item.codigo || "").toLowerCase() === "criar",
-        jaCriado: (item.codigo || "").toLowerCase() !== "criar" && !!item.codigo?.trim(),
         ordem: item.ordem || 0,
       }));
 
@@ -91,10 +86,9 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
 
   const toggleSelecionado = async (id) => {
     const row = rows.find(r => r.id === id);
-    if (!row) return;
+    if (!row || !row.isCriar) return; // Só permite marcar se for "criar"
 
     const novoValor = !row.selecionado;
-
     setRows(prev => prev.map(r => (r.id === id ? { ...r, selecionado: novoValor } : r)));
 
     try {
@@ -142,9 +136,7 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
     }
 
     try {
-      console.log('🔄 Iniciando criação do item:', row.codigo);
-
-      // 1. Cria o item na tabela 'itens' (banco global de insumos)
+      // 1. Cria o item na tabela global de insumos
       const { error: insertError } = await supabase
         .from("itens")
         .insert({
@@ -153,31 +145,20 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
           unidade: row.unidade || null,
         });
 
-      if (insertError) {
-        console.error('❌ Erro ao inserir item:', insertError);
-        throw insertError;
-      }
+      if (insertError) throw insertError;
 
-      console.log('✅ Item criado na tabela itens');
-
-      // 2. Atualiza o item na nota espelho (atual)
+      // 2. Atualiza apenas codigo e descricao na nota espelho
       const { error: updateEspelhoError } = await supabase
         .from("planilha_itens")
         .update({
           codigo: row.codigo.trim(),
           descricao: row.descricao || "",
-          unidade: row.unidade || null,
         })
         .eq("id", row.id);
 
-      if (updateEspelhoError) {
-        console.error('❌ Erro ao atualizar espelho:', updateEspelhoError);
-        throw updateEspelhoError;
-      }
+      if (updateEspelhoError) throw updateEspelhoError;
 
-      console.log('✅ Item atualizado na nota espelho');
-
-      // 3. Busca o mapeamento no localStorage
+      // 3. Atualiza APENAS codigo e descricao no item original
       const mapaStr = localStorage.getItem(`mapa_itens_${notaEspelhoId}`);
       if (mapaStr) {
         try {
@@ -185,30 +166,21 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
           const itemOriginalId = mapa[row.id];
 
           if (itemOriginalId) {
-            console.log('🔄 Atualizando item original ID:', itemOriginalId);
-
             const { error: updateOriginalError } = await supabase
               .from("planilha_itens")
               .update({
                 codigo: row.codigo.trim(),
                 descricao: row.descricao || "",
-                unidade: row.unidade || null,
               })
               .eq("id", itemOriginalId);
 
             if (updateOriginalError) {
-              console.error('❌ Erro ao atualizar item original:', updateOriginalError);
-            } else {
-              console.log('✅ Item original atualizado com sucesso!');
+              console.error("Erro ao atualizar item original:", updateOriginalError);
             }
-          } else {
-            console.warn('⚠️ ID original não encontrado no mapa para item espelho:', row.id);
           }
         } catch (e) {
-          console.error('❌ Erro ao processar mapeamento:', e);
+          console.error("Erro ao processar mapeamento:", e);
         }
-      } else {
-        console.warn('⚠️ Mapeamento não encontrado no localStorage');
       }
 
       // 4. Atualiza estado local
@@ -218,22 +190,15 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
             ? {
                 ...r,
                 isCriar: false,
-                jaCriado: true,
                 codigo: row.codigo.trim(),
                 descricao: row.descricao,
-                unidade: row.unidade,
               }
             : r
         )
       );
 
-      // 5. Atualiza lista de unidades
-      const { data: unidadesAtualizadas } = await supabase.from("itens").select("unidade");
-      setUnidadesDisponiveis([...new Set(unidadesAtualizadas?.map(u => u.unidade).filter(Boolean) || [])]);
-
       alert("Item criado com sucesso! A listagem original foi atualizada automaticamente.");
     } catch (err) {
-      console.error("❌ Erro geral em handleAddCriar:", err);
       alert("Erro ao criar item: " + (err.message || "Erro desconhecido"));
     }
   };
@@ -253,7 +218,6 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
           if (row.isCriar) {
             updateData.codigo = row.codigo?.trim() || null;
             updateData.descricao = row.descricao || null;
-            updateData.unidade = row.unidade || null;
           }
 
           await supabase
@@ -335,21 +299,23 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
               const currentGroup = row.grupo_envio;
               const nextRow = rowsParaExibir[visualIdx + 1];
               const isLastInGroup = !nextRow || nextRow.grupo_envio !== currentGroup;
-              const isDisabled = !row.isCriar;
 
               return (
                 <React.Fragment key={row.id ?? visualIdx}>
                   <tr className={row.selecionado ? "linha-selecionada" : ""}>
                     <td>
-                      <input
-                        type="checkbox"
-                        checked={row.selecionado}
-                        onChange={() => toggleSelecionado(row.id)}
-                        disabled={isDisabled}
-                      />
+                      {/* Checkbox só aparece para itens "criar" */}
+                      {row.isCriar && (
+                        <input
+                          type="checkbox"
+                          checked={row.selecionado}
+                          onChange={() => toggleSelecionado(row.id)}
+                        />
+                      )}
                     </td>
                     <td>{row.ordem}</td>
                     <td>
+                      {/* Código só edita se for "criar" */}
                       {row.isCriar ? (
                         <input
                           type="text"
@@ -362,6 +328,7 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
                       )}
                     </td>
                     <td>
+                      {/* Descrição só edita se for "criar" */}
                       {row.isCriar ? (
                         <input
                           type="text"
@@ -374,25 +341,21 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
                       )}
                     </td>
                     <td>
-                      {row.isCriar ? (
-                        <select
-                          value={row.unidade || ""}
-                          onChange={(e) => handleInputChange(row.id, "unidade", e.target.value)}
-                        >
-                          <option value="">(selecionar)</option>
-                          {unidadesDisponiveis.map((un, i) => (
-                            <option key={i} value={un}>{un}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <span>{row.unidade || ""}</span>
-                      )}
+                      {/* Unidade SEMPRE congelada */}
+                      <span>{row.unidade || ""}</span>
                     </td>
                     <td>
+                      {/* Quantidade SEMPRE congelada */}
                       <span>{row.quantidade || ""}</span>
                     </td>
-                    <td>{row.locacao || ""}</td>
-                    <td>{row.eap || ""}</td>
+                    <td>
+                      {/* Locação SEMPRE congelada */}
+                      <span>{row.locacao || ""}</span>
+                    </td>
+                    <td>
+                      {/* EAP SEMPRE congelado */}
+                      <span>{row.eap || ""}</span>
+                    </td>
                     <td>
                       {comentarioEditandoId === row.id ? (
                         <div className="comentario-editavel">
@@ -401,20 +364,19 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
                             onChange={(e) => handleComentarioChange(row.id, e.target.value)}
                             placeholder="Comente aqui..."
                             autoFocus
-                            disabled={isDisabled}
+                            disabled={!row.isCriar}
                           />
                           <div className="comentario-botoes">
                             <button
                               className="btn-comentario-salvar"
                               onClick={() => salvarComentarioIndividual(row.id, comentarios[row.id])}
-                              disabled={isDisabled}
+                              disabled={!row.isCriar}
                             >
                               Salvar
                             </button>
                             <button
                               className="btn-comentario-cancelar"
                               onClick={() => setComentarioEditandoId(null)}
-                              disabled={isDisabled}
                             >
                               Cancelar
                             </button>
@@ -423,8 +385,8 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
                       ) : (
                         <div
                           className="icone-comentario-clicavel"
-                          onClick={() => !isDisabled && setComentarioEditandoId(row.id)}
-                          style={isDisabled ? { opacity: 0.6, pointerEvents: "none" } : {}}
+                          onClick={() => row.isCriar && setComentarioEditandoId(row.id)}
+                          style={!row.isCriar ? { opacity: 0.6, pointerEvents: "none" } : {}}
                         >
                           <FaComment />
                           {comentarios[row.id] && <span className="indicador-comentario">•</span>}

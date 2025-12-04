@@ -6,6 +6,7 @@ import "./loader.css";
 import { FaPlus, FaTimes, FaPaperPlane } from "react-icons/fa";
 import Check from "./Check";
 import Loading from "./Loading";
+import BuscaInsumo from "./BuscaInsumo"; // ✅ novo componente
 
 export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
   const [rows, setRows] = useState([]);
@@ -21,19 +22,31 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
   const [statusEnvio, setStatusEnvio] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // ✅ Estados para o modal de busca de insumo
+  const [buscaInsumoAberta, setBuscaInsumoAberta] = useState(false);
+  const [linhaBuscaAtiva, setLinhaBuscaAtiva] = useState(null);
+
   // Carrega perfil do usuário logado
   useEffect(() => {
     const fetchUserProfile = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data, error } = await supabase.auth.getUser();
+      if (error) return;
+
+      const user = data.user;
       if (user) {
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from("profiles")
           .select("nome, id")
           .eq("id", user.id)
           .single();
 
-        setNomeUsuarioLogado(profile?.nome || user.email?.split("@")[0] || "Usuário");
-        setUserIdLogado(profile?.id || "");
+        if (profileError) {
+          setNomeUsuarioLogado(user.email?.split("@")[0] || "Usuário");
+          setUserIdLogado("");
+        } else {
+          setNomeUsuarioLogado(profile?.nome || user.email?.split("@")[0] || "Usuário");
+          setUserIdLogado(profile?.id || "");
+        }
       }
     };
     fetchUserProfile();
@@ -48,12 +61,13 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
 
     const carregarSetores = async () => {
       try {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from("setores")
           .select("id, name, nickname")
           .eq("user_id", containerAtual.id)
           .order("nickname");
 
+        if (error) throw error;
         setSetoresContainer(data || []);
       } catch (err) {
         console.error("Erro ao carregar setores do container:", err);
@@ -64,11 +78,45 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
     carregarSetores();
   }, [containerAtual?.id]);
 
+  // Carrega locações (pavimentos), EAPs e unidades SEMPRE que o projeto mudar
+  useEffect(() => {
+    if (!projetoAtual?.id) {
+      setLocacoes([]);
+      setEaps([]);
+      setUnidadesDisponiveis([]);
+      return;
+    }
+
+    const carregarReferenciasDoProjeto = async () => {
+      try {
+        const [pavimentosRes, eapsRes, unidadesRes] = await Promise.all([
+          supabase.from("pavimentos").select("name").eq("project_id", projetoAtual.id),
+          supabase.from("eap").select("name").eq("project_id", projetoAtual.id),
+          supabase.from("itens").select("unidade"),
+        ]);
+
+        setLocacoes(pavimentosRes.data?.map(p => p.name) || []);
+        setEaps(eapsRes.data?.map(e => e.name) || []);
+        setUnidadesDisponiveis([
+          ...new Set(unidadesRes.data?.map(u => u.unidade).filter(Boolean) || [])
+        ]);
+      } catch (err) {
+        console.error("Erro ao carregar referências do projeto:", err);
+        setLocacoes([]);
+        setEaps([]);
+        setUnidadesDisponiveis([]);
+      }
+    };
+
+    carregarReferenciasDoProjeto();
+  }, [projetoAtual?.id]);
+
   const registrarAlteracao = (autor = nomeUsuarioLogado) => {
     const agora = new Date();
     setUltimaAlteracao(`${autor} alterou em ${agora.toLocaleDateString()} ${agora.toLocaleTimeString()}`);
   };
 
+  // Carrega APENAS os itens da nota
   const carregarDadosDoBanco = async () => {
     try {
       if (!projetoAtual?.id || !notaAtual?.id) {
@@ -85,21 +133,16 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
         return;
       }
 
-      const [{ data: pavimentosData }, { data: eapsData }, { data: unidadesData }, { data: itensSalvos, error: itensErr }] = await Promise.all([
-        supabase.from("pavimentos").select("name").eq("project_id", projetoAtual.id),
-        supabase.from("eap").select("name").eq("project_id", projetoAtual.id),
-        supabase.from("itens").select("unidade"),
-        supabase.from("planilha_itens").select("*").eq("nota_id", notaAtual.id).order("ordem", { ascending: true })
-      ]);
+      const { data: itensRes, error: itensError } = await supabase
+        .from("planilha_itens")
+        .select("*")
+        .eq("nota_id", notaAtual.id)
+        .order("ordem", { ascending: true });
 
-      if (itensErr) throw itensErr;
+      if (itensError) throw itensError;
 
-      setLocacoes(pavimentosData?.map(p => p.name) || []);
-      setEaps(eapsData?.map(e => e.name) || []);
-      setUnidadesDisponiveis([...new Set(unidadesData?.map(u => u.unidade).filter(Boolean) || [])]);
-
-      if (itensSalvos?.length) {
-        const mapped = itensSalvos.map(item => ({
+      if (itensRes?.length) {
+        const mapped = itensRes.map(item => ({
           id: item.id,
           codigo: item.codigo || "",
           descricao: item.descricao || "",
@@ -130,12 +173,12 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
 
       registrarAlteracao();
     } catch (err) {
-      console.error("Erro ao carregar dados:", err);
+      console.error("Erro ao carregar dados da nota:", err);
       alert("Erro ao carregar os dados da lista.");
     }
   };
 
-  // ✅ Carrega rascunho do localStorage ou do banco
+  // Carrega rascunho ou dados do banco quando projeto ou nota mudam
   useEffect(() => {
     const carregarRascunhoOuBanco = async () => {
       setLoading(true);
@@ -179,7 +222,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
     carregarRascunhoOuBanco();
   }, [projetoAtual, notaAtual]);
 
-  // ✅ Salva rascunho no localStorage a cada alteração
+  // Salva rascunho no localStorage
   useEffect(() => {
     if (notaAtual?.id && rows.length > 0) {
       const draft = {
@@ -191,29 +234,30 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
     }
   }, [rows, ultimaAlteracao, notaAtual?.id]);
 
-  // ✅ POLLING - Verifica atualizações a cada 3 segundos
+  // Polling: sincroniza apenas código e descrição
   useEffect(() => {
     if (!notaAtual?.id || !projetoAtual?.id) return;
 
-    console.log('🔄 Iniciando polling para nota:', notaAtual.id);
-
     const verificarAtualizacoes = async () => {
       try {
-        const { data: itensAtualizados } = await supabase
+        const { data, error } = await supabase
           .from("planilha_itens")
-          .select("id, codigo, descricao, unidade")
+          .select("id, codigo, descricao")
           .eq("nota_id", notaAtual.id);
 
-        if (itensAtualizados) {
+        if (error) throw error;
+
+        if (data) {
           setRows(prev => prev.map(r => {
-            const itemAtualizado = itensAtualizados.find(i => i.id === r.id);
-            if (itemAtualizado && itemAtualizado.codigo !== r.codigo) {
-              console.log('✅ Código atualizado:', r.codigo, '→', itemAtualizado.codigo);
+            const itemAtualizado = data.find(i => i.id === r.id);
+            if (itemAtualizado && (
+              r.codigo !== itemAtualizado.codigo ||
+              r.descricao !== itemAtualizado.descricao
+            )) {
               return {
                 ...r,
                 codigo: itemAtualizado.codigo,
                 descricao: itemAtualizado.descricao,
-                unidade: itemAtualizado.unidade,
               };
             }
             return r;
@@ -225,11 +269,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
     };
 
     const interval = setInterval(verificarAtualizacoes, 3000);
-
-    return () => {
-      console.log('⏹️ Parando polling');
-      clearInterval(interval);
-    };
+    return () => clearInterval(interval);
   }, [notaAtual?.id, projetoAtual?.id]);
 
   const buscarItemPorCodigo = async (index, codigo) => {
@@ -243,11 +283,13 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
     }
 
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("itens")
         .select("descricao, unidade")
         .eq("codigo", codigo)
         .maybeSingle();
+
+      if (error) throw error;
 
       const novas = [...rows];
       if (data) {
@@ -395,20 +437,23 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
       }
 
       const setorId = setorSelecionado;
-      const { data: pilhasRecebidos } = await supabase
+      const { data: pilhasRecebidos, error: pilhasError } = await supabase
         .from("pilhas")
         .select("id")
         .eq("setor_id", setorId)
         .eq("title", "Recebidos")
         .limit(1);
 
+      if (pilhasError) throw pilhasError;
+
       let pilhaRecebidosId;
       if (!pilhasRecebidos || pilhasRecebidos.length === 0) {
-        const { data: novaPilha } = await supabase
+        const { data: novaPilha, error: insertError } = await supabase
           .from("pilhas")
           .insert({ title: "Recebidos", setor_id: setorId })
           .select("id")
           .single();
+        if (insertError) throw insertError;
         pilhaRecebidosId = novaPilha.id;
       } else {
         pilhaRecebidosId = pilhasRecebidos[0].id;
@@ -432,7 +477,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
           })
           .eq("id", notaEspelhoId);
       } else {
-        const { data: novaNota } = await supabase
+        const { data: novaNota, error: notaError } = await supabase
           .from("notas")
           .insert({
             nome: notaAtual.nome,
@@ -443,32 +488,19 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
           })
           .select("id")
           .single();
+        if (notaError) throw notaError;
         notaEspelhoId = novaNota.id;
       }
 
-      const { data: itensOriginais } = await supabase
+      const { data: itensOriginais, error: itensError } = await supabase
         .from("planilha_itens")
         .select("*")
         .eq("nota_id", notaAtual.id)
         .order("ordem", { ascending: true });
 
+      if (itensError) throw itensError;
+
       if (itensOriginais?.length > 0) {
-        const { data: itensExistentes } = await supabase
-          .from("planilha_itens")
-          .select("id, ordem")
-          .eq("nota_id", notaEspelhoId);
-
-        // Cria mapa de item_espelho_id -> item_original_id
-        const mapaItens = {};
-        if (itensExistentes) {
-          itensExistentes.forEach(itemEspelho => {
-            const itemOriginal = itensOriginais.find(io => io.ordem === itemEspelho.ordem);
-            if (itemOriginal) {
-              mapaItens[itemEspelho.id] = itemOriginal.id;
-            }
-          });
-        }
-
         await supabase.from("planilha_itens").delete().eq("nota_id", notaEspelhoId);
 
         const itensParaInserir = itensOriginais.map(item => ({
@@ -490,12 +522,13 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
           ordem: item.ordem,
         }));
 
-        const { data: itensInseridos } = await supabase
+        const { data: itensInseridos, error: insertItensError } = await supabase
           .from("planilha_itens")
           .insert(itensParaInserir)
           .select("id, ordem");
 
-        // Salva mapeamento no localStorage para referência futura
+        if (insertItensError) throw insertItensError;
+
         if (itensInseridos) {
           const mapeamento = {};
           itensInseridos.forEach(itemEspelho => {
@@ -593,8 +626,9 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
           <tbody>
             {rowsParaExibir.map((row, visualIdx) => {
               const isCriar = row.codigo?.toLowerCase() === "criar";
-              const isEditavel = !row.id || (row.data_envio && (Date.now() - new Date(row.data_envio).getTime()) < 60 * 60 * 1000);
-              const isLinhaCongelada = !isEditavel;
+              const foiEnviada = !!row.id && !!row.data_envio;
+              const isLinhaCongelada = foiEnviada;
+              const podeEditarTudo = !row.id;
               const nextRow = rowsParaExibir[visualIdx + 1];
               const isLastInGroup = !nextRow || nextRow.grupo_envio !== row.grupo_envio;
 
@@ -605,28 +639,45 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
                   <tr className={isLinhaCongelada ? "linha-congelada" : ""}>
                     <td>{row.ordem}</td>
                     <td>
-                      <input
-                        type="text"
-                        value={row.codigo}
-                        onChange={(e) => {
-                          handleInputChange(indexOriginal, "codigo", e.target.value);
-                          if (codigoErro.has(indexOriginal)) {
-                            setCodigoErro(prev => {
-                              const novo = new Set(prev);
-                              novo.delete(indexOriginal);
-                              return novo;
-                            });
-                          }
-                        }}
-                        onBlur={() => buscarItemPorCodigo(indexOriginal, row.codigo)}
-                        onKeyPress={(e) => handleCodigoEnter(e, indexOriginal, row.codigo)}
-                        placeholder="Código"
-                        disabled={isLinhaCongelada}
-                        className={codigoErro.has(indexOriginal) ? "codigo-invalido" : ""}
-                      />
+                      {(isCriar || podeEditarTudo) && !isLinhaCongelada ? (
+                        <div className="codigo-com-lupa">
+                          <input
+                            type="text"
+                            value={row.codigo}
+                            onChange={(e) => {
+                              handleInputChange(indexOriginal, "codigo", e.target.value);
+                              if (codigoErro.has(indexOriginal)) {
+                                setCodigoErro(prev => {
+                                  const novo = new Set(prev);
+                                  novo.delete(indexOriginal);
+                                  return novo;
+                                });
+                              }
+                            }}
+                            onBlur={() => !isCriar && buscarItemPorCodigo(indexOriginal, row.codigo)}
+                            onKeyPress={(e) => !isCriar && handleCodigoEnter(e, indexOriginal, row.codigo)}
+                            placeholder="Código"
+                            className={codigoErro.has(indexOriginal) ? "codigo-invalido" : ""}
+                          />
+                          <button
+                            type="button"
+                            className="lupa-busca-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setLinhaBuscaAtiva(indexOriginal);
+                              setBuscaInsumoAberta(true);
+                            }}
+                            title="Buscar insumo"
+                          >
+                            🔍
+                          </button>
+                        </div>
+                      ) : (
+                        <span>{row.codigo || ""}</span>
+                      )}
                     </td>
                     <td>
-                      {isCriar && isEditavel ? (
+                      {(isCriar || podeEditarTudo) && !isLinhaCongelada ? (
                         <input
                           type="text"
                           value={row.descricao || ""}
@@ -638,7 +689,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
                       )}
                     </td>
                     <td>
-                      {isCriar && isEditavel ? (
+                      {isCriar && podeEditarTudo ? (
                         <select
                           value={row.unidade || ""}
                           onChange={(e) => handleInputChange(indexOriginal, "unidade", e.target.value)}
@@ -653,17 +704,20 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
                       )}
                     </td>
                     <td>
-                      <input
-                        type="number"
-                        value={row.quantidade ?? ""}
-                        onChange={(e) => handleInputChange(indexOriginal, "quantidade", e.target.value)}
-                        min="0"
-                        step="any"
-                        disabled={isLinhaCongelada}
-                      />
+                      {podeEditarTudo ? (
+                        <input
+                          type="number"
+                          value={row.quantidade ?? ""}
+                          onChange={(e) => handleInputChange(indexOriginal, "quantidade", e.target.value)}
+                          min="0"
+                          step="any"
+                        />
+                      ) : (
+                        <span>{row.quantidade || ""}</span>
+                      )}
                     </td>
                     <td>
-                      {isEditavel ? (
+                      {podeEditarTudo ? (
                         <select
                           value={row.locacao || ""}
                           onChange={(e) => handleInputChange(indexOriginal, "locacao", e.target.value)}
@@ -678,7 +732,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
                       )}
                     </td>
                     <td>
-                      {isEditavel ? (
+                      {podeEditarTudo ? (
                         <select
                           value={row.eap || ""}
                           onChange={(e) => handleInputChange(indexOriginal, "eap", e.target.value)}
@@ -695,7 +749,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
                     <td>{row.fornecedor || ""}</td>
                     <td>
                       <div className="button-group">
-                        {isEditavel && (
+                        {podeEditarTudo && (
                           <button
                             className="remove-btn"
                             onClick={() => removeRow(indexOriginal)}
@@ -729,6 +783,23 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
           </tbody>
         </table>
       </div>
+
+      {/* ✅ Modal de busca de insumo */}
+      <BuscaInsumo
+        isOpen={buscaInsumoAberta}
+        onClose={() => {
+          setBuscaInsumoAberta(false);
+          setLinhaBuscaAtiva(null);
+        }}
+        onSelect={(codigo) => {
+          if (linhaBuscaAtiva !== null) {
+            handleInputChange(linhaBuscaAtiva, "codigo", codigo);
+            buscarItemPorCodigo(linhaBuscaAtiva, codigo);
+          }
+          setBuscaInsumoAberta(false);
+          setLinhaBuscaAtiva(null);
+        }}
+      />
     </div>
   );
 }

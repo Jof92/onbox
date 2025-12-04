@@ -353,3 +353,27 @@ select {
   align-items: center;
   gap: 10px;
 }
+
+.codigo-com-lupa {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lupa-busca-btn {
+  background: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.lupa-busca-btn:hover {
+  background: #e0e0e0;
+}
