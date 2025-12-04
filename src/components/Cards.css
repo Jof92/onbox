@@ -115,7 +115,7 @@
   font-weight: 600;
   color: #fff;
   margin: 0;
-  padding: 10px 12px;
+  padding: 7px 12px;
   border-radius: 6px;
   text-align: center;
   background: #3b82f6;
@@ -611,11 +611,11 @@
 }
 
 .reset-color-dot {
-  width: 20px;
-  height: 20px;
+  width: 13px;
+  height: 13px;
   border-radius: 50%;
   background: white;
-  border: 2px solid #888;
+  border: 1px solid #888;
   cursor: pointer;
   flex-shrink: 0;
   box-shadow: 0 2px 5px rgba(0,0,0,0.15);
@@ -627,7 +627,7 @@
 }
 
 .color-track {
-  height: 18px;
+  height: 10px;
   flex: 1;
   border-radius: 8px;
   background: linear-gradient(
@@ -649,9 +649,7 @@
 .close-color-picker {
   width: 26px;
   height: 26px;
-  border-radius: 50%;
-  background: #e0e0e0;
-  border: 1px solid #aaa;
+  background: none;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -664,7 +662,135 @@
 }
 
 .close-color-picker:hover {
-  background: #cfcfcf;
-  color: #000;
-  border-color: #888;
+  color: red;
+ 
+}
+
+/*/* Estilo base da nota */
+.card-item {
+  position: relative;
+  /* Mantenha seu estilo atual de borda colorida por tipo aqui (ex: border-left, ::before, etc.) */
+}
+
+/* Container do checkbox: fixo no canto superior esquerdo */
+.concluir-checkbox-wrapper {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none; /* Evita interferir com o drag ou clique na nota */
+  transition: opacity 0.15s ease;
+  z-index: 3;
+}
+
+/* Apenas ao passar o mouse na nota inteira, mostra o checkbox */
+.card-item:hover .concluir-checkbox-wrapper {
+  opacity: 1;
+  pointer-events: auto; /* Só habilita clique quando visível */
+}
+
+.concluir-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  margin: 0;
+  padding: 0;
+  accent-color: #2e7d32; /* verde suave */
+  border: 1px solid #ccc;
+  border-radius: 3px;
+}
+
+/* Estado "concluída": borda verde sólida e remove as bordas decorativas de tipo */
+.card-item.concluida {
+  border: 2px solid #2e7d32 !important;
+  background-color: rgba(46, 125, 50, 0.05);
+}
+
+/* Suprimir as bordas de tipo (ajuste conforme sua implementação atual) */
+.card-item.concluida::before,
+.card-item.concluida::after {
+  display: none !important;
+}
+
+/* Se as bordas de tipo forem feitas com border-left/top/etc., use: */
+.card-item.concluida {
+  border-left: 2px solid #2e7d32 !important;
+  border-top: 2px solid #2e7d32 !important;
+  border-right: 2px solid #2e7d32 !important;
+  border-bottom: 2px solid #2e7d32 !important;
+}
+
+/* Campo de data de conclusão - Cards.jsx */
+.data-conclusao-container {
+    padding: 4px 0;
+  font-size: 0.85em;
+  color: #555;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.data-conclusao-container:hover {
+  color: #2d3748;
+}
+
+.data-conclusao-container input[type="date"] {
+  width: 120px;
+  padding: 4px 8px;
+  border: 1px solid #cbd5e0;
+  border-radius: 4px;
+  background-color: #f8fafc;
+  font-size: 0.85em;
+  color: #2d3748;
+  cursor: pointer;
+  appearance: none; /* Remove setas padrão em alguns navegadores */
+}
+
+.data-conclusao-container input[type="date"]:focus {
+  outline: none;
+  border-color: #4299e1;
+  box-shadow: 0 0 0 2px rgba(66, 153, 225, 0.2);
+}
+
+/* Botões de ação (✅ e ✖) */
+.data-conclusao-container button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8em;
+  font-weight: bold;
+  color: #0abb30;
+  transition: background-color 0.15s, color 0.15s;
+  border: #bec1c7 1px solid;
+}
+
+.data-conclusao-container button:hover {
+  background-color: #a7d6aeea;
+}
+
+.data-conclusao-container button:last-child {
+  color: #e53e3e;
+}
+
+.data-conclusao-container button:last-child:hover {
+  background-color: #fee;
+  color: #c53030;
+}
+
+/* Estilo para o texto "Clique para definir data" */
+.data-conclusao-container > div {
+  color: #94a3b8;
+  font-style: italic;
 }

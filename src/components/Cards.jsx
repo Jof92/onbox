@@ -37,6 +37,13 @@ export default function Cards() {
 
   const [showColorPicker, setShowColorPicker] = useState({});
 
+  // Estado para controlar notas concluídas
+  const [notasConcluidas, setNotasConcluidas] = useState(new Set());
+
+  // ✅ Novo estado para controlar edição de data de conclusão
+  const [dataConclusaoEdit, setDataConclusaoEdit] = useState({});
+  const [dataConclusaoSalva, setDataConclusaoSalva] = useState({});
+
   const colorTrackRefs = useRef({});
 
   const updateUrlWithNota = (notaId) => {
@@ -98,20 +105,32 @@ export default function Cards() {
 
         const { data: pilhas } = await supabase
           .from("pilhas")
-          .select("*, notas(id, nome, tipo, responsavel, progresso)")
+          .select("*, notas(id, nome, tipo, responsavel, progresso, concluida, data_conclusao)")
           .eq(type === "project" ? "project_id" : "setor_id", entityId)
           .order("created_at");
 
         const pilhasData = pilhas || [];
         const progressoInicial = {};
+        const concluidasInicial = new Set();
+        const dataConclusaoInicial = {};
+
         pilhasData.forEach((pilha) => {
           pilha.notas.forEach((nota) => {
             if (nota.progresso != null) {
               progressoInicial[nota.id] = nota.progresso;
             }
+            if (nota.concluida) {
+              concluidasInicial.add(String(nota.id));
+            }
+            if (nota.data_conclusao) {
+              dataConclusaoInicial[nota.id] = nota.data_conclusao.split("T")[0]; // ISO date -> YYYY-MM-DD
+            }
           });
         });
+
         setNotaProgresso(progressoInicial);
+        setNotasConcluidas(concluidasInicial);
+        setDataConclusaoSalva(dataConclusaoInicial);
 
         const recebidos = pilhasData.filter((p) => p.title === "Recebidos");
         const outras = pilhasData.filter((p) => p.title !== "Recebidos");
@@ -260,7 +279,6 @@ export default function Cards() {
     }
   };
 
-  // ✅ Corrigido: lógica segura com useRef + evento de clique
   useEffect(() => {
     const setupClickHandlers = () => {
       Object.keys(showColorPicker).forEach((colId) => {
@@ -330,6 +348,28 @@ export default function Cards() {
     }
   };
 
+  const toggleConclusaoNota = async (notaId, concluida) => {
+    const newConcluida = !concluida;
+    const { error } = await supabase
+      .from("notas")
+      .update({ concluida: newConcluida })
+      .eq("id", notaId);
+
+    if (!error) {
+      setNotasConcluidas((prev) => {
+        const novo = new Set(prev);
+        if (newConcluida) {
+          novo.add(String(notaId));
+        } else {
+          novo.delete(String(notaId));
+        }
+        return novo;
+      });
+    } else {
+      console.error("Erro ao atualizar conclusão:", error);
+    }
+  };
+
   const handleSaveTask = async () => {
     if (!formData.nome.trim() || !activeColumnId) return;
     if (!usuarioId) {
@@ -341,7 +381,7 @@ export default function Cards() {
       const { nome, tipo } = formData;
       const { data: newNota, error } = await supabase
         .from("notas")
-        .insert([{ nome, tipo, pilha_id: activeColumnId, responsavel: usuarioId }])
+        .insert([{ nome, tipo, pilha_id: activeColumnId, responsavel: usuarioId, concluida: false }])
         .select()
         .single();
 
@@ -382,6 +422,11 @@ export default function Cards() {
         delete cp[notaId];
         return cp;
       });
+      setNotasConcluidas((prev) => {
+        const novo = new Set(prev);
+        novo.delete(String(notaId));
+        return novo;
+      });
       if (notaSelecionada?.id === notaId) {
         setNotaSelecionada(null);
         setIsNotaRecebidos(false);
@@ -420,6 +465,42 @@ export default function Cards() {
       alert("Erro ao salvar alterações.");
     }
   };
+
+  // ✅ Função para salvar data de conclusão
+  const saveDataConclusao = async (notaId, data) => {
+    const { error } = await supabase
+      .from("notas")
+      .update({ data_conclusao: data || null })
+      .eq("id", notaId);
+
+    if (!error) {
+      setDataConclusaoSalva((prev) => ({ ...prev, [notaId]: data || "" }));
+      setDataConclusaoEdit((prev) => {
+        const cp = { ...prev };
+        delete cp[notaId];
+        return cp;
+      });
+    } else {
+      console.error("Erro ao salvar data de conclusão:", error);
+    }
+  };
+
+  // ✅ Clique fora do campo de data
+  useEffect(() => {
+    const handleClickOutsideDate = (e) => {
+      Object.keys(dataConclusaoEdit).forEach((id) => {
+        const el = document.querySelector(`.data-conclusao-container[data-nota-id="${id}"]`);
+        if (el && !el.contains(e.target)) {
+          saveDataConclusao(id, dataConclusaoEdit[id]);
+        }
+      });
+    };
+
+    if (Object.keys(dataConclusaoEdit).length > 0) {
+      document.addEventListener("mousedown", handleClickOutsideDate);
+      return () => document.removeEventListener("mousedown", handleClickOutsideDate);
+    }
+  }, [dataConclusaoEdit]);
 
   const onDragEnd = useCallback(
     async ({ source, destination }) => {
@@ -530,7 +611,6 @@ export default function Cards() {
                       position: "relative",
                     }}
                   >
-                    {/* ✅ Barra de estilo: só visível ao clicar em "Estilo" */}
                     {isColorPickerVisible && !isRecebidos && (
                       <div className="color-picker-toolbar">
                         <button
@@ -630,50 +710,142 @@ export default function Cards() {
                     </div>
 
                     <div className="cards-list">
-                      {col.notas.map((nota, index) => (
-                        <Draggable key={String(nota.id)} draggableId={String(nota.id)} index={index}>
-                          {(prov, snapshot) => (
-                            <div
-                              className={`card-item tipo-${(nota.tipo || "lista").toLowerCase()} ${snapshot.isDragging ? "dragging" : ""}`}
-                              ref={prov.innerRef}
-                              {...prov.draggableProps}
-                              {...prov.dragHandleProps}
-                              style={{ ...prov.draggableProps.style, userSelect: "none" }}
-                              onClick={() => handleOpenNota(nota)}
-                            >
-                              <div className="card-info">
-                                <div className="card-title-wrapper">
-                                  <strong>{nota.nome}</strong>
-                                </div>
-                                <p>
-                                  {nota.tipo}
-                                  {nota.tipo === "Atas" && notaProgresso[nota.id] !== undefined && (
-                                    <> - {notaProgresso[nota.id]}%</>
-                                  )}
-                                </p>
-                              </div>
-                              <div className="card-menu-wrapper" onClick={(e) => e.stopPropagation()}>
-                                <button
-                                  className="card-menu-btn"
-                                  onClick={() => setMenuOpenNota(menuOpenNota === nota.id ? null : nota.id)}
+                      {col.notas.map((nota, index) => {
+                        const isConcluida = notasConcluidas.has(String(nota.id));
+                        const isEditingDate = dataConclusaoEdit.hasOwnProperty(String(nota.id));
+
+                        return (
+                          <Draggable key={String(nota.id)} draggableId={String(nota.id)} index={index}>
+                            {(prov, snapshot) => (
+                              <div
+                                className={`card-item tipo-${(nota.tipo || "lista").toLowerCase()} ${snapshot.isDragging ? "dragging" : ""} ${isConcluida ? "concluida" : ""}`}
+                                ref={prov.innerRef}
+                                {...prov.draggableProps}
+                                {...prov.dragHandleProps}
+                                style={{ ...prov.draggableProps.style, userSelect: "none" }}
+                                onClick={() => handleOpenNota(nota)}
+                              >
+                                <div
+                                  className="concluir-checkbox-wrapper"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleConclusaoNota(nota.id, isConcluida);
+                                  }}
                                 >
-                                  <FaEllipsisV />
-                                </button>
-                                {menuOpenNota === nota.id && (
-                                  <div className="card-menu-dropdown">
-                                    <button onClick={() => handleEditNota(nota, col.id)}>
-                                      <FaEdit /> Editar
+                                  <input
+                                    type="checkbox"
+                                    checked={isConcluida}
+                                    readOnly
+                                    className="concluir-checkbox"
+                                  />
+                                </div>
+
+                                <div className="card-info">
+                                  <div className="card-title-wrapper">
+                                    <strong>{nota.nome}</strong>
+                                  </div>
+                                  <p>
+                                    {nota.tipo}
+                                    {nota.tipo === "Atas" && notaProgresso[nota.id] !== undefined && (
+                                      <> - {notaProgresso[nota.id]}%</>
+                                    )}
+                                  </p>
+
+                                  {/* ✅ Campo de data de conclusão (só aparece se concluída) */}
+                                  {isConcluida && (
+                                    <div
+                                      className="data-conclusao-container"
+                                      data-nota-id={nota.id}
+                                      onClick={(e) => e.stopPropagation()} // ←←← CORREÇÃO PRINCIPAL AQUI
+                                    >
+                                      {isEditingDate ? (
+                                        <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "4px" }}>
+                                          <input
+                                            type="date"
+                                            value={dataConclusaoEdit[nota.id] || ""}
+                                            onChange={(e) =>
+                                              setDataConclusaoEdit((prev) => ({
+                                                ...prev,
+                                                [nota.id]: e.target.value,
+                                              }))
+                                            }
+                                            onClick={(e) => e.stopPropagation()} // ←←← também aqui, para clicar no input
+                                            style={{ fontSize: "0.85em", padding: "2px 4px" }}
+                                          />
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              saveDataConclusao(nota.id, dataConclusaoEdit[nota.id]);
+                                            }}
+                                            style={{ fontSize: "0.8em" }}
+                                          >
+                                            ✓
+                                          </button>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setDataConclusaoEdit((prev) => {
+                                                const cp = { ...prev };
+                                                delete cp[nota.id];
+                                                return cp;
+                                              });
+                                            }}
+                                            style={{ fontSize: "0.8em", color: "#e53e3e" }}
+                                          >
+                                            ✖
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <div
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setDataConclusaoEdit((prev) => ({
+                                              ...prev,
+                                              [nota.id]: dataConclusaoSalva[nota.id] || "",
+                                            }));
+                                          }}
+                                          style={{
+                                            marginTop: "4px",
+                                            fontSize: "0.85em",
+                                            color: dataConclusaoSalva[nota.id] ? "#444" : "#999",
+                                            fontStyle: dataConclusaoSalva[nota.id] ? "normal" : "italic",
+                                          }}
+                                        >
+                                          {dataConclusaoSalva[nota.id]
+                                            ? new Date(dataConclusaoSalva[nota.id]).toLocaleDateString("pt-BR")
+                                            : "Data da entrega"}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* ✅ Menu de três pontos só aparece se NÃO concluída */}
+                                {!isConcluida && (
+                                  <div className="card-menu-wrapper" onClick={(e) => e.stopPropagation()}>
+                                    <button
+                                      className="card-menu-btn"
+                                      onClick={() => setMenuOpenNota(menuOpenNota === nota.id ? null : nota.id)}
+                                    >
+                                      <FaEllipsisV />
                                     </button>
-                                    <button onClick={() => handleDeleteNota(nota.id, col.id)}>
-                                      <FaTrash /> Excluir
-                                    </button>
+                                    {menuOpenNota === nota.id && (
+                                      <div className="card-menu-dropdown">
+                                        <button onClick={() => handleEditNota(nota, col.id)}>
+                                          <FaEdit /> Editar
+                                        </button>
+                                        <button onClick={() => handleDeleteNota(nota.id, col.id)}>
+                                          <FaTrash /> Excluir
+                                        </button>
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                               </div>
-                            </div>
-                          )}
-                        </Draggable>
-                      ))}
+                            )}
+                          </Draggable>
+                        );
+                      })}
                       {provided.placeholder}
                     </div>
                   </div>
