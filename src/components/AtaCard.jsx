@@ -6,7 +6,13 @@ import "./loader.css";
 import "./AtaCard.css";
 import AtaObjetivos from "./AtaObjetivos"; // ✅ Novo componente
 
-export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onProgressoChange }) {
+export default function AtaCard({ 
+  projetoAtual, 
+  notaAtual, 
+  ultimaAlteracao, 
+  onProgressoChange,
+  containerAtual  // 👈 RECEBE O CONTAINER DO MODAL
+}) {
   const [projetoNome, setProjetoNome] = useState("");
   const [pauta, setPauta] = useState("");
   const [local, setLocal] = useState("");
@@ -99,7 +105,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
             } else {
               return {
                 id: p.profile_id,
-                nome: "Usuário excluído",
+                nome: "Usuário excluíedido",
                 funcao: "Membro"
               };
             }
@@ -210,81 +216,68 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
     if (projetoAtual?.id && notaAtual?.id) fetchAta();
   }, [projetoAtual?.id, notaAtual?.id, fetchAta]);
 
-  // 🔍 Buscar participantes com @ — inclui VOCÊ e membros do container
-  const handleParticipanteChange = (e) => {
+  // 🔍 Buscar participantes com @ — MEMBROS DO CONTAINER ATUAL (containerAtual.id)
+  const handleParticipanteChange = async (e) => {
     const v = e.target.value;
     setParticipanteInput(v);
 
-    if (v.startsWith("@") && v.length > 1 && usuarioId) {
+    if (v.startsWith("@") && v.length > 1 && containerAtual?.id) {
       const termo = v.slice(1).toLowerCase();
 
-      // Buscar seu próprio perfil
-      const fetchMeuPerfil = supabase
-        .from("profiles")
-        .select("id, nickname, nome, funcao")
-        .eq("id", usuarioId)
-        .single();
+      try {
+        // Buscar convites ACEITOS para o container ATUAL (containerAtual.id)
+        const { data: convites, error: convitesError } = await supabase
+          .from("convites")
+          .select("user_id")
+          .eq("container_id", containerAtual.id)
+          .eq("status", "aceito");
 
-      // Buscar membros do container (convites aceitos)
-      const fetchConvites = supabase
-        .from("convites")
-        .select("user_id")
-        .eq("container_id", usuarioId)
-        .eq("status", "aceito");
-
-      Promise.all([fetchMeuPerfil, fetchConvites])
-        .then(async ([meuPerfilRes, convitesRes]) => {
-          const sugestoes = [];
-
-          // Adicionar seu próprio perfil se corresponder
-          if (meuPerfilRes.data) {
-            const eu = meuPerfilRes.data;
-            if (
-              (eu.nickname?.toLowerCase().includes(termo)) ||
-              (eu.nome?.toLowerCase().includes(termo))
-            ) {
-              sugestoes.push(eu);
-            }
-          }
-
-          // Adicionar outros membros do container
-          if (!convitesRes.error && convitesRes.data?.length > 0) {
-            const userIds = convitesRes.data
-              .map(c => c.user_id)
-              .filter(id => id && id !== usuarioId); // evita duplicar você
-
-            if (userIds.length > 0) {
-              const { data: profiles, error: profilesError } = await supabase
-                .from("profiles")
-                .select("id, nickname, nome, funcao")
-                .in("id", userIds);
-
-              if (!profilesError && profiles) {
-                const filtrados = profiles.filter(p =>
-                  (p.nickname?.toLowerCase().includes(termo)) ||
-                  (p.nome?.toLowerCase().includes(termo))
-                );
-                sugestoes.push(...filtrados);
-              }
-            }
-          }
-
-          // Remover duplicatas por ID
-          const ids = new Set();
-          const unicos = [];
-          for (const p of sugestoes) {
-            if (!ids.has(p.id)) {
-              ids.add(p.id);
-              unicos.push(p);
-            }
-          }
-
-          setSugestoesParticipantes(unicos.slice(0, 10));
-        })
-        .catch(err => {
-          console.error("Erro ao buscar sugestões de participantes:", err);
+        if (convitesError) {
+          console.error("Erro ao buscar convites:", convitesError);
           setSugestoesParticipantes([]);
+          return;
+        }
+
+        const userIds = convites
+          .map(c => c.user_id)
+          .filter(id => id); // Remove nulos
+
+        if (userIds.length === 0) {
+          setSugestoesParticipantes([]);
+          return;
+        }
+
+        // Buscar perfis desses membros
+        const { data: profiles, error: profilesError } = await supabase
+          .from("profiles")
+          .select("id, nickname, nome, funcao")
+          .in("id", userIds);
+
+        if (profilesError) {
+          console.error("Erro ao buscar perfis:", profilesError);
+          setSugestoesParticipantes([]);
+          return;
+        }
+
+        // Filtrar por nickname ou nome (case-insensitive)
+        const sugestoes = profiles.filter(p =>
+          (p.nickname?.toLowerCase().includes(termo)) ||
+          (p.nome?.toLowerCase().includes(termo))
+        );
+
+        // Remover duplicatas por ID
+        const seen = new Set();
+        const unicos = sugestoes.filter(p => {
+          if (seen.has(p.id)) return false;
+          seen.add(p.id);
+          return true;
         });
+
+        setSugestoesParticipantes(unicos.slice(0, 10));
+      } catch (err) {
+        console.error("Erro inesperado ao buscar participantes:", err);
+        setSugestoesParticipantes([]);
+      }
     } else {
       setSugestoesParticipantes([]);
     }
@@ -389,7 +382,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
       setSalvando(false);
     }
   }, [
-    ataId, usuarioId, notaAtual, projetoAtual, pauta, local, texto, proxima, dataLocal, participantes
+    ataId, usuarioId, notaAtual, projetoAtual, pauta, local, texto, proxima, dataLocal, participantes, containerAtual
   ]);
 
   if (loading) return <div className="ata-card-loading"><Loading size={200} /></div>;
@@ -497,6 +490,7 @@ export default function AtaCard({ projetoAtual, notaAtual, ultimaAlteracao, onPr
           projetoNome={projetoNome}
           autorNome={autorNome}
           onProgressoChange={onProgressoChange}
+          containerAtual={containerAtual}
         />
 
         <div className="ata-section proxima-reuniao-container">

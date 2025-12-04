@@ -136,6 +136,7 @@ export default function ModalNota({
                     onProgressoChange={handleProgressoChange}
                     user={{ id: usuarioId }}
                     onClose={onCloseVisualizarNota}
+                    containerAtual={{ id: donoContainerId }} // 👈 IMPORTANTE!                    
                   />
                 );
               } else if (notaSelecionada.tipo === "Tarefas") {
@@ -149,6 +150,7 @@ export default function ModalNota({
                     pilhaAtual={pilhaAtual}
                     usuarioAtual={usuarioAtual}
                     onClose={onCloseVisualizarNota}
+                    containerAtual={{ id: donoContainerId }} // 👈 IMPORTANTE!
                   />
                 );
               } else if (notaSelecionada.tipo === "Metas") {

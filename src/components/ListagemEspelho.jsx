@@ -17,7 +17,6 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
   const [loading, setLoading] = useState(true);
   const [unidadesDisponiveis, setUnidadesDisponiveis] = useState([]);
 
-  // Carregar perfil do usuário logado
   useEffect(() => {
     const fetchUserProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -33,7 +32,6 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
     fetchUserProfile();
   }, []);
 
-  // Carregar dados da nota espelho
   const carregarDados = async () => {
     setLoading(true);
     try {
@@ -42,11 +40,9 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
         return;
       }
 
-      // Carregar unidades disponíveis
       const { data: unidadesData } = await supabase.from("itens").select("unidade");
       setUnidadesDisponiveis([...new Set(unidadesData?.map(u => u.unidade).filter(Boolean) || [])]);
 
-      // Carregar itens ordenados por ordem ASC (1, 2, 3...)
       const { data: itensSalvos, error } = await supabase
         .from("planilha_itens")
         .select("*")
@@ -140,12 +136,15 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
   };
 
   const handleAddCriar = async (row) => {
-    if (!row.codigo?.trim()) {
-      alert("Informe um código válido.");
+    if (!row.codigo?.trim() || row.codigo.toLowerCase() === 'criar') {
+      alert("Digite um código válido antes de criar o item!");
       return;
     }
 
     try {
+      console.log('🔄 Iniciando criação do item:', row.codigo);
+
+      // 1. Cria o item na tabela 'itens' (banco global de insumos)
       const { error: insertError } = await supabase
         .from("itens")
         .insert({
@@ -154,9 +153,15 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
           unidade: row.unidade || null,
         });
 
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error('❌ Erro ao inserir item:', insertError);
+        throw insertError;
+      }
 
-      const { error: updateError } = await supabase
+      console.log('✅ Item criado na tabela itens');
+
+      // 2. Atualiza o item na nota espelho (atual)
+      const { error: updateEspelhoError } = await supabase
         .from("planilha_itens")
         .update({
           codigo: row.codigo.trim(),
@@ -165,8 +170,48 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
         })
         .eq("id", row.id);
 
-      if (updateError) throw updateError;
+      if (updateEspelhoError) {
+        console.error('❌ Erro ao atualizar espelho:', updateEspelhoError);
+        throw updateEspelhoError;
+      }
 
+      console.log('✅ Item atualizado na nota espelho');
+
+      // 3. Busca o mapeamento no localStorage
+      const mapaStr = localStorage.getItem(`mapa_itens_${notaEspelhoId}`);
+      if (mapaStr) {
+        try {
+          const mapa = JSON.parse(mapaStr);
+          const itemOriginalId = mapa[row.id];
+
+          if (itemOriginalId) {
+            console.log('🔄 Atualizando item original ID:', itemOriginalId);
+
+            const { error: updateOriginalError } = await supabase
+              .from("planilha_itens")
+              .update({
+                codigo: row.codigo.trim(),
+                descricao: row.descricao || "",
+                unidade: row.unidade || null,
+              })
+              .eq("id", itemOriginalId);
+
+            if (updateOriginalError) {
+              console.error('❌ Erro ao atualizar item original:', updateOriginalError);
+            } else {
+              console.log('✅ Item original atualizado com sucesso!');
+            }
+          } else {
+            console.warn('⚠️ ID original não encontrado no mapa para item espelho:', row.id);
+          }
+        } catch (e) {
+          console.error('❌ Erro ao processar mapeamento:', e);
+        }
+      } else {
+        console.warn('⚠️ Mapeamento não encontrado no localStorage');
+      }
+
+      // 4. Atualiza estado local
       setRows(prev =>
         prev.map(r =>
           r.id === row.id
@@ -182,12 +227,13 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
         )
       );
 
+      // 5. Atualiza lista de unidades
       const { data: unidadesAtualizadas } = await supabase.from("itens").select("unidade");
       setUnidadesDisponiveis([...new Set(unidadesAtualizadas?.map(u => u.unidade).filter(Boolean) || [])]);
 
-      alert("Item criado com sucesso!");
+      alert("Item criado com sucesso! A listagem original foi atualizada automaticamente.");
     } catch (err) {
-      console.error("Erro em handleAddCriar:", err);
+      console.error("❌ Erro geral em handleAddCriar:", err);
       alert("Erro ao criar item: " + (err.message || "Erro desconhecido"));
     }
   };
@@ -233,7 +279,6 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
     );
   }
 
-  // ✅ Inverte a exibição: mais recente (maior ordem) no topo
   const rowsParaExibir = [...rows].reverse();
 
   return (
@@ -303,7 +348,7 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
                         disabled={isDisabled}
                       />
                     </td>
-                    <td>{row.ordem}</td> {/* ✅ Mostra a ordem real, não o índice */}
+                    <td>{row.ordem}</td>
                     <td>
                       {row.isCriar ? (
                         <input

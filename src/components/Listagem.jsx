@@ -140,7 +140,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
     const carregarRascunhoOuBanco = async () => {
       setLoading(true);
 
-      // Caso não haja nota/projeto, inicializa vazio
       if (!projetoAtual?.id || !notaAtual?.id) {
         setRows([{
           codigo: "",
@@ -162,7 +161,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
       if (draftStr) {
         try {
           const draft = JSON.parse(draftStr);
-          // Opcional: só restaura se for recente (< 7 dias)
           if (draft.rows && draft.timestamp > Date.now() - 7 * 24 * 60 * 60 * 1000) {
             setRows(draft.rows);
             setUltimaAlteracao(draft.ultimaAlteracao || "");
@@ -174,7 +172,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
         }
       }
 
-      // Caso contrário, carrega do banco
       await carregarDadosDoBanco();
       setLoading(false);
     };
@@ -193,6 +190,47 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
       localStorage.setItem(`listagem_draft_${notaAtual.id}`, JSON.stringify(draft));
     }
   }, [rows, ultimaAlteracao, notaAtual?.id]);
+
+  // ✅ POLLING - Verifica atualizações a cada 3 segundos
+  useEffect(() => {
+    if (!notaAtual?.id || !projetoAtual?.id) return;
+
+    console.log('🔄 Iniciando polling para nota:', notaAtual.id);
+
+    const verificarAtualizacoes = async () => {
+      try {
+        const { data: itensAtualizados } = await supabase
+          .from("planilha_itens")
+          .select("id, codigo, descricao, unidade")
+          .eq("nota_id", notaAtual.id);
+
+        if (itensAtualizados) {
+          setRows(prev => prev.map(r => {
+            const itemAtualizado = itensAtualizados.find(i => i.id === r.id);
+            if (itemAtualizado && itemAtualizado.codigo !== r.codigo) {
+              console.log('✅ Código atualizado:', r.codigo, '→', itemAtualizado.codigo);
+              return {
+                ...r,
+                codigo: itemAtualizado.codigo,
+                descricao: itemAtualizado.descricao,
+                unidade: itemAtualizado.unidade,
+              };
+            }
+            return r;
+          }));
+        }
+      } catch (err) {
+        console.error('Erro ao verificar atualizações:', err);
+      }
+    };
+
+    const interval = setInterval(verificarAtualizacoes, 3000);
+
+    return () => {
+      console.log('⏹️ Parando polling');
+      clearInterval(interval);
+    };
+  }, [notaAtual?.id, projetoAtual?.id]);
 
   const buscarItemPorCodigo = async (index, codigo) => {
     if (!codigo?.trim() || codigo.toLowerCase() === "criar") {
@@ -338,7 +376,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
         if (error) throw error;
       }
 
-      // ===== NOTIFICAÇÕES =====
       const notificacoesParaInserir = setoresParaEnvio.map(setorId => ({
         user_id: userIdLogado,
         remetente_id: userIdLogado,
@@ -357,7 +394,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
         }
       }
 
-      // ===== CRIA PILHA "RECEBIDOS" E NOTA ESPELHO =====
       const setorId = setorSelecionado;
       const { data: pilhasRecebidos } = await supabase
         .from("pilhas")
@@ -417,6 +453,22 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
         .order("ordem", { ascending: true });
 
       if (itensOriginais?.length > 0) {
+        const { data: itensExistentes } = await supabase
+          .from("planilha_itens")
+          .select("id, ordem")
+          .eq("nota_id", notaEspelhoId);
+
+        // Cria mapa de item_espelho_id -> item_original_id
+        const mapaItens = {};
+        if (itensExistentes) {
+          itensExistentes.forEach(itemEspelho => {
+            const itemOriginal = itensOriginais.find(io => io.ordem === itemEspelho.ordem);
+            if (itemOriginal) {
+              mapaItens[itemEspelho.id] = itemOriginal.id;
+            }
+          });
+        }
+
         await supabase.from("planilha_itens").delete().eq("nota_id", notaEspelhoId);
 
         const itensParaInserir = itensOriginais.map(item => ({
@@ -438,10 +490,24 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
           ordem: item.ordem,
         }));
 
-        await supabase.from("planilha_itens").insert(itensParaInserir);
+        const { data: itensInseridos } = await supabase
+          .from("planilha_itens")
+          .insert(itensParaInserir)
+          .select("id, ordem");
+
+        // Salva mapeamento no localStorage para referência futura
+        if (itensInseridos) {
+          const mapeamento = {};
+          itensInseridos.forEach(itemEspelho => {
+            const itemOriginal = itensOriginais.find(io => io.ordem === itemEspelho.ordem);
+            if (itemOriginal) {
+              mapeamento[itemEspelho.id] = itemOriginal.id;
+            }
+          });
+          localStorage.setItem(`mapa_itens_${notaEspelhoId}`, JSON.stringify(mapeamento));
+        }
       }
 
-      // ✅ Limpa rascunho após salvar com sucesso
       localStorage.removeItem(`listagem_draft_${notaAtual.id}`);
 
       setCodigoErro(new Set());
@@ -466,7 +532,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
     );
   }
 
-  // Inverte apenas para exibição
   const rowsParaExibir = [...rows].reverse();
 
   return (

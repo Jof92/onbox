@@ -79,7 +79,15 @@ const ChipResponsavel = ({ responsavel, onRemove, disabled }) => {
 };
 
 export default function AtaObjetivos({
-  ataId, texto, usuarioId, projetoAtual, notaAtual, projetoNome, autorNome, onProgressoChange
+  ataId,
+  texto,
+  usuarioId,
+  projetoAtual,
+  notaAtual,
+  projetoNome,
+  autorNome,
+  onProgressoChange,
+  containerAtual // ✅ Recebe containerAtual do AtaCard
 }) {
   const [criarObjetivos, setCriarObjetivos] = useState(false);
   const [objetivosList, setObjetivosList] = useState([]);
@@ -125,7 +133,6 @@ export default function AtaObjetivos({
     let respPorObj = {};
 
     if (objetivoIds.length > 0) {
-      // ✅ Usa a view enriquecida com nome_exibicao
       const { data: respData, error: respErr } = await supabase
         .from("ata_objetivos_responsaveis_enriquecidos")
         .select("*")
@@ -307,7 +314,7 @@ export default function AtaObjetivos({
     }
   };
 
-  // ============= Funções de responsáveis (CORRIGIDAS) =============
+  // ============= Funções de responsáveis (CORRIGIDAS COM containerAtual) =============
 
   const handleResponsavelInputChange = (e, i) => {
     const valor = e.target.value;
@@ -315,73 +322,59 @@ export default function AtaObjetivos({
     const objetivo = objetivosList[i];
     if (objetivo?.concluido) return;
 
-    if (valor.startsWith("@") && valor.length > 1 && usuarioId) {
+    if (valor.startsWith("@") && valor.length > 1 && containerAtual?.id) {
       const termo = valor.slice(1).toLowerCase();
 
-      // Buscar seu próprio perfil
-      const fetchMeuPerfil = supabase
-        .from("profiles")
-        .select("id, nickname, nome, funcao")
-        .eq("id", usuarioId)
-        .single();
-
-      // Buscar membros do container (convites aceitos)
-      const fetchConvites = supabase
+      supabase
         .from("convites")
         .select("user_id")
-        .eq("container_id", usuarioId)
-        .eq("status", "aceito");
-
-      Promise.all([fetchMeuPerfil, fetchConvites])
-        .then(async ([meuPerfilRes, convitesRes]) => {
-          const sugestoes = [];
-
-          // Adicionar seu próprio perfil se corresponder
-          if (meuPerfilRes.data) {
-            const eu = meuPerfilRes.data;
-            if (
-              (eu.nickname?.toLowerCase().includes(termo)) ||
-              (eu.nome?.toLowerCase().includes(termo))
-            ) {
-              sugestoes.push(eu);
-            }
+        .eq("container_id", containerAtual.id)
+        .eq("status", "aceito")
+        .then(async ({ data: convites, error: convitesError }) => {
+          if (convitesError) {
+            console.error("Erro ao buscar convites:", convitesError);
+            setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
+            return;
           }
 
-          // Adicionar outros membros do container
-          if (!convitesRes.error && convitesRes.data?.length > 0) {
-            const userIds = convitesRes.data
-              .map(c => c.user_id)
-              .filter(id => id && id !== usuarioId); // evita duplicar você
+          const userIds = convites
+            .map(c => c.user_id)
+            .filter(id => id);
 
-            if (userIds.length > 0) {
-              const { data: profiles, error: profilesError } = await supabase
-                .from("profiles")
-                .select("id, nickname, nome, funcao")
-                .in("id", userIds);
-
-              if (!profilesError && profiles) {
-                const filtrados = profiles.filter(p =>
-                  (p.nickname?.toLowerCase().includes(termo)) ||
-                  (p.nome?.toLowerCase().includes(termo))
-                );
-                sugestoes.push(...filtrados);
-              }
-            }
+          if (userIds.length === 0) {
+            setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
+            return;
           }
 
-          // Remover duplicatas por ID
-          const ids = new Set();
-          const unicos = [];
-          for (const p of sugestoes) {
-            if (!ids.has(p.id)) {
-              ids.add(p.id);
-              unicos.push(p);
-            }
+          const { data: profiles, error: profilesError } = await supabase
+            .from("profiles")
+            .select("id, nickname, nome, funcao")
+            .in("id", userIds);
+
+          if (profilesError) {
+            console.error("Erro ao buscar perfis:", profilesError);
+            setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
+            return;
           }
+
+          const sugestoes = profiles.filter(p =>
+            (p.nickname?.toLowerCase().includes(termo)) ||
+            (p.nome?.toLowerCase().includes(termo))
+          );
+
+          const seen = new Set();
+          const unicos = sugestoes.filter(p => {
+            if (seen.has(p.id)) return false;
+            seen.add(p.id);
+            return true;
+          });
 
           setSugestoesResponsavel(prev => ({ ...prev, [i]: unicos.slice(0, 10) }));
         })
-        .catch(() => setSugestoesResponsavel(prev => ({ ...prev, [i]: [] })));
+        .catch(err => {
+          console.error("Erro inesperado na busca de responsáveis:", err);
+          setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
+        });
     } else {
       setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
     }
@@ -407,7 +400,7 @@ export default function AtaObjetivos({
     const novoResp = {
       nome_externo: nome,
       usuario_id: null,
-      nome_exibicao: nome, // ✅ Nome exibido imediatamente
+      nome_exibicao: nome,
       id: Date.now() + Math.random()
     };
     novos[i] = { ...novos[i], responsaveis: [...novos[i].responsaveis, novoResp] };
@@ -441,7 +434,7 @@ export default function AtaObjetivos({
       usuario_id: item.id,
       nome: item.nome,
       nickname: item.nickname,
-      nome_exibicao: item.nome, // ✅ Nome exibido imediatamente
+      nome_exibicao: item.nome,
     };
     novos[i] = { ...novos[i], responsaveis: [...novos[i].responsaveis, novoResp] };
     setObjetivosList(novos);
@@ -612,7 +605,7 @@ export default function AtaObjetivos({
                             className="sugestao-item"
                             onClick={() => adicionarResponsavelInterno(item, i)}
                           >
-                            <span>@{item.nome}</span>
+                            <span>@{item.nickname || item.nome}</span>
                           </div>
                         ))}
                       </div>
@@ -620,7 +613,6 @@ export default function AtaObjetivos({
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                    {/* ✅ ÚNICA ALTERAÇÃO: bloco do input de data */}
                     <input
                       type="date"
                       value={o.dataEntrega || ""}

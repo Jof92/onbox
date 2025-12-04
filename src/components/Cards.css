@@ -600,3 +600,69 @@
   border-color: #007bff;
 }
 
+/* === ESTILO DO SELETOR DE COR (via "Estilo") === */
+
+.color-picker-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 0 4px;
+}
+
+.reset-color-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  border: 2px solid #ccc;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.reset-color-dot:hover {
+  border-color: #888;
+  transform: scale(1.1);
+}
+
+.color-track {
+  height: 16px;
+  flex: 1;
+  border-radius: 8px;
+  background: linear-gradient(
+    to right,
+    hsl(0, 40%, 94%),
+    hsl(40, 40%, 94%),
+    hsl(80, 40%, 94%),
+    hsl(140, 40%, 94%),
+    hsl(200, 40%, 94%),
+    hsl(260, 40%, 94%),
+    hsl(320, 40%, 94%),
+    hsl(360, 40%, 94%)
+  );
+  cursor: pointer;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.06);
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+.close-color-picker {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #f1f1f1;
+  border: 1px solid #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  color: #666;
+  font-size: 12px;
+  padding: 0;
+}
+
+.close-color-picker:hover {
+  background: #e0e0e0;
+  color: #333;
+}
