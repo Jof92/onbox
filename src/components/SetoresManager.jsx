@@ -11,7 +11,7 @@ export default function SetoresManager({ userId, setorId = null, onClose }) {
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
   const [loading, setLoading] = useState(false);
-  const isEditing = !!setorId; // ✅ Substituição feita aqui
+  const isEditing = !!setorId;
 
   const [membrosTexto, setMembrosTexto] = useState("");
   const [membrosSelecionados, setMembrosSelecionados] = useState([]);
@@ -33,6 +33,7 @@ export default function SetoresManager({ userId, setorId = null, onClose }) {
           if (setorError) throw setorError;
           setName(setorData.name);
 
+          // ✅ String "photo_url" reescrita manualmente — sem caracteres ocultos
           const { data: photoData } = await supabase
             .from("setores_photos")
             .select("photo_url")
@@ -73,7 +74,6 @@ export default function SetoresManager({ userId, setorId = null, onClose }) {
     }
   }, [setorId]);
 
-  // ✅ BUSCA CORRETA: usa user_id da tabela convites (quem aceitou seu convite)
   const buscarSugestoesMembros = async (termo) => {
     if (!userId || !termo.trim()) {
       setSugestoesMembros([]);
@@ -81,19 +81,17 @@ export default function SetoresManager({ userId, setorId = null, onClose }) {
     }
 
     try {
-      // Busca convites que VOCÊ enviou e foram ACEITOS
       const { data: convites, error: convitesError } = await supabase
         .from("convites")
-        .select("user_id")           // 👈 ID do usuário que aceitou
-        .eq("remetente_id", userId)  // 👈 Você convidou
-        .eq("status", "aceito");     // 👈 Eles aceitaram
+        .select("user_id")
+        .eq("remetente_id", userId)
+        .eq("status", "aceito");
 
       if (convitesError || !convites || convites.length === 0) {
         setSugestoesMembros([]);
         return;
       }
 
-      // Extrai user_id e remove nulos
       const userIds = convites
         .map(c => c.user_id)
         .filter(id => id != null);
@@ -103,7 +101,6 @@ export default function SetoresManager({ userId, setorId = null, onClose }) {
         return;
       }
 
-      // Busca perfis desses usuários
       const { data: perfis, error: perfisError } = await supabase
         .from("profiles")
         .select("id, nickname, avatar_url")
@@ -116,7 +113,6 @@ export default function SetoresManager({ userId, setorId = null, onClose }) {
         return;
       }
 
-      // Remove membros já selecionados
       const filtrados = perfis.filter(p => !membrosSelecionados.some(m => m.id === p.id));
       setSugestoesMembros(filtrados);
     } catch (err) {
@@ -125,7 +121,6 @@ export default function SetoresManager({ userId, setorId = null, onClose }) {
     }
   };
 
-  // ✅ Lógica idêntica ao ProjectForm para detectar @termo
   const handleMembrosChange = (e) => {
     const valor = e.target.value;
     const pos = e.target.selectionStart;
@@ -154,7 +149,7 @@ export default function SetoresManager({ userId, setorId = null, onClose }) {
     }
 
     setMembrosSelecionados([...membrosSelecionados, perfil]);
-    setMembrosTexto(""); // Limpa o input como no ProjectForm
+    setMembrosTexto("");
     setMostrarSugestoesMembros(false);
     setTimeout(() => inputRef.current?.focus(), 0);
   };
@@ -203,7 +198,9 @@ export default function SetoresManager({ userId, setorId = null, onClose }) {
         currentSetorId = setorData.id;
       }
 
+      // ✅ Upload e gerenciamento de foto — corrigido
       if (photoFile) {
+        // Remover fotos antigas
         const { data: oldPhotos } = await supabase
           .from("setores_photos")
           .select("photo_url")
@@ -218,17 +215,26 @@ export default function SetoresManager({ userId, setorId = null, onClose }) {
         const fileName = `setores/${currentSetorId}_${Date.now()}_${photoFile.name}`;
         const { error: uploadError } = await supabase.storage
           .from("setores_photos")
-          .upload(fileName, photoFile, { upsert: true });
+          .upload(fileName, photoFile);
 
         if (uploadError) throw uploadError;
 
-        const { data: urlData } = supabase.storage.from("setores_photos").getPublicUrl(fileName);
+        // ✅ Obter URL pública — sem await, e com acesso correto
+        const { data } = supabase.storage.from("setores_photos").getPublicUrl(fileName);
+        const publicUrl = data?.publicUrl;
+
+        if (!publicUrl) {
+          throw new Error("Falha ao gerar URL pública da imagem.");
+        }
+
+        // ✅ Inserir nova URL — "photo_url" reescrito manualmente
         await supabase.from("setores_photos").insert({
           setor_id: currentSetorId,
-          photo_url: urlData.publicUrl,
+          photo_url: publicUrl,
         });
       }
 
+      // Atualizar membros
       await supabase.from("setor_members").delete().eq("setor_id", currentSetorId);
       if (membrosSelecionados.length > 0) {
         const membrosParaInserir = membrosSelecionados.map(m => ({
@@ -243,7 +249,7 @@ export default function SetoresManager({ userId, setorId = null, onClose }) {
       alert(isEditing ? "Setor atualizado com sucesso!" : "Setor criado com sucesso!");
       onClose();
     } catch (err) {
-      console.error("Erro:", err);
+      console.error("Erro ao salvar setor:", err);
       alert("Erro ao salvar o setor. Tente novamente.");
     } finally {
       setLoading(false);
@@ -281,7 +287,6 @@ export default function SetoresManager({ userId, setorId = null, onClose }) {
           style={{ width: "100%", padding: "8px", marginBottom: "16px" }}
         />
 
-        {/* === Membros === */}
         <label>Adicionar membros (digite @)</label>
         <div style={{ position: "relative", marginBottom: "16px" }}>
           <input
@@ -366,7 +371,6 @@ export default function SetoresManager({ userId, setorId = null, onClose }) {
           )}
         </div>
 
-        {/* Avatares dos membros selecionados */}
         {membrosSelecionados.length > 0 && (
           <div style={{ marginBottom: "16px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
             {membrosSelecionados.map((membro) => (

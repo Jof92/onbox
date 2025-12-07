@@ -1,20 +1,20 @@
-// src/components/ProjectManager.jsx
-import React, { useState, useEffect } from "react";
+// src/pages/ProjectManager.jsx
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../supabaseClient";
-import Loading from "./Loading";
-import Sidebar from "./Sidebar";
-import SetoresManager from "./SetoresManager";
-import ProjectForm from "./ProjectForm";
-import ContainerGrid from "./ContainerGrid";
-import EntityDetails from "./EntityDetails";
+import Loading from "../components/Loading";
+// ❌ REMOVIDO: import Sidebar from "./Sidebar";
+import SetoresManager from "../components/SetoresManager";
+import ProjectForm from "../components/ProjectForm";
+import ContainerGrid from "../components/ContainerGrid";
+import EntityDetails from "../components/EntityDetails";
 import backImg from "../assets/back.png";
 import back1Img from "../assets/back1.png";
 import back2Img from "../assets/back2.png";
 import back3Img from "../assets/back3.png";
 import "./Containers.css";
 
-export default function ProjectManager({ containerAtual, onProjectSelect, onProjectDeleted }) {
+export default function ProjectManager({ containerAtual, user, onSidebarUpdate }) {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -37,16 +37,14 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
   const [currentUserId, setCurrentUserId] = useState(null);
   const [gerenteContainerId, setGerenteContainerId] = useState(null);
 
-  // 🔹 Obter o ID do usuário logado
-  useEffect(() => {
-    const fetchCurrentUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setCurrentUserId(user?.id);
-    };
-    fetchCurrentUser();
-  }, []);
+  const userId = user?.id;
 
-  // Carregar perfil (nome do container)
+  // Obter ID do usuário
+  useEffect(() => {
+    setCurrentUserId(userId);
+  }, [userId]);
+
+  // Carregar perfil
   useEffect(() => {
     const loadProfile = async () => {
       if (!containerAtual) return;
@@ -60,7 +58,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
     loadProfile();
   }, [containerAtual]);
 
-  // 🔹 RESETAR SELEÇÃO AO MUDAR DE CONTAINER
+  // Reset seleção
   useEffect(() => {
     setSelectedProject(null);
     setSelectedSetor(null);
@@ -86,7 +84,6 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
     }
 
     try {
-      // Incluímos explicitamente gerente_caixa_id
       const { data: projectsData, error: projectsError } = await supabase
         .from("projects")
         .select(`*, pavimentos(*), eap(*)`)
@@ -106,22 +103,19 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
             .limit(1)
             .single();
 
-          const { data: membersData, error: membersError } = await supabase
+          const { data: membersData } = await supabase
             .from("project_members")
             .select("user_id")
             .eq("project_id", proj.id);
 
           let membrosDetalhados = [];
-          if (!membersError && membersData?.length) {
+          if (membersData?.length) {
             const userIds = membersData.map(m => m.user_id);
-            const { data: perfis, error: perfisError } = await supabase
+            const { data: perfis } = await supabase
               .from("profiles")
               .select("id, nickname, avatar_url")
               .in("id", userIds);
-
-            if (!perfisError) {
-              membrosDetalhados = perfis || [];
-            }
+            membrosDetalhados = perfis || [];
           }
 
           const sortedPavimentos = [...(proj.pavimentos || [])].sort(
@@ -137,7 +131,6 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
             eap: sortedEap,
             photo_url: photoData?.photo_url || null,
             membros: membrosDetalhados,
-            // gerente_caixa_id já vem do select
           });
         } catch (err) {
           enhancedProjects.push({
@@ -149,7 +142,6 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
           });
         }
       }
-
       setProjects(enhancedProjects);
     } catch (err) {
       setError("Erro ao carregar projetos");
@@ -164,14 +156,11 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
     }
 
     try {
-      // Incluímos gerente_caixa_id
-      const { data: setoresData, error } = await supabase
+      const { data: setoresData } = await supabase
         .from("setores")
         .select("*")
         .eq("user_id", userId)
         .order("created_at", { ascending: true });
-
-      if (error) throw error;
 
       const setoresComFoto = await Promise.all(
         (setoresData || []).map(async (setor) => {
@@ -185,7 +174,6 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
           return { ...setor, photo_url: photoData?.photo_url || null };
         })
       );
-
       setSetores(setoresComFoto);
     } catch (err) {
       setError("Erro ao carregar setores");
@@ -196,24 +184,20 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
   const loadSetorDetails = async (setor) => {
     setLoading(true);
     try {
-      const { data: membersData, error: membersError } = await supabase
+      const { data: membersData } = await supabase
         .from("setor_members")
         .select("user_id")
         .eq("setor_id", setor.id);
 
       let membrosDetalhados = [];
-      if (!membersError && membersData?.length) {
+      if (membersData?.length) {
         const userIds = membersData.map(m => m.user_id);
-        const { data: perfis, error: perfisError } = await supabase
+        const { data: perfis } = await supabase
           .from("profiles")
           .select("id, nickname, avatar_url")
           .in("id", userIds);
-
-        if (!perfisError) {
-          membrosDetalhados = perfis || [];
-        }
+        membrosDetalhados = perfis || [];
       }
-
       setSetorDetalhado({ ...setor, membros: membrosDetalhados });
     } catch (err) {
       console.error("Erro ao carregar membros do setor:", err);
@@ -235,13 +219,11 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
 
     const loadAll = async () => {
       try {
-        const { data: profileData, error } = await supabase
+        const { data: profileData } = await supabase
           .from("profiles")
           .select("background, gerente_container_id")
           .eq("id", containerAtual)
           .single();
-
-        if (error) throw error;
 
         setBackground(profileData?.background || "#f1f1f1ff");
         setGerenteContainerId(profileData?.gerente_container_id);
@@ -261,24 +243,18 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
   }, [containerAtual]);
 
   // === LÓGICA DE PERMISSÃO ===
-
-  // Permissão de container (criar, apagar, gerenciar todos os itens)
   const hasContainerEditPermissions = currentUserId && (
     currentUserId === containerAtual || 
     currentUserId === gerenteContainerId
   );
 
-  // Permissão por entidade (editar um projeto/setor específico)
   const canEditEntity = (entity) => {
     if (!currentUserId || !entity) return false;
-    // Dono ou gerente de container sempre pode
     if (hasContainerEditPermissions) return true;
-    // Ou é gerente da caixa específica
     return currentUserId === entity.gerente_caixa_id;
   };
 
   // === Projetos ===
-
   const handleSaveProject = async (formData) => {
     const {
       name,
@@ -373,7 +349,6 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
       setIsEditing(false);
       setSelectedProject(null);
       await fetchProjects(containerAtual);
-      onProjectSelect?.(projectResult);
     } catch (err) {
       alert("Erro ao salvar projeto.");
     } finally {
@@ -401,8 +376,8 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
       await supabase.from("project_members").delete().eq("project_id", projectId);
       await supabase.from("projects").delete().eq("id", projectId);
 
+      setProjects(prev => prev.filter(p => p.id !== projectId));
       if (selectedProject?.id === projectId) setSelectedProject(null);
-      onProjectDeleted?.();
       await fetchProjects(containerAtual);
     } catch (err) {
       alert("Erro ao excluir projeto.");
@@ -412,7 +387,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
   };
 
   const handleEditProject = async (project) => {
-    const { data: membros, error: membrosError } = await supabase
+    const { data: membros } = await supabase
       .from("project_members")
       .select("user_id")
       .eq("project_id", project.id);
@@ -420,17 +395,14 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
     let membrosSelecionados = [];
     let membrosTexto = "";
 
-    if (!membrosError && membros?.length) {
+    if (membros?.length) {
       const userIds = membros.map(m => m.user_id);
-      const { data: perfis, error: perfisError } = await supabase
+      const { data: perfis } = await supabase
         .from("profiles")
         .select("id, nickname, avatar_url")
         .in("id", userIds);
-
-      if (!perfisError) {
-        membrosSelecionados = perfis || [];
-        membrosTexto = perfis?.map(p => `@${p.nickname}`).join(" ") || "";
-      }
+      membrosSelecionados = perfis || [];
+      membrosTexto = perfis?.map(p => `@${p.nickname}`).join(" ") || "";
     }
 
     const formData = {
@@ -450,35 +422,7 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
     setShowForm(true);
   };
 
-  // === Navegação ===
-
-  const openCardsPage = (proj) => {
-    navigate(`/cards/${encodeURIComponent(proj.name || "Projeto")}`, {
-      state: {
-        projectId: proj.id,
-        projectName: proj.name,
-        projectPhoto: proj.photo_url,
-        from: location.pathname,
-        containerId: containerAtual,
-      },
-    });
-  };
-
-  const openSetorCardsPage = (setor) => {
-    navigate(`/cards/${encodeURIComponent(setor.name || "Setor")}`, {
-      state: {
-        setorId: setor.id,
-        setorName: setor.name,
-        setorPhoto: setor.photo_url,
-        entityType: "setor",
-        from: location.pathname,
-        containerId: containerAtual,
-      },
-    });
-  };
-
   // === Setores ===
-
   const handleOpenSetoresManager = () => {
     if (!containerAtual) {
       alert("Usuário não identificado.");
@@ -504,11 +448,10 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
 
       await supabase.from("setor_members").delete().eq("setor_id", setorId);
       await supabase.from("setores").delete().eq("id", setorId);
-      setSetores((prev) => prev.filter((s) => s.id !== setorId));
+      setSetores(prev => prev.filter(s => s.id !== setorId));
       setMenuSetorAberto(null);
       setSelectedSetor(null);
       setSetorDetalhado(null);
-      alert("Setor excluído!");
     } catch (err) {
       alert("Erro ao excluir.");
     } finally {
@@ -516,12 +459,62 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
     }
   };
 
+  // === Navegação ===
+  const openCardsPage = (proj) => {
+    navigate(`/cards/${encodeURIComponent(proj.name || "Projeto")}`, {
+      state: {
+        projectId: proj.id,
+        projectName: proj.name,
+        projectPhoto: proj.photo_url,
+        from: location.pathname,
+        containerId: containerAtual,
+      },
+    });
+  };
+
+  const openSetorCardsPage = (setor) => {
+    navigate(`/cards/${encodeURIComponent(setor.name || "Setor")}`, {
+      state: {
+        setorId: setor.id,
+        setorName: setor.name,
+        setorPhoto: setor.photo_url,
+        entityType: "setor",
+        from: location.pathname,
+        containerId: containerAtual,
+      },
+    });
+  };
+
+  // ✅ Expor dados para o Sidebar (via callback obrigatório)
+  useEffect(() => {
+    if (onSidebarUpdate) {
+      onSidebarUpdate({
+        projects,
+        selectedProject,
+        onCreateProject: () => {
+          setIsEditing(false);
+          setInitialFormData(null);
+          setShowForm(true);
+        },
+        onProjectSelect: (proj) => setSelectedProject(proj),
+        onDeleteProject: handleDeleteProject,
+        onOpenSetoresManager: handleOpenSetoresManager,
+        currentUserId,
+        containerOwnerId: containerAtual,
+        gerenteContainerId,
+      });
+    }
+  }, [
+    projects,
+    selectedProject,
+    currentUserId,
+    containerAtual,
+    gerenteContainerId,
+    onSidebarUpdate
+  ]);
+
   // === Renderização ===
-
-  if (loading) {
-  return <Loading />;
-}
-
+  if (loading) return <Loading />;
   if (error) {
     return (
       <div style={{ padding: "20px", color: "red", textAlign: "center" }}>
@@ -532,150 +525,133 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
   }
 
   return (
-    <>
-      <Sidebar
-        projects={projects}
-        selectedProject={selectedProject}
-        onCreateProject={() => {
-          setIsEditing(false);
-          setInitialFormData(null);
-          setShowForm(true);
-        }}
-        onProjectSelect={(proj) => {
-          setSelectedProject(proj);
-          onProjectSelect?.(proj);
-        }}
-        onDeleteProject={handleDeleteProject}
-        onOpenSetoresManager={handleOpenSetoresManager}
-        currentUserId={currentUserId}
-        containerOwnerId={containerAtual}
-        gerenteContainerId={gerenteContainerId}
-      />
-
-      <main
-        className="containers-main"
+    <main
+      className="containers-main"
+      style={{
+        background: background.startsWith("#")
+          ? background
+          : `url(${background}) center/300px auto repeat`,
+      }}
+    >
+      <div
+        className="dot-btn"
         style={{
-          background: background.startsWith("#")
-            ? background
-            : `url(${background}) center/300px auto repeat`,
+          position: "absolute",
+          right: "10px",
+          cursor: "pointer",
+          fontSize: "20px",
+          zIndex: 1001,
+          color: "#fff",
+          textShadow: "0 1px 2px rgba(0,0,0,0.5)",
         }}
+        onClick={() => setShowBackgroundMenu(!showBackgroundMenu)}
       >
-        <div
-          className="dot-btn"
-          style={{
-            position: "absolute",
-            right: "10px",
-            cursor: "pointer",
-            fontSize: "20px",
-            zIndex: 1001,
-            color: "#fff",
-            textShadow: "0 1px 2px rgba(0,0,0,0.5)",
-          }}
-          onClick={() => setShowBackgroundMenu(!showBackgroundMenu)}
-        >
-          ⋮
-        </div>
+        ⋮
+      </div>
 
-        {showBackgroundMenu && (
-          <div className="background-menu">
-            {[
-              { label: "Padrão", value: "#f1f1f1ff" },
-              { label: "Preto", value: "#000000" },
-              { label: "Branco", value: "#ffffff" },
-              { label: "Azul Leve", value: "#e3f2fd" },
-              { label: "Verde Leve", value: "#e8f5e9" },
-              { label: "Fundo 1", value: backImg },
-              { label: "Fundo 2", value: back1Img },
-              { label: "Fundo 3", value: back2Img },
-              { label: "Fundo 4", value: back3Img },
-            ].map((opt) => (
+      {showBackgroundMenu && (
+        <div className="background-menu">
+          {[
+            { label: "Padrão", value: "#f1f1f1ff" },
+            { label: "Preto", value: "#000000" },
+            { label: "Branco", value: "#ffffff" },
+            { label: "Azul Leve", value: "#e3f2fd" },
+            { label: "Verde Leve", value: "#e8f5e9" },
+            { label: "Fundo 1", value: backImg },
+            { label: "Fundo 2", value: back1Img },
+            { label: "Fundo 3", value: back2Img },
+            { label: "Fundo 4", value: back3Img },
+          ].map((opt) => (
+            <div
+              key={opt.value}
+              className="background-option"
+              onClick={() => handleSetBackground(opt.value)}
+            >
               <div
-                key={opt.value}
-                className="background-option"
-                onClick={() => handleSetBackground(opt.value)}
-              >
-                <div
-                  className="background-swatch"
-                  style={{
-                    backgroundColor: opt.value.startsWith("#") ? opt.value : "transparent",
-                    backgroundImage: opt.value.startsWith("#")
-                      ? "none"
-                      : `url(${opt.value})`,
-                  }}
-                />
-                {opt.label}
-              </div>
-            ))}
-          </div>
-        )}
+                className="background-swatch"
+                style={{
+                  backgroundColor: opt.value.startsWith("#") ? opt.value : "transparent",
+                  backgroundImage: opt.value.startsWith("#")
+                    ? "none"
+                    : `url(${opt.value})`,
+                }}
+              />
+              {opt.label}
+            </div>
+          ))}
+        </div>
+      )}
 
-        {selectedSetor && setorDetalhado ? (
-          <EntityDetails
-            entityType="setor"
-            entity={setorDetalhado}
-            onBack={() => setSelectedSetor(null)}
-            onEdit={() => {
-              setSetorEmEdicao(setorDetalhado.id);
-              setShowSetoresModal(true);
-            }}
-            canEdit={canEditEntity(setorDetalhado)} // ✅ Permissão por caixa
-          />
-        ) : selectedProject ? (
-          <EntityDetails
-            entityType="project"
-            entity={selectedProject}
-            onBack={() => setSelectedProject(null)}
-            onEdit={() => handleEditProject(selectedProject)}
-            canEdit={canEditEntity(selectedProject)} // ✅ Permissão por caixa
-          >
-            {(selectedProject.pavimentos?.length > 0 || selectedProject.eap?.length > 0) && (
-              <div className="project-sections">
-                {selectedProject.pavimentos?.length > 0 && (
-                  <div className="project-section">
-                    <h3>Pavimentos</h3>
-                    <ul>
-                      {selectedProject.pavimentos.map((p) => (
-                        <li key={p.id}>{p.name || ""}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {selectedProject.eap?.length > 0 && (
-                  <div className="project-section">
-                    <h3>EAP</h3>
-                    <ul>
-                      {selectedProject.eap.map((e) => (
-                        <li key={e.id}>{e.name || ""}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            )}
-          </EntityDetails>
-        ) : (
-          <ContainerGrid
-            projects={projects}
-            setores={setores}
-            onProjectClick={openCardsPage}
-            onSetorClick={openSetorCardsPage}
-            onSetorAction={(action, setor) => {
-              if (action === "verPerfil") {
-                setSelectedSetor(setor);
-                loadSetorDetails(setor);
-              } else if (action === "delete") {
-                handleDeleteSetor(setor.id);
-              }
-            }}
-            menuSetorAberto={menuSetorAberto}
-            setMenuSetorAberto={setMenuSetorAberto}
-          />
-        )}
-      </main>
+      {selectedSetor && setorDetalhado ? (
+        <EntityDetails
+          entityType="setor"
+          entity={setorDetalhado}
+          onBack={() => setSelectedSetor(null)}
+          onEdit={() => {
+            setSetorEmEdicao(setorDetalhado.id);
+            setShowSetoresModal(true);
+          }}
+          canEdit={canEditEntity(setorDetalhado)}
+        />
+      ) : selectedProject ? (
+        <EntityDetails
+          entityType="project"
+          entity={selectedProject}
+          onBack={() => setSelectedProject(null)}
+          onEdit={() => handleEditProject(selectedProject)}
+          canEdit={canEditEntity(selectedProject)}
+        >
+          {(selectedProject.pavimentos?.length > 0 || selectedProject.eap?.length > 0) && (
+            <div className="project-sections">
+              {selectedProject.pavimentos?.length > 0 && (
+                <div className="project-section">
+                  <h3>Pavimentos</h3>
+                  <ul>
+                    {selectedProject.pavimentos.map((p) => (
+                      <li key={p.id}>{p.name || ""}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {selectedProject.eap?.length > 0 && (
+                <div className="project-section">
+                  <h3>EAP</h3>
+                  <ul>
+                    {selectedProject.eap.map((e) => (
+                      <li key={e.id}>{e.name || ""}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </EntityDetails>
+      ) : (
+        <ContainerGrid
+          projects={projects}
+          setores={setores}
+          onProjectClick={openCardsPage}
+          onSetorClick={openSetorCardsPage}
+          onSetorAction={(action, setor) => {
+            if (action === "verPerfil") {
+              setSelectedSetor(setor);
+              loadSetorDetails(setor);
+            } else if (action === "delete") {
+              handleDeleteSetor(setor.id);
+            }
+          }}
+          menuSetorAberto={menuSetorAberto}
+          setMenuSetorAberto={setMenuSetorAberto}
+        />
+      )}
 
       <ProjectForm
         isOpen={showForm}
-        onClose={() => setShowForm(false)}
+        onClose={() => {
+          setShowForm(false);
+          setIsEditing(false);
+          setInitialFormData(null);
+        }}
         onSave={handleSaveProject}
         initialData={initialFormData}
         containerAtual={containerAtual}
@@ -700,6 +676,6 @@ export default function ProjectManager({ containerAtual, onProjectSelect, onProj
           }}
         />
       )}
-    </>
+    </main>
   );
 }

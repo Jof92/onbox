@@ -9,19 +9,7 @@
   overflow: hidden;
 }
 
-/* ===== Header principal ===== */
-.containers-header {
-  background: #ffffff;
-  color: #020a52;
-  padding: 5px 5px;
-  font-size: 12px;
-  font-weight: bold;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-}
 
-.tittle-cont{
-  text-align: center;
-}
 
 /* ===== Conteúdo principal (sidebars + main) ===== */
 .containers-content {
@@ -67,7 +55,6 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 15px;
 }
 
 .sidebar-project {
@@ -720,4 +707,179 @@
   background: #fff;
   padding: 5px;
   border-radius: 10px;
+}
+
+/* Wrapper para título + conteúdo principal */
+.containers-main-with-title {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  /* O background será definido pelo ProjectManager via style inline */
+}
+
+/* Título alinhado à esquerda, só na área principal */
+.tittle-cont {
+  margin: 0;
+  padding: 12px 20px;
+  font-size: 16px;
+  font-weight: bold;
+  color: #020a52;
+  background: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid #eee;
+  text-align: left;
+}
+
+/* === Agenda rápida no Sidebar === */
+.sidebar-agenda-today {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  border: 1px solid #eee;
+  width: 200px;
+}
+
+.agenda-header-side {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.agenda-date {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  text-align: center;
+  flex: 1;
+  text-transform: capitalize;
+  color: #333;
+}
+
+.nav-day-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #555;
+  font-size: 14px;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+}
+
+.nav-day-btn:hover {
+  background: #e9ecef;
+  color: #222;
+}
+
+.agenda-items {
+  height: 150px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.agenda-item {
+  font-size: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.agenda-item:last-child {
+  border-bottom: none;
+}
+
+.item-type {
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.item-title {
+  font-weight: 500;
+  font-size: 13px;
+  color: #222;
+}
+
+.item-note {
+  font-size: 11px;
+  color: #666;
+  font-style: italic;
+}
+
+.agenda-empty {
+  font-size: 12px;
+  color: #888;
+  text-align: center;
+  padding: 8px 0;
+  margin: 0;
+}
+
+/* === Botão "+ Box" e dropdown === */
+.box-menu-container {
+  position: relative;
+}
+
+.box-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: #bf9010;
+  color: white;
+  border: none;
+  padding: 10px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.box-btn:hover {
+  background: #e1ac22;
+  transform: scale(1.05);
+}
+
+.box-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  z-index: 1000;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.box-dropdown-item {
+  width: 100%;
+  padding: 10px 14px;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: #333;
+  transition: background-color 0.15s;
+}
+
+.box-dropdown-item:hover {
+  background-color: #f0f4ff;
+}
+
+.box-dropdown-item:not(:last-child) {
+  border-bottom: 1px solid #eee;
 }
