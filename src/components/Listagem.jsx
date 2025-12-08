@@ -3,10 +3,11 @@ import React, { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
 import "./Listagem.css";
 import "./loader.css";
-import { FaPlus, FaTimes, FaPaperPlane } from "react-icons/fa";
+import { FaPlus, FaTimes, FaPaperPlane, FaComment } from "react-icons/fa";
+import { FaPenToSquare, FaMagnifyingGlass } from "react-icons/fa6";
 import Check from "./Check";
 import Loading from "./Loading";
-import BuscaInsumo from "./BuscaInsumo"; // ✅ novo componente
+import BuscaInsumo from "./BuscaInsumo";
 
 export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
   const [rows, setRows] = useState([]);
@@ -22,7 +23,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
   const [statusEnvio, setStatusEnvio] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // ✅ Estados para o modal de busca de insumo
   const [buscaInsumoAberta, setBuscaInsumoAberta] = useState(false);
   const [linhaBuscaAtiva, setLinhaBuscaAtiva] = useState(null);
 
@@ -78,7 +78,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
     carregarSetores();
   }, [containerAtual?.id]);
 
-  // Carrega locações (pavimentos), EAPs e unidades SEMPRE que o projeto mudar
+  // Carrega locações, EAPs e unidades
   useEffect(() => {
     if (!projetoAtual?.id) {
       setLocacoes([]);
@@ -116,7 +116,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
     setUltimaAlteracao(`${autor} alterou em ${agora.toLocaleDateString()} ${agora.toLocaleTimeString()}`);
   };
 
-  // Carrega APENAS os itens da nota
   const carregarDadosDoBanco = async () => {
     try {
       if (!projetoAtual?.id || !notaAtual?.id) {
@@ -127,7 +126,8 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
           quantidade: "",
           locacao: "",
           eap: "",
-          fornecedor: "",
+          observacao: "",
+          comentario: "",
           ordem: 1,
         }]);
         return;
@@ -150,7 +150,8 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
           quantidade: item.quantidade || "",
           locacao: item.locacao || "",
           eap: item.eap || "",
-          fornecedor: item.fornecedor || "",
+          observacao: item.observacao || "",
+          comentario: item.comentario || "",
           criado_em: item.criado_em || null,
           grupo_envio: item.grupo_envio || "antigo",
           data_envio: item.data_envio || item.criado_em,
@@ -166,7 +167,8 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
           quantidade: "",
           locacao: "",
           eap: "",
-          fornecedor: "",
+          observacao: "",
+          comentario: "",
           ordem: 1,
         }]);
       }
@@ -178,7 +180,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
     }
   };
 
-  // Carrega rascunho ou dados do banco quando projeto ou nota mudam
   useEffect(() => {
     const carregarRascunhoOuBanco = async () => {
       setLoading(true);
@@ -191,7 +192,8 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
           quantidade: "",
           locacao: "",
           eap: "",
-          fornecedor: "",
+          observacao: "",
+          comentario: "",
           ordem: 1,
         }]);
         setLoading(false);
@@ -222,7 +224,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
     carregarRascunhoOuBanco();
   }, [projetoAtual, notaAtual]);
 
-  // Salva rascunho no localStorage
   useEffect(() => {
     if (notaAtual?.id && rows.length > 0) {
       const draft = {
@@ -234,7 +235,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
     }
   }, [rows, ultimaAlteracao, notaAtual?.id]);
 
-  // Polling: sincroniza apenas código e descrição
+  // Polling: sincroniza código e descrição
   useEffect(() => {
     if (!notaAtual?.id || !projetoAtual?.id) return;
 
@@ -333,7 +334,8 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
       quantidade: "",
       locacao: "",
       eap: "",
-      fornecedor: "",
+      observacao: "",
+      comentario: "",
       criado_em: new Date().toISOString(),
       ordem: ultimaOrdem + 1,
     };
@@ -388,7 +390,8 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
             quantidade: it.quantidade ? Number(it.quantidade) : null,
             locacao: it.locacao || null,
             eap: it.eap || null,
-            fornecedor: it.fornecedor || null,
+            observacao: it.observacao || null,
+            comentario: it.comentario || null,
             direcionar_para: JSON.stringify(setoresParaEnvio),
             ordem: it.ordem,
           }).eq("id", it.id);
@@ -406,7 +409,8 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
           quantidade: it.quantidade ? Number(it.quantidade) : null,
           locacao: it.locacao || null,
           eap: it.eap || null,
-          fornecedor: it.fornecedor || null,
+          observacao: it.observacao || null,
+          comentario: it.comentario || null,
           direcionar_para: JSON.stringify(setoresParaEnvio),
           grupo_envio: grupoEnvio,
           data_envio: dataEnvio,
@@ -513,7 +517,8 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
           quantidade: item.quantidade,
           locacao: item.locacao,
           eap: item.eap,
-          fornecedor: item.fornecedor,
+          observacao: item.observacao,
+          comentario: item.comentario,
           direcionar_para: item.direcionar_para,
           criado_em: new Date().toISOString(),
           grupo_envio: item.grupo_envio,
@@ -542,7 +547,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
       }
 
       localStorage.removeItem(`listagem_draft_${notaAtual.id}`);
-
       setCodigoErro(new Set());
       setSetorSelecionado("");
       await carregarDadosDoBanco();
@@ -577,7 +581,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
       </div>
 
       <div className="action-buttons">
-        <button className="add-row-btn" onClick={addRow}><FaPlus /> Adicionar linha</button>
+        <button className="add-row-btn" onClick={addRow}>Nova linha</button>
 
         <div style={{ position: "relative", maxWidth: "300px" }}>
           <select
@@ -619,7 +623,8 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
               <th>Qtd.</th>
               <th>Locação</th>
               <th>EAP</th>
-              <th>Fornecedor</th>
+              <th>Observação</th>
+              <th>Comentário</th>
               <th>Ações</th>
             </tr>
           </thead>
@@ -628,10 +633,12 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
               const isCriar = row.codigo?.toLowerCase() === "criar";
               const foiEnviada = !!row.id && !!row.data_envio;
               const isLinhaCongelada = foiEnviada;
-              const podeEditarTudo = !row.id;
+              const podeEditarCodigo = !row.id && !isLinhaCongelada;
+              const podeEditarDescricao = isCriar && !isLinhaCongelada;
+              const podeEditarDemais = !row.id && !isLinhaCongelada;
+
               const nextRow = rowsParaExibir[visualIdx + 1];
               const isLastInGroup = !nextRow || nextRow.grupo_envio !== row.grupo_envio;
-
               const indexOriginal = rows.findIndex(r => r.ordem === row.ordem);
 
               return (
@@ -639,7 +646,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
                   <tr className={isLinhaCongelada ? "linha-congelada" : ""}>
                     <td>{row.ordem}</td>
                     <td>
-                      {(isCriar || podeEditarTudo) && !isLinhaCongelada ? (
+                      {podeEditarCodigo ? (
                         <div className="codigo-com-lupa">
                           <input
                             type="text"
@@ -669,7 +676,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
                             }}
                             title="Buscar insumo"
                           >
-                            🔍
+                            <FaMagnifyingGlass />
                           </button>
                         </div>
                       ) : (
@@ -677,8 +684,8 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
                       )}
                     </td>
                     <td>
-                      {(isCriar || podeEditarTudo) && !isLinhaCongelada ? (
-                        <input
+                      {podeEditarDescricao ? (
+                        <input className="descri"
                           type="text"
                           value={row.descricao || ""}
                           onChange={(e) => handleInputChange(indexOriginal, "descricao", e.target.value)}
@@ -689,12 +696,12 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
                       )}
                     </td>
                     <td>
-                      {isCriar && podeEditarTudo ? (
+                      {podeEditarDemais && isCriar ? (
                         <select
                           value={row.unidade || ""}
                           onChange={(e) => handleInputChange(indexOriginal, "unidade", e.target.value)}
                         >
-                          <option value="">(selecionar)</option>
+                          <option value=""></option>
                           {unidadesDisponiveis.map((un, i) => (
                             <option key={i} value={un}>{un}</option>
                           ))}
@@ -704,7 +711,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
                       )}
                     </td>
                     <td>
-                      {podeEditarTudo ? (
+                      {podeEditarDemais ? (
                         <input
                           type="number"
                           value={row.quantidade ?? ""}
@@ -717,12 +724,12 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
                       )}
                     </td>
                     <td>
-                      {podeEditarTudo ? (
+                      {podeEditarDemais ? (
                         <select
                           value={row.locacao || ""}
                           onChange={(e) => handleInputChange(indexOriginal, "locacao", e.target.value)}
                         >
-                          <option value="">(selecionar)</option>
+                          <option value=""></option>
                           {locacoes.map((loc, i) => (
                             <option key={i} value={loc}>{loc}</option>
                           ))}
@@ -732,12 +739,12 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
                       )}
                     </td>
                     <td>
-                      {podeEditarTudo ? (
+                      {podeEditarDemais ? (
                         <select
                           value={row.eap || ""}
                           onChange={(e) => handleInputChange(indexOriginal, "eap", e.target.value)}
                         >
-                          <option value="">(selecionar)</option>
+                          <option value=""></option>
                           {eaps.map((eap, i) => (
                             <option key={i} value={eap}>{eap}</option>
                           ))}
@@ -746,10 +753,30 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
                         <span>{row.eap || ""}</span>
                       )}
                     </td>
-                    <td>{row.fornecedor || ""}</td>
+                    <td>
+                      {podeEditarDemais ? (
+                        <div className="observacao-cell">
+                          <input
+                            type="text"
+                            value={row.observacao || ""}
+                            onChange={(e) => handleInputChange(indexOriginal, "observacao", e.target.value)}
+                            placeholder="Observação"
+                          />
+                          <FaPenToSquare className="observacao-icon" />
+                        </div>
+                      ) : (
+                        <span>{row.observacao || ""}</span>
+                      )}
+                    </td>
+                    <td>
+                      <div className="comentario-cell">
+                        <span>{row.comentario || ""}</span>
+                        <FaComment className="comentario-icon" />
+                      </div>
+                    </td>
                     <td>
                       <div className="button-group">
-                        {podeEditarTudo && (
+                        {podeEditarDemais && (
                           <button
                             className="remove-btn"
                             onClick={() => removeRow(indexOriginal)}
@@ -763,7 +790,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
 
                   {isLastInGroup && visualIdx < rowsParaExibir.length - 1 && (
                     <tr className="delimiter-row">
-                      <td colSpan="9">
+                      <td colSpan="10">
                         <div className="envio-delimiter">
                           Enviado por <strong>{row.enviado_por}</strong> em{" "}
                           {new Date(row.data_envio).toLocaleString("pt-BR", {
@@ -784,7 +811,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
         </table>
       </div>
 
-      {/* ✅ Modal de busca de insumo */}
       <BuscaInsumo
         isOpen={buscaInsumoAberta}
         onClose={() => {

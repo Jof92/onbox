@@ -101,6 +101,15 @@
 .listagem-table {
   width: 100%;
   border-collapse: collapse;
+  input, select {
+    width: 6em;
+    padding: 6px 6px;
+    border-radius: 4px;
+  }
+      .descri{
+  width: 15em;
+}
+
 }
 
 .listagem-table th {
@@ -129,10 +138,7 @@
 .sugestao-input,
 input[type="number"],
 select {
-  padding: 6px 8px;
-  border-radius: 6px;
-  border: 1px solid #ddd;
-  width: 100%;
+  width: 5em;
   box-sizing: border-box;
   font-size: 14px;
 }
@@ -228,22 +234,28 @@ select {
     padding: 6px;
   }
 }
+
+/* ==============================
+   ✅ .direcionar-para-input — versão unificada (sem duplicações)
+   ============================== */
 .direcionar-para-input {
-  padding: 6px 10px;
+  width: 100%;
+  max-width: 250px;
+  min-width: 150px;
+  height: 36px;
+  padding: 8px 10px;
   font-size: 14px;
   border: 1px solid #ccc;
   border-radius: 4px;
-  height: 36px;
-  min-width: 150px;
-  max-width: 250px;
   outline: none;
-  transition: border-color 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .direcionar-para-input:focus {
   border-color: #00c48c;
   box-shadow: 0 0 3px rgba(0, 196, 140, 0.5);
 }
+
 .action-buttons {
   display: flex;
   align-items: center;
@@ -265,23 +277,6 @@ select {
 
 .add-row-btn:hover, .send-btn:hover {
   background-color: #00a36a;
-}
-
-.direcionar-para-input {
-  padding: 6px 10px;
-  font-size: 14px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  height: 36px;
-  min-width: 150px;
-  max-width: 250px;
-  outline: none;
-  transition: border-color 0.2s ease;
-}
-
-.direcionar-para-input:focus {
-  border-color: #00c48c;
-  box-shadow: 0 0 3px rgba(0, 196, 140, 0.5);
 }
 
 .envio-delimiter {
@@ -317,14 +312,6 @@ select {
   background-color: #fdf2f2;
 }
 
-.direcionar-para-input {
-  width: 100%;
-  padding: 8px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  font-size: 14px;
-}
-
 .sugestoes-dropdown {
   position: absolute;
   background: white;
@@ -358,14 +345,13 @@ select {
   display: flex;
   align-items: center;
   gap: 6px;
+
+  
 }
 
 .lupa-busca-btn {
-  background: #f0f0f0;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   font-size: 12px;
   cursor: pointer;
   display: flex;
@@ -375,5 +361,7 @@ select {
 }
 
 .lupa-busca-btn:hover {
+  border-radius: 4px;
   background: #e0e0e0;
 }
+
