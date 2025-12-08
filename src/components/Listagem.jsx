@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
 import "./Listagem.css";
 import "./loader.css";
-import { FaPlus, FaTimes, FaPaperPlane, FaComment } from "react-icons/fa";
+import { FaTrash, FaTimes, FaPaperPlane, FaComment } from "react-icons/fa";
 import { FaPenToSquare, FaMagnifyingGlass } from "react-icons/fa6";
 import Check from "./Check";
 import Loading from "./Loading";
@@ -777,12 +777,13 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
                     <td>
                       <div className="button-group">
                         {podeEditarDemais && (
-                          <button
-                            className="remove-btn"
-                            onClick={() => removeRow(indexOriginal)}
-                          >
-                            <FaTimes />
-                          </button>
+                          <FaTrash
+                            className="delete-icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeRow(indexOriginal);
+                            }}
+                          />
                         )}
                       </div>
                     </td>
