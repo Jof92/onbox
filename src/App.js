@@ -1,14 +1,24 @@
 // src/App.jsx
 import React, { useState, useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from "react-router-dom";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import LoginPanel from "./components/Login";
-import Containers from "./components/Containers";
+import Containers from "./components/Containers"; // ✅ ajustado para pages/
 import Cards from "./components/Cards";
 import Home from "./components/Home";
 import { supabase } from "./supabaseClient";
 import "./App.css";
+
+// Wrapper para Containers com containerId da URL
+const ContainersWrapper = () => {
+  const { containerId } = useParams();
+  // Validação simples: aceita UUID ou null
+  const validContainerId = containerId && /^[0-9a-fA-F-]{36}$/.test(containerId)
+    ? containerId
+    : null;
+  return <Containers currentContainerId={validContainerId} />;
+};
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -18,7 +28,7 @@ export default function App() {
   const [hasOverdueToday, setHasOverdueToday] = useState(false);
   const [glowDismissed, setGlowDismissed] = useState(false);
 
-  // === Monitorar sessão do usuário ===
+  // Monitorar sessão
   useEffect(() => {
     const fetchSession = async () => {
       const { data } = await supabase.auth.getSession();
@@ -36,7 +46,7 @@ export default function App() {
     return () => subscription.subscription.unsubscribe();
   }, []);
 
-  // === Buscar perfil do usuário ===
+  // Buscar perfil
   useEffect(() => {
     const fetchProfile = async () => {
       if (!session?.user) {
@@ -58,7 +68,7 @@ export default function App() {
     fetchProfile();
   }, [session]);
 
-  // === Verificar se existe ALGUMA tarefa que venceu ONTEM (-1 dia) ===
+  // Verificar tarefas vencidas ONTEM
   useEffect(() => {
     const checkIfOverdueYesterday = async () => {
       if (!session?.user?.id) {
@@ -67,15 +77,14 @@ export default function App() {
       }
 
       try {
-        // Calcular a data de ONTEM no formato YYYY-MM-DD
         const hoje = new Date();
         const ontem = new Date(hoje);
         ontem.setDate(hoje.getDate() - 1);
-        const ontemStr = ontem.toISOString().split('T')[0]; // Ex: "2025-12-01"
+        const ontemStr = ontem.toISOString().split('T')[0];
 
         let hasOverdue = false;
 
-        // === 1. Verificar objetivos com data_entrega = ontemStr ===
+        // Objetivos de ontem
         const { data: responsaveis, error: err1 } = await supabase
           .from("ata_objetivos_responsaveis_enriquecidos")
           .select("ata_objetivo_id")
@@ -84,44 +93,33 @@ export default function App() {
         if (err1) throw err1;
 
         if (responsaveis?.length) {
-          const objetivoIds = responsaveis
-            .map(r => r.ata_objetivo_id)
-            .filter(Boolean);
-
+          const objetivoIds = responsaveis.map(r => r.ata_objetivo_id).filter(Boolean);
           if (objetivoIds.length > 0) {
             const { data: objetivos, error: err2 } = await supabase
               .from("ata_objetivos")
               .select("data_entrega, concluido, texto")
               .in("id", objetivoIds)
-              .eq("data_entrega", ontemStr); // 🔍 Filtra só os de ONTEM
+              .eq("data_entrega", ontemStr);
 
             if (err2) throw err2;
 
-            // Verifica se há algum objetivo NÃO concluído e NÃO excluído
-            const hasActiveOverdueObjetivo = objetivos?.some(obj =>
-              !obj.concluido && 
-              obj.texto && 
-              !obj.texto.startsWith("[EXCLUIDO]")
+            const hasActiveOverdue = objetivos?.some(obj =>
+              !obj.concluido && obj.texto && !obj.texto.startsWith("[EXCLUIDO]")
             );
-
-            if (hasActiveOverdueObjetivo) {
-              hasOverdue = true;
-            }
+            if (hasActiveOverdue) hasOverdue = true;
           }
         }
 
-        // === 2. Verificar comentários com data_entrega = ontemStr (se ainda não encontrou) ===
+        // Comentários de ontem
         if (!hasOverdue) {
           const { data: comentarios, error: err3 } = await supabase
             .from("comentarios")
-            .select("id") // só precisamos saber se existe
+            .select("id")
             .eq("agendado_por", session.user.id)
-            .eq("data_entrega", ontemStr); // 🔍 Só os de ONTEM
+            .eq("data_entrega", ontemStr);
 
-          if (err3) {
-            console.warn("Erro ao buscar comentários de ontem:", err3);
-          } else if (comentarios?.length > 0) {
-            hasOverdue = true; // comentários não têm "exclusão lógica" além de remover o agendado_por
+          if (!err3 && comentarios?.length > 0) {
+            hasOverdue = true;
           }
         }
 
@@ -135,7 +133,7 @@ export default function App() {
     checkIfOverdueYesterday();
   }, [session?.user?.id]);
 
-  // === Fechar painel de login com ESC ===
+  // Fechar login com ESC
   useEffect(() => {
     const handleEsc = (event) => {
       if (event.key === "Escape" && showLoginPanel) {
@@ -146,7 +144,6 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleEsc);
   }, [showLoginPanel]);
 
-  // === Controle de login/logout ===
   const handleLoginClick = () => setShowLoginPanel((prev) => !prev);
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -193,7 +190,7 @@ export default function App() {
             <Route
               path="/containers/:containerId?"
               element={
-                session ? <Containers /> : <Navigate to="/" replace />
+                session ? <ContainersWrapper /> : <Navigate to="/" replace />
               }
             />
             <Route

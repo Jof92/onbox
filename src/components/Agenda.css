@@ -469,3 +469,36 @@
   opacity: 1;
 }
 
+/* Checkbox simples para "exibir agenda no container?" */
+.agenda-sidebar-toggle {
+  margin: 10px 0 20px;
+  font-size: 0.85rem;
+  color: #333;
+}
+
+.agenda-sidebar-toggle input[type="checkbox"] {
+  transform: scale(1.1);
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.agenda-sidebar-toggle label {
+  cursor: pointer;
+  user-select: none;
+}
+
+.nova-tarefa-btn {
+  background: #e0e0e0;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  color: #333;
+  width: 100%;
+  text-align: left;
+}
+
+.nova-tarefa-btn:hover {
+  background: #d5d5d5;
+}

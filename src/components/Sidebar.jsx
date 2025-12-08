@@ -1,6 +1,7 @@
 // src/components/Sidebar.jsx
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { FaPlus, FaTrash, FaChevronLeft, FaChevronRight } from "react-icons/fa";
+import { FaTrash, FaChevronLeft, FaChevronRight } from "react-icons/fa";
+import { TfiDropbox } from "react-icons/tfi";
 import { supabase } from "../supabaseClient";
 import { format, addDays, subDays } from "date-fns";
 import ptBR from "date-fns/locale/pt-BR";
@@ -16,20 +17,22 @@ export default function Sidebar({
   currentUserId,
   containerOwnerId,
   gerenteContainerId,
+  currentContainerId,
 }) {
   const hasEditPermissions = currentUserId && (
     currentUserId === containerOwnerId || 
     currentUserId === gerenteContainerId
   );
 
-  // Estados para o bloco de agenda do dia
   const [dataExibida, setDataExibida] = useState(new Date());
   const [agendaDoDia, setAgendaDoDia] = useState([]);
   const [carregandoAgenda, setCarregandoAgenda] = useState(false);
   const [showBoxMenu, setShowBoxMenu] = useState(false);
+  const [showAgendaBlock, setShowAgendaBlock] = useState(false);
+  const [loadingPreference, setLoadingPreference] = useState(true);
   const boxMenuRef = useRef(null);
 
-  // Fecha o menu ao clicar fora
+  // Fecha dropdown ao clicar fora
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (boxMenuRef.current && !boxMenuRef.current.contains(event.target)) {
@@ -40,7 +43,52 @@ export default function Sidebar({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Função para normalizar texto (igual à do Agenda.jsx)
+  // Carrega preferência inicial
+  const loadPreference = useCallback(async () => {
+    if (!currentUserId || !currentContainerId) {
+      setShowAgendaBlock(false);
+      setLoadingPreference(false);
+      return;
+    }
+
+    try {
+      const { data: pref, error } = await supabase
+        .from("user_preferences")
+        .select("value")
+        .eq("user_id", currentUserId)
+        .eq("container_id", currentContainerId)
+        .eq("key", "show_sidebar_agenda")
+        .single();
+
+      if (!error) {
+        setShowAgendaBlock(pref?.value || false);
+      } else if (error.code !== "PGRST116") {
+        console.warn("Erro ao carregar preferência no sidebar:", error);
+      }
+    } catch (err) {
+      console.warn("Erro ao carregar preferência no sidebar", err);
+    } finally {
+      setLoadingPreference(false);
+    }
+  }, [currentUserId, currentContainerId]);
+
+  // Carrega na montagem
+  useEffect(() => {
+    loadPreference();
+  }, [loadPreference]);
+
+  // ✅ ESCUTA EVENTO GLOBAL PARA ATUALIZAR IMEDIATAMENTE
+  useEffect(() => {
+    const handlePreferenceUpdate = () => {
+      loadPreference();
+    };
+
+    window.addEventListener('agendaPreferenceUpdated', handlePreferenceUpdate);
+    return () => {
+      window.removeEventListener('agendaPreferenceUpdated', handlePreferenceUpdate);
+    };
+  }, [loadPreference]);
+
   const normalizarTexto = (str) => {
     if (!str) return "";
     return str
@@ -51,12 +99,10 @@ export default function Sidebar({
       .trim();
   };
 
-  // Função para buscar atividades de uma data específica
   const fetchAgendaForDate = useCallback(async (userId, dateStr) => {
     if (!userId || !dateStr) return [];
 
     try {
-      // === Objetivos ===
       const { data: responsaveis, error: err1 } = await supabase
         .from("ata_objetivos_responsaveis_enriquecidos")
         .select("ata_objetivo_id")
@@ -91,7 +137,6 @@ export default function Sidebar({
         }
       }
 
-      // === Comentários ===
       const { data: comentarios, error: err3 } = await supabase
         .from("comentarios")
         .select("id, conteudo, nota_id")
@@ -107,7 +152,6 @@ export default function Sidebar({
         tipo: 'comentario'
       }));
 
-      // === Buscar nomes das notas ===
       const notaIds = [
         ...new Set([
           ...objetivosDoDia.map(o => o.ata_id).filter(Boolean),
@@ -145,7 +189,6 @@ export default function Sidebar({
     }
   }, []);
 
-  // Efeito para carregar agenda sempre que a data ou usuário mudar
   useEffect(() => {
     if (!currentUserId) {
       setAgendaDoDia([]);
@@ -171,57 +214,59 @@ export default function Sidebar({
 
   return (
     <aside className="containers-sidebar">
-      {/* === BLOCO DE AGENDA DO DIA === */}
-      <div className="sidebar-agenda-today">
-        <div className="agenda-header-side">
-          <button
-            className="nav-day-btn"
-            onClick={() => setDataExibida(prev => subDays(prev, 1))}
-            aria-label="Dia anterior"
-          >
-            <FaChevronLeft />
-          </button>
-          <h4 className="agenda-date">
-            {format(dataExibida, "EEEE, dd MMM", { locale: ptBR })}
-          </h4>
-          <button
-            className="nav-day-btn"
-            onClick={() => setDataExibida(prev => addDays(prev, 1))}
-            aria-label="Próximo dia"
-          >
-            <FaChevronRight />
-          </button>
-        </div>
+      {/* === BLOCO DE AGENDA DO DIA (CONDICIONAL) === */}
+      {!loadingPreference && showAgendaBlock && (
+        <div className="sidebar-agenda-today">
+          <div className="agenda-header-side">
+            <button
+              className="nav-day-btn"
+              onClick={() => setDataExibida(prev => subDays(prev, 1))}
+              aria-label="Dia anterior"
+            >
+              <FaChevronLeft />
+            </button>
+            <h4 className="agenda-date">
+              {format(dataExibida, "EEEE, dd MMM", { locale: ptBR })}
+            </h4>
+            <button
+              className="nav-day-btn"
+              onClick={() => setDataExibida(prev => addDays(prev, 1))}
+              aria-label="Próximo dia"
+            >
+              <FaChevronRight />
+            </button>
+          </div>
 
-        <div className="agenda-items">
-          {carregandoAgenda ? (
-            <p className="agenda-empty">Carregando...</p>
-          ) : agendaDoDia.length > 0 ? (
-            agendaDoDia.map(item => (
-              <div key={`${item.tipo}-${item.id}`} className="agenda-item">
-                <span className="item-type">
-                  {item.tipo === 'objetivo' ? '✓' : '💬'}
-                </span>
-                <span className="item-title">
-                  {item.tipo === 'objetivo' ? item.texto : `"${item.conteudo}"`}
-                </span>
-                <span className="item-note">{item.nomeNota}</span>
-              </div>
-            ))
-          ) : (
-            <p className="agenda-empty">Nenhuma atividade</p>
-          )}
+          <div className="agenda-items">
+            {carregandoAgenda ? (
+              <p className="agenda-empty">Carregando...</p>
+            ) : agendaDoDia.length > 0 ? (
+              agendaDoDia.map(item => (
+                <div key={`${item.tipo}-${item.id}`} className="agenda-item">
+                  <span className="item-type">
+                    {item.tipo === 'objetivo' ? '✓' : '💬'}
+                  </span>
+                  <span className="item-title">
+                    {item.tipo === 'objetivo' ? item.texto : `"${item.conteudo}"`}
+                  </span>
+                  <span className="item-note">{item.nomeNota}</span>
+                </div>
+              ))
+            ) : (
+              <p className="agenda-empty">Nenhuma atividade</p>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* === ÚNICO BOTÃO "+ Box" com dropdown === */}
+      {/* === Botão "+ Box" === */}
       {hasEditPermissions && (
         <div className="box-menu-container" ref={boxMenuRef}>
           <button
             className="sidebar-btn box-btn"
             onClick={() => setShowBoxMenu(!showBoxMenu)}
           >
-            <FaPlus className="icon" /> Box
+            <TfiDropbox className="icon" /> Box
           </button>
 
           {showBoxMenu && (

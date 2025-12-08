@@ -8,8 +8,7 @@ import Sidebar from "../components/Sidebar";
 import ProjectManager from "./ProjectManager";
 import "./Containers.css";
 
-export default function Containers() {
-  const { containerId: containerIdDaUrl } = useParams();
+export default function Containers({ currentContainerId: containerIdDaUrl }) {
   const navigate = useNavigate();
 
   const [user, setUser] = useState(null);
@@ -27,6 +26,7 @@ export default function Containers() {
     currentUserId: null,
     containerOwnerId: null,
     gerenteContainerId: null,
+    currentContainerId: null, // ✅ ADICIONADO
   });
 
   // Carrega usuário logado
@@ -43,7 +43,7 @@ export default function Containers() {
     loadUser();
   }, [navigate]);
 
-  // Define containerAtual
+  // Define containerAtual com base no containerIdDaUrl ou user.id
   useEffect(() => {
     if (user) {
       const idParaUsar = containerIdDaUrl || user.id;
@@ -51,7 +51,7 @@ export default function Containers() {
     }
   }, [user, containerIdDaUrl]);
 
-  // Busca nome do dono do container — ✅ SEM .single()
+  // Busca nome do dono do container
   useEffect(() => {
     const fetchNomeDono = async () => {
       if (!containerAtual) {
@@ -82,6 +82,16 @@ export default function Containers() {
     fetchNomeDono();
   }, [containerAtual]);
 
+  // Atualiza containerAtual no sidebarProps sempre que mudar
+  useEffect(() => {
+    if (containerAtual) {
+      setSidebarProps(prev => ({
+        ...prev,
+        currentContainerId: containerAtual,
+      }));
+    }
+  }, [containerAtual]);
+
   if (loading) return <Loading />;
 
   return (
@@ -93,13 +103,15 @@ export default function Containers() {
           user={user}
         />
 
-        <Sidebar {...sidebarProps} />
+        {/* ✅ Passa currentContainerId para Sidebar */}
+        <Sidebar {...sidebarProps} currentContainerId={containerAtual} />
 
         <div className="containers-main-with-title">
           <h1 className="tittle-cont">
             Container {nomeContainer ? `- ${nomeContainer}` : ""}
           </h1>
 
+          {/* ✅ Passa containerAtual para ProjectManager, que deve repassar para Agenda */}
           <ProjectManager
             containerAtual={containerAtual}
             user={user}

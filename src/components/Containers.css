@@ -21,7 +21,7 @@
 /* ===== Sidebar principal ===== */
 .containers-sidebar {
   background: #fff;
-  padding: 25px 20px;
+  padding: 10px 20px;
   display: flex;
   flex-direction: column;
   gap: 15px;
@@ -882,4 +882,83 @@
 
 .box-dropdown-item:not(:last-child) {
   border-bottom: 1px solid #eee;
+}
+
+/* === BARRAS DE ROLAGEM MODERNAS E SUAVES === */
+
+/* WebKit browsers (Chrome, Safari, Edge) */
+.container::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.container::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 10px;
+}
+
+.container::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+  transition: background 0.2s ease;
+}
+
+.container::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+/* Firefox */
+.container {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+.container::-moz-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.container::-moz-scrollbar-track {
+  background: transparent;
+  border-radius: 10px;
+}
+
+.container::-moz-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+  transition: background 0.2s ease;
+}
+
+.container::-moz-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+/* Rolagem suave em todo o container */
+.container {
+  scroll-behavior: smooth;
+}
+
+/* Aplica a estilização também no bloco da agenda */
+.sidebar-agenda-today .agenda-items {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+.sidebar-agenda-today .agenda-items::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-agenda-today .agenda-items::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 8px;
+}
+
+.sidebar-agenda-today .agenda-items::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  transition: background 0.2s ease;
+}
+
+.sidebar-agenda-today .agenda-items::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
 }

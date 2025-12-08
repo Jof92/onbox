@@ -1,7 +1,7 @@
 // src/components/ThinSidebar.jsx
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { FaCog, FaUserFriends, FaHome, FaCalendar } from "react-icons/fa";
-import { useNavigate } from "react-router-dom"; // ✅ Adicionado
+import { useNavigate } from "react-router-dom";
 import "./ThinSidebar.css";
 import Collab from "./Collab";
 import ContainerSettings from "./ContainerSettings";
@@ -9,7 +9,7 @@ import Agenda from "./Agenda";
 import { supabase } from "../supabaseClient";
 
 export default function ThinSidebar({ containerAtual, setContainerAtual, user }) {
-  const navigate = useNavigate(); // ✅ Para atualizar a URL
+  const navigate = useNavigate();
 
   const [showCollab, setShowCollab] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -148,7 +148,6 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
     setShowCollab(true);
   };
 
-  // ✅ Atualizado: navega para /containers/ID e atualiza estado
   const handleTrocarContainer = (colaborador) => {
     const containerId = colaborador?.remetente?.id;
     if (!containerId) return;
@@ -156,7 +155,6 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
     navigate(`/containers/${containerId}`);
   };
 
-  // ✅ Atualizado: navega para seu próprio container
   const handleVoltarHome = () => {
     if (user?.id) {
       setContainerAtual(user.id);
@@ -259,6 +257,7 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
       {showAgenda && (
         <Agenda
           user={user}
+          currentContainerId={containerAtual} // ✅ CORREÇÃO AQUI
           onClose={() => setShowAgenda(false)}
         />
       )}
