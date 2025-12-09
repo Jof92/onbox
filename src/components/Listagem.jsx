@@ -26,6 +26,9 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
   const [buscaInsumoAberta, setBuscaInsumoAberta] = useState(false);
   const [linhaBuscaAtiva, setLinhaBuscaAtiva] = useState(null);
 
+  // 🔁 Estado para forçar re-carregamento após atualizações externas (ex: do espelho)
+  const [forcarAtualizacao, setForcarAtualizacao] = useState(0);
+
   // Carrega perfil do usuário logado
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -222,7 +225,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
     };
 
     carregarRascunhoOuBanco();
-  }, [projetoAtual, notaAtual]);
+  }, [projetoAtual, notaAtual, forcarAtualizacao]); // ✅ Inclui forcarAtualizacao
 
   useEffect(() => {
     if (notaAtual?.id && rows.length > 0) {
@@ -235,7 +238,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
     }
   }, [rows, ultimaAlteracao, notaAtual?.id]);
 
-  // Polling: sincroniza código e descrição
+  // 🔁 POLLING EXPANDIDO: agora sincroniza também 'comentario'
   useEffect(() => {
     if (!notaAtual?.id || !projetoAtual?.id) return;
 
@@ -243,7 +246,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
       try {
         const { data, error } = await supabase
           .from("planilha_itens")
-          .select("id, codigo, descricao")
+          .select("id, codigo, descricao, comentario") // ✅ inclui 'comentario'
           .eq("nota_id", notaAtual.id);
 
         if (error) throw error;
@@ -253,12 +256,14 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
             const itemAtualizado = data.find(i => i.id === r.id);
             if (itemAtualizado && (
               r.codigo !== itemAtualizado.codigo ||
-              r.descricao !== itemAtualizado.descricao
+              r.descricao !== itemAtualizado.descricao ||
+              r.comentario !== itemAtualizado.comentario // ✅ compara comentário
             )) {
               return {
                 ...r,
                 codigo: itemAtualizado.codigo,
                 descricao: itemAtualizado.descricao,
+                comentario: itemAtualizado.comentario, // ✅ atualiza comentário
               };
             }
             return r;
@@ -626,8 +631,8 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
               <th>#</th>
               <th>Código</th>
               <th>Descrição</th>
-              <th>Unid</th>
-              <th>Qtd.</th>
+              <th>Unidade</th>
+              <th>Quantidade</th>
               <th>Locação</th>
               <th>EAP</th>
               <th>Observação</th>
@@ -765,13 +770,11 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
                         <textarea
                           value={row.observacao || ""}
                           onChange={(e) => {
-                            // Atualiza enquanto digita (opcional, mas ajuda UX)
                             const novas = [...rows];
                             novas[indexOriginal].observacao = e.target.value;
                             setRows(novas);
                           }}
                           onBlur={(e) => handleObservacaoBlur(indexOriginal, e.target.value)}
-                          placeholder="Observação"
                           className="observacao-textarea"
                           rows="1"
                         />
@@ -782,9 +785,9 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
                       )}
                     </td>
                     <td>
-                      <div className="comentario-cell">
-                        <span>{row.comentario || ""}</span>
-                        <FaComment className="comentario-icon" />
+                      {/* ✅ Comentário: exibe o valor atualizado (via polling ou reload) */}
+                      <div className="observacao-rendered">
+                        {row.comentario || ""}
                       </div>
                     </td>
                     <td>

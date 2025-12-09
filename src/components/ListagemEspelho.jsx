@@ -4,29 +4,25 @@ import { supabase } from "../supabaseClient";
 import "./Listagem.css";
 import "./ListagemEspelho.css";
 import "./loader.css";
-import { FaPaperPlane, FaComment, FaPlus, FaTimes } from "react-icons/fa";
+import { FaPaperPlane, FaPlus, FaTimes } from "react-icons/fa";
 import Check from "./Check";
 import Loading from "./Loading";
 
 export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelhoId, onClose }) {
   const [rows, setRows] = useState([]);
-  const [comentarios, setComentarios] = useState({});
-  const [comentarioEditandoId, setComentarioEditandoId] = useState(null);
-  const [nomeUsuarioLogado, setNomeUsuarioLogado] = useState("Usuário");
-  const [statusEnvio, setStatusEnvio] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [statusEnvio, setStatusEnvio] = useState(null);
 
+  // Carrega dados do perfil (opcional, pode ser removido se não for usado)
   useEffect(() => {
     const fetchUserProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("nome")
-          .eq("id", user.id)
-          .single();
-        setNomeUsuarioLogado(profile?.nome || user.email?.split("@")[0] || "Usuário");
-      }
+      if (!user) return;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("nome")
+        .eq("id", user.id)
+        .single();
     };
     fetchUserProfile();
   }, []);
@@ -56,6 +52,7 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
         quantidade: item.quantidade || "",
         locacao: item.locacao || "",
         eap: item.eap || "",
+        observacao: item.observacao || "",
         comentario: item.comentario || "",
         criado_em: item.criado_em || null,
         grupo_envio: item.grupo_envio || "antigo",
@@ -66,12 +63,6 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
       }));
 
       setRows(mapped);
-
-      const comentariosIniciais = {};
-      mapped.forEach(item => {
-        comentariosIniciais[item.id] = item.comentario || "";
-      });
-      setComentarios(comentariosIniciais);
     } catch (err) {
       console.error("Erro ao carregar listagem espelho:", err);
       alert("Erro ao carregar os dados.");
@@ -86,7 +77,7 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
 
   const toggleSelecionado = async (id) => {
     const row = rows.find(r => r.id === id);
-    if (!row || !row.isCriar) return; // Só permite marcar se for "criar"
+    if (!row || !row.isCriar) return;
 
     const novoValor = !row.selecionado;
     setRows(prev => prev.map(r => (r.id === id ? { ...r, selecionado: novoValor } : r)));
@@ -96,7 +87,6 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
         .from("planilha_itens")
         .update({ selecionado: novoValor })
         .eq("id", id);
-
       if (error) throw error;
     } catch (err) {
       console.error("Erro ao salvar seleção:", err);
@@ -109,34 +99,57 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
     setRows(prev => prev.map(r => (r.id === id ? { ...r, [campo]: valor } : r)));
   };
 
-  const handleComentarioChange = (id, valor) => {
-    setComentarios(prev => ({ ...prev, [id]: valor }));
-  };
-
-  const salvarComentarioIndividual = async (id, novoComentario) => {
+  // ✅ Atualiza o comentário no espelho E na linha original (se mapeamento existir)
+  const handleComentarioBlur = async (id, novoComentario) => {
     try {
-      const { error } = await supabase
+      // 1. Salvar no espelho
+      const { error: espelhoError } = await supabase
         .from("planilha_itens")
         .update({ comentario: novoComentario || null })
         .eq("id", id);
+      if (espelhoError) throw espelhoError;
 
-      if (error) throw error;
+      // 2. Atualizar localmente
+      setRows(prev => prev.map(r => (r.id === id ? { ...r, comentario: novoComentario } : r)));
 
-      setComentarios(prev => ({ ...prev, [id]: novoComentario }));
-      setComentarioEditandoId(null);
+      // 3. Sincronizar com a linha original, se houver mapeamento
+      const mapaKey = `mapa_itens_${notaEspelhoId}`;
+      const mapaStr = localStorage.getItem(mapaKey);
+      let itemOriginalId = null;
+
+      if (mapaStr) {
+        try {
+          const mapa = JSON.parse(mapaStr);
+          itemOriginalId = mapa[id];
+        } catch (parseError) {
+          console.warn("Falha ao parsear mapeamento:", parseError);
+        }
+      }
+
+      if (itemOriginalId) {
+        const { error: originalError } = await supabase
+          .from("planilha_itens")
+          .update({ comentario: novoComentario || null })
+          .eq("id", itemOriginalId);
+        if (originalError) {
+          console.error("Erro ao atualizar comentário na linha original:", originalError);
+          // Não interrompe o fluxo — apenas registra
+        }
+      }
     } catch (err) {
+      console.error("Erro ao salvar comentário:", err);
       alert("Erro ao salvar comentário.");
     }
   };
 
   const handleAddCriar = async (row) => {
-    if (!row.codigo?.trim() || row.codigo.toLowerCase() === 'criar') {
+    if (!row.codigo?.trim() || row.codigo.toLowerCase() === "criar") {
       alert("Digite um código válido antes de criar o item!");
       return;
     }
 
     try {
-      // 1. Cria o item na tabela global de insumos
+      // Inserir no catálogo global
       const { error: insertError } = await supabase
         .from("itens")
         .insert({
@@ -144,10 +157,9 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
           descricao: row.descricao || "",
           unidade: row.unidade || null,
         });
-
       if (insertError) throw insertError;
 
-      // 2. Atualiza apenas codigo e descricao na nota espelho
+      // Atualizar linha no espelho
       const { error: updateEspelhoError } = await supabase
         .from("planilha_itens")
         .update({
@@ -155,63 +167,52 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
           descricao: row.descricao || "",
         })
         .eq("id", row.id);
-
       if (updateEspelhoError) throw updateEspelhoError;
 
-      // 3. Atualiza APENAS codigo e descricao no item original
-      const mapaStr = localStorage.getItem(`mapa_itens_${notaEspelhoId}`);
+      // Atualizar linha original via mapeamento
+      const mapaKey = `mapa_itens_${notaEspelhoId}`;
+      const mapaStr = localStorage.getItem(mapaKey);
       if (mapaStr) {
         try {
           const mapa = JSON.parse(mapaStr);
           const itemOriginalId = mapa[row.id];
-
           if (itemOriginalId) {
-            const { error: updateOriginalError } = await supabase
+            await supabase
               .from("planilha_itens")
               .update({
                 codigo: row.codigo.trim(),
                 descricao: row.descricao || "",
               })
               .eq("id", itemOriginalId);
-
-            if (updateOriginalError) {
-              console.error("Erro ao atualizar item original:", updateOriginalError);
-            }
           }
         } catch (e) {
-          console.error("Erro ao processar mapeamento:", e);
+          console.error("Erro ao atualizar item original via mapeamento:", e);
         }
       }
 
-      // 4. Atualiza estado local
+      // Atualizar estado local
       setRows(prev =>
         prev.map(r =>
           r.id === row.id
-            ? {
-                ...r,
-                isCriar: false,
-                codigo: row.codigo.trim(),
-                descricao: row.descricao,
-              }
+            ? { ...r, isCriar: false, codigo: row.codigo.trim(), descricao: row.descricao }
             : r
         )
       );
 
       alert("Item criado com sucesso! A listagem original foi atualizada automaticamente.");
     } catch (err) {
+      console.error("Erro ao criar item:", err);
       alert("Erro ao criar item: " + (err.message || "Erro desconhecido"));
     }
   };
 
   const handleSave = async () => {
     if (!notaEspelhoId) return;
-
     setStatusEnvio("enviando");
     try {
       await Promise.all(
         rows.map(async (row) => {
           const updateData = {
-            comentario: comentarios[row.id] || null,
             selecionado: row.selecionado,
           };
 
@@ -232,6 +233,7 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
     } catch (err) {
       console.error("Erro ao salvar:", err);
       alert("Erro ao salvar a lista.");
+      setStatusEnvio(null);
     }
   };
 
@@ -287,11 +289,13 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
               <th>#</th>
               <th>Código</th>
               <th>Descrição</th>
-              <th>Unid</th>
-              <th>Qtd.</th>
+              <th>Unidade</th>
+              <th>Quantidade</th>
               <th>Locação</th>
               <th>EAP</th>
-              <th style={{ width: '120px' }}>Comentário</th>
+              <th>Observação</th>
+              <th>Comentário</th>
+              <th style={{ width: '40px' }}>Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -304,7 +308,6 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
                 <React.Fragment key={row.id ?? visualIdx}>
                   <tr className={row.selecionado ? "linha-selecionada" : ""}>
                     <td>
-                      {/* Checkbox só aparece para itens "criar" */}
                       {row.isCriar && (
                         <input
                           type="checkbox"
@@ -315,7 +318,6 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
                     </td>
                     <td>{row.ordem}</td>
                     <td>
-                      {/* Código só edita se for "criar" */}
                       {row.isCriar ? (
                         <input
                           type="text"
@@ -328,9 +330,9 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
                       )}
                     </td>
                     <td>
-                      {/* Descrição só edita se for "criar" */}
                       {row.isCriar ? (
                         <input
+                          className="descri"
                           type="text"
                           value={row.descricao || ""}
                           onChange={(e) => handleInputChange(row.id, "descricao", e.target.value)}
@@ -340,75 +342,45 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
                         <span>{row.descricao || ""}</span>
                       )}
                     </td>
+                    <td><span>{row.unidade || ""}</span></td>
+                    <td><span>{row.quantidade || ""}</span></td>
+                    <td><span>{row.locacao || ""}</span></td>
+                    <td><span>{row.eap || ""}</span></td>
                     <td>
-                      {/* Unidade SEMPRE congelada */}
-                      <span>{row.unidade || ""}</span>
+                      <div className="observacao-rendered">
+                        {row.observacao || ""}
+                      </div>
                     </td>
                     <td>
-                      {/* Quantidade SEMPRE congelada */}
-                      <span>{row.quantidade || ""}</span>
+                      <textarea
+                        value={row.comentario || ""}
+                        onChange={(e) => handleInputChange(row.id, "comentario", e.target.value)}
+                        onBlur={(e) => handleComentarioBlur(row.id, e.target.value)}
+                        className="observacao-textarea"
+                        rows="1"
+                        placeholder="Comentário..."
+                      />
                     </td>
                     <td>
-                      {/* Locação SEMPRE congelada */}
-                      <span>{row.locacao || ""}</span>
-                    </td>
-                    <td>
-                      {/* EAP SEMPRE congelado */}
-                      <span>{row.eap || ""}</span>
-                    </td>
-                    <td>
-                      {comentarioEditandoId === row.id ? (
-                        <div className="comentario-editavel">
-                          <textarea
-                            value={comentarios[row.id] || ""}
-                            onChange={(e) => handleComentarioChange(row.id, e.target.value)}
-                            placeholder="Comente aqui..."
-                            autoFocus
-                            disabled={!row.isCriar}
-                          />
-                          <div className="comentario-botoes">
-                            <button
-                              className="btn-comentario-salvar"
-                              onClick={() => salvarComentarioIndividual(row.id, comentarios[row.id])}
-                              disabled={!row.isCriar}
-                            >
-                              Salvar
-                            </button>
-                            <button
-                              className="btn-comentario-cancelar"
-                              onClick={() => setComentarioEditandoId(null)}
-                            >
-                              Cancelar
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div
-                          className="icone-comentario-clicavel"
-                          onClick={() => row.isCriar && setComentarioEditandoId(row.id)}
-                          style={!row.isCriar ? { opacity: 0.6, pointerEvents: "none" } : {}}
+                      {row.isCriar && (
+                        <button
+                          className="add-supabase-btn"
+                          style={{ padding: '4px', fontSize: '0.9em' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAddCriar(row);
+                          }}
+                          title="Criar item global"
                         >
-                          <FaComment />
-                          {comentarios[row.id] && <span className="indicador-comentario">•</span>}
-                          {row.isCriar && (
-                            <button
-                              className="add-supabase-btn"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleAddCriar(row);
-                              }}
-                            >
-                              <FaPlus />
-                            </button>
-                          )}
-                        </div>
+                          <FaPlus />
+                        </button>
                       )}
                     </td>
                   </tr>
 
                   {isLastInGroup && visualIdx < rowsParaExibir.length - 1 && (
                     <tr className="delimiter-row">
-                      <td colSpan="9">
+                      <td colSpan="11">
                         <div className="envio-delimiter">
                           Enviado por <strong>{row.enviado_por}</strong> em{" "}
                           {new Date(row.data_envio).toLocaleString("pt-BR", {

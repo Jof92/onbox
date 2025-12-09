@@ -102,12 +102,11 @@
   width: 100%;
   border-collapse: collapse;
   input, select {
-    width: 6em;
-    padding: 6px 6px;
+    padding: 4px 6px;
     border-radius: 4px;
   }
       .descri{
-  width: 15em;
+  width: 25em;
 }
 
 }
@@ -382,13 +381,14 @@ select {
   width: 100%;
   min-height: 27px;
   max-height: 120px; /* opcional: limite máximo */
-  resize: none;
-  padding: 4px 6px;
-  border: 1px solid #ccc;
+  
+  padding: 3px 6px;
+  border: 1px solid #cbd5e1;
   border-radius: 4px;
   font-size: 14px;
   line-height: 1.4;
   overflow: hidden; /* para evitar scroll durante expansão */
   box-sizing: border-box;
+  margin-top: 2px;
 }
 
