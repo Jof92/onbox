@@ -1,12 +1,9 @@
 // src/components/Login.jsx
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import "./Login.css";
 
 export default function LoginPanel({ onLogin, onClose }) {
-  const navigate = useNavigate();
-
   const [isSignup, setIsSignup] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -71,9 +68,10 @@ export default function LoginPanel({ onLogin, onClose }) {
 
         if (profile) {
           if (onLogin) onLogin();
-          navigate("/containers");
+          if (onClose) onClose();
         } else {
-          navigate("/loginfull");
+          if (onClose) onClose();
+          window.location.href = "/loginfull";
         }
       }
     } catch (err) {
@@ -84,9 +82,39 @@ export default function LoginPanel({ onLogin, onClose }) {
     }
   };
 
-  const handleEsqueciSenha = () => {
-    if (onClose) onClose(); // ✅ Fecha o modal
-    navigate("/ResetSenha");
+  // 🔥 Nova lógica: dispara e-mail de recuperação
+  const handleEsqueciSenha = async () => {
+    if (!formData.email) {
+      setError("Por favor, digite seu e-mail para recuperar a senha.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(formData.email, {
+        options: {
+          emailRedirectTo: "https://onbox-two.vercel.app/ResetSenha",
+        },
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      setSuccessMessage("E-mail de recuperação enviado! Verifique sua caixa de entrada.");
+      setFormData((prev) => ({ ...prev, email: "" }));
+      setTimeout(() => {
+        setSuccessMessage("");
+        if (onClose) onClose();
+      }, 4000);
+    } catch (err) {
+      console.error("Erro ao enviar e-mail de recuperação:", err);
+      setError(err.message || "Erro ao enviar e-mail. Verifique o endereço.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const renderInput = (label, field, type = "text") => (
@@ -112,7 +140,7 @@ export default function LoginPanel({ onLogin, onClose }) {
 
             <form onSubmit={handleSubmit}>
               {renderInput("Email", "email", "email")}
-              {renderInput("Senha", "senha", "password")}
+              {!isSignup && renderInput("Senha", "senha", "password")}
               {isSignup && renderInput("Confirmar Senha", "confirmarSenha", "password")}
 
               {error && <div className="error-msg">{error}</div>}
@@ -155,6 +183,7 @@ export default function LoginPanel({ onLogin, onClose }) {
                     type="button"
                     className="link-btn"
                     onClick={handleEsqueciSenha}
+                    disabled={loading}
                   >
                     Esqueci a senha
                   </button>
