@@ -1,9 +1,10 @@
+// src/components/Login.jsx
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import "./Login.css";
 
-export default function LoginPanel({ onLogin }) {
+export default function LoginPanel({ onLogin, onClose }) {
   const navigate = useNavigate();
 
   const [isSignup, setIsSignup] = useState(false);
@@ -17,12 +18,10 @@ export default function LoginPanel({ onLogin }) {
     confirmarSenha: "",
   });
 
-  // Atualiza campos do formulário
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  // Envia formulário
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -31,19 +30,16 @@ export default function LoginPanel({ onLogin }) {
 
     try {
       if (isSignup) {
-        // 🔹 Validações
         if (!formData.email.includes("@")) throw new Error("Email inválido.");
         if (formData.senha.length < 6)
           throw new Error("A senha deve ter pelo menos 6 caracteres.");
         if (formData.senha !== formData.confirmarSenha)
           throw new Error("As senhas não coincidem.");
 
-        // 🔹 Cadastro com redirecionamento após confirmação
         const { error: signUpError } = await supabase.auth.signUp({
           email: formData.email,
           password: formData.senha,
           options: {
-            // 🔸 Redireciona direto para a página de cadastro completo
             emailRedirectTo: "https://onbox-two.vercel.app/loginfull",
           },
         });
@@ -54,14 +50,12 @@ export default function LoginPanel({ onLogin }) {
           "✅ Cadastro iniciado! Verifique seu e-mail e clique no link para continuar o cadastro no OnBox."
         );
 
-        // Limpa formulário e volta para modo de login
         setFormData({ email: "", senha: "", confirmarSenha: "" });
         setTimeout(() => {
           setSuccessMessage("");
           setIsSignup(false);
         }, 5000);
       } else {
-        // 🔹 Login normal
         const { data, error: loginError } = await supabase.auth.signInWithPassword({
           email: formData.email,
           password: formData.senha,
@@ -69,7 +63,6 @@ export default function LoginPanel({ onLogin }) {
 
         if (loginError) throw loginError;
 
-        // Verifica se o usuário tem perfil completo
         const { data: profile } = await supabase
           .from("profiles")
           .select("id")
@@ -77,11 +70,9 @@ export default function LoginPanel({ onLogin }) {
           .maybeSingle();
 
         if (profile) {
-          // ✅ Perfil completo → containers
           if (onLogin) onLogin();
           navigate("/containers");
         } else {
-          // 🚧 Perfil incompleto → loginfull
           navigate("/loginfull");
         }
       }
@@ -93,7 +84,11 @@ export default function LoginPanel({ onLogin }) {
     }
   };
 
-  // Campo reutilizável
+  const handleEsqueciSenha = () => {
+    if (onClose) onClose(); // ✅ Fecha o modal
+    navigate("/ResetSenha");
+  };
+
   const renderInput = (label, field, type = "text") => (
     <div className="form-group">
       <label>{label}</label>
@@ -154,6 +149,14 @@ export default function LoginPanel({ onLogin }) {
                     onClick={() => setIsSignup(true)}
                   >
                     Cadastre-se
+                  </button>
+                  {" | "}
+                  <button
+                    type="button"
+                    className="link-btn"
+                    onClick={handleEsqueciSenha}
+                  >
+                    Esqueci a senha
                   </button>
                 </>
               )}

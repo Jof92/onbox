@@ -378,3 +378,17 @@ select {
   color: #ff0000;
 }
 
+.observacao-textarea {
+  width: 100%;
+  min-height: 27px;
+  max-height: 120px; /* opcional: limite máximo */
+  resize: none;
+  padding: 4px 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1.4;
+  overflow: hidden; /* para evitar scroll durante expansão */
+  box-sizing: border-box;
+}
+

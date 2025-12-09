@@ -3,8 +3,8 @@ import React, { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
 import "./Listagem.css";
 import "./loader.css";
-import { FaTrash, FaTimes, FaPaperPlane, FaComment } from "react-icons/fa";
-import { FaPenToSquare, FaMagnifyingGlass } from "react-icons/fa6";
+import { FaTrash, FaPaperPlane, FaComment } from "react-icons/fa";
+import { FaMagnifyingGlass } from "react-icons/fa6";
 import Check from "./Check";
 import Loading from "./Loading";
 import BuscaInsumo from "./BuscaInsumo";
@@ -314,6 +314,13 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
   const handleInputChange = (index, campo, valor) => {
     const novas = [...rows];
     novas[index][campo] = valor;
+    setRows(novas);
+    registrarAlteracao();
+  };
+
+  const handleObservacaoBlur = (index, valor) => {
+    const novas = [...rows];
+    novas[index].observacao = valor;
     setRows(novas);
     registrarAlteracao();
   };
@@ -755,17 +762,23 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
                     </td>
                     <td>
                       {podeEditarDemais ? (
-                        <div className="observacao-cell">
-                          <input
-                            type="text"
-                            value={row.observacao || ""}
-                            onChange={(e) => handleInputChange(indexOriginal, "observacao", e.target.value)}
-                            placeholder="Observação"
-                          />
-                          <FaPenToSquare className="observacao-icon" />
-                        </div>
+                        <textarea
+                          value={row.observacao || ""}
+                          onChange={(e) => {
+                            // Atualiza enquanto digita (opcional, mas ajuda UX)
+                            const novas = [...rows];
+                            novas[indexOriginal].observacao = e.target.value;
+                            setRows(novas);
+                          }}
+                          onBlur={(e) => handleObservacaoBlur(indexOriginal, e.target.value)}
+                          placeholder="Observação"
+                          className="observacao-textarea"
+                          rows="1"
+                        />
                       ) : (
-                        <span>{row.observacao || ""}</span>
+                        <div className="observacao-rendered">
+                          {row.observacao || ""}
+                        </div>
                       )}
                     </td>
                     <td>

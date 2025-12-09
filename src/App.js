@@ -4,16 +4,15 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from "rea
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import LoginPanel from "./components/Login";
-import Containers from "./components/Containers"; // ✅ ajustado para pages/
+import Containers from "./components/Containers";
 import Cards from "./components/Cards";
 import Home from "./components/Home";
+import ResetSenha from "./components/ResetSenha"; // ✅ Corrigido: ./pages/
 import { supabase } from "./supabaseClient";
 import "./App.css";
 
-// Wrapper para Containers com containerId da URL
 const ContainersWrapper = () => {
   const { containerId } = useParams();
-  // Validação simples: aceita UUID ou null
   const validContainerId = containerId && /^[0-9a-fA-F-]{36}$/.test(containerId)
     ? containerId
     : null;
@@ -28,7 +27,6 @@ export default function App() {
   const [hasOverdueToday, setHasOverdueToday] = useState(false);
   const [glowDismissed, setGlowDismissed] = useState(false);
 
-  // Monitorar sessão
   useEffect(() => {
     const fetchSession = async () => {
       const { data } = await supabase.auth.getSession();
@@ -46,7 +44,6 @@ export default function App() {
     return () => subscription.subscription.unsubscribe();
   }, []);
 
-  // Buscar perfil
   useEffect(() => {
     const fetchProfile = async () => {
       if (!session?.user) {
@@ -68,7 +65,6 @@ export default function App() {
     fetchProfile();
   }, [session]);
 
-  // Verificar tarefas vencidas ONTEM
   useEffect(() => {
     const checkIfOverdueYesterday = async () => {
       if (!session?.user?.id) {
@@ -84,7 +80,6 @@ export default function App() {
 
         let hasOverdue = false;
 
-        // Objetivos de ontem
         const { data: responsaveis, error: err1 } = await supabase
           .from("ata_objetivos_responsaveis_enriquecidos")
           .select("ata_objetivo_id")
@@ -110,7 +105,6 @@ export default function App() {
           }
         }
 
-        // Comentários de ontem
         if (!hasOverdue) {
           const { data: comentarios, error: err3 } = await supabase
             .from("comentarios")
@@ -133,7 +127,6 @@ export default function App() {
     checkIfOverdueYesterday();
   }, [session?.user?.id]);
 
-  // Fechar login com ESC
   useEffect(() => {
     const handleEsc = (event) => {
       if (event.key === "Escape" && showLoginPanel) {
@@ -171,7 +164,10 @@ export default function App() {
 
         {showLoginPanel && !session && (
           <div className="login-panel-container show">
-            <LoginPanel onLogin={() => setShowLoginPanel(false)} />
+            <LoginPanel
+              onLogin={() => setShowLoginPanel(false)}
+              onClose={() => setShowLoginPanel(false)} // ✅ Passa onClose
+            />
           </div>
         )}
 
@@ -198,6 +194,10 @@ export default function App() {
               element={
                 session ? <Cards projects={projects} /> : <Navigate to="/" replace />
               }
+            />
+            <Route
+              path="/ResetSenha"
+              element={<ResetSenha />}
             />
           </Routes>
         </main>
