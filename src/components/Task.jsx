@@ -91,6 +91,7 @@ const MencoesTooltip = ({ children, userId, projetoAtual, containerId, supabaseC
         style={{
           color: "#1E88E5",
           textDecoration: "underline",
+          fontWeight: "bold",
           cursor: "default",
         }}
       >
@@ -106,6 +107,7 @@ const MencoesTooltip = ({ children, userId, projetoAtual, containerId, supabaseC
         color: "#1E88E5",
         textDecoration: "underline",
         cursor: "pointer",
+        fontWeight: "bold", // ✅ CORREÇÃO CRUCIAL: GARANTE O NEGRITO
       }}
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
@@ -210,11 +212,22 @@ const renderMencoes = (conteudo, perfilesPorId, projetoAtual, containerId, supab
           containerId={containerId}
           supabaseClient={supabaseClient}
         >
-          <span className="mencoes">@{nickname}</span>
+          @{nickname}
         </MencoesTooltip>
       );
     } else {
-      partes.push(match[0]);
+      // Mesmo sem usuário encontrado, aplica destaque visual
+      partes.push(
+        <span
+          key={match.index}
+          style={{
+            color: "#1E88E5",
+            textDecoration: "underline",
+          }}
+        >
+          @{nickname}
+        </span>
+      );
     }
 
     lastIndex = match.index + match[0].length;
@@ -224,11 +237,7 @@ const renderMencoes = (conteudo, perfilesPorId, projetoAtual, containerId, supab
     partes.push(conteudo.slice(lastIndex));
   }
 
-  return (
-    <div className="comentario-texto">
-      {partes}
-    </div>
-  );
+  return <>{partes}</>;
 };
 
 const mencionaUsuario = (conteudo, userProfile) => {

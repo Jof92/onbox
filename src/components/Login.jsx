@@ -37,7 +37,7 @@ export default function LoginPanel({ onLogin, onClose }) {
           email: formData.email,
           password: formData.senha,
           options: {
-            emailRedirectTo: "https://onbox-two.vercel.app/loginfull",
+            emailRedirectTo: "https://onbox-two.vercel.app/containers",
           },
         });
 
@@ -70,8 +70,10 @@ export default function LoginPanel({ onLogin, onClose }) {
           if (onLogin) onLogin();
           if (onClose) onClose();
         } else {
+          // Perfil ainda não existe, mas o usuário está autenticado.
+          // Redireciona para a página principal de containers.
           if (onClose) onClose();
-          window.location.href = "/loginfull";
+          window.location.href = "/containers";
         }
       }
     } catch (err) {
@@ -95,7 +97,7 @@ export default function LoginPanel({ onLogin, onClose }) {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(formData.email, {
         options: {
-          emailRedirectTo: "https://onbox-two.vercel.app/ResetSenha",
+          emailRedirectTo: "https://onbox-two.vercel.app/containers",
         },
       });
 
@@ -141,7 +143,12 @@ export default function LoginPanel({ onLogin, onClose }) {
             <form onSubmit={handleSubmit}>
               {renderInput("Email", "email", "email")}
               {!isSignup && renderInput("Senha", "senha", "password")}
-              {isSignup && renderInput("Confirmar Senha", "confirmarSenha", "password")}
+              {isSignup && (
+                <>
+                  {renderInput("Senha", "senha", "password")}
+                  {renderInput("Confirmar Senha", "confirmarSenha", "password")}
+                </>
+              )}
 
               {error && <div className="error-msg">{error}</div>}
 

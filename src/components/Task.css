@@ -393,6 +393,7 @@
   color: #1E88E5;
   text-decoration: underline;
   cursor: pointer;
+  font-weight: bold;
 }
 
 /* Tooltip de menções */
