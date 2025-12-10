@@ -8,12 +8,12 @@ import { FaPaperPlane, FaPlus, FaTimes } from "react-icons/fa";
 import Check from "./Check";
 import Loading from "./Loading";
 
-export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelhoId, onClose }) {
+export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelhoId, onClose, onStatusUpdate }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusEnvio, setStatusEnvio] = useState(null);
 
-  // Carrega dados do perfil (opcional, pode ser removido se não for usado)
+  // Carrega dados do perfil (opcional)
   useEffect(() => {
     const fetchUserProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -99,7 +99,6 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
     setRows(prev => prev.map(r => (r.id === id ? { ...r, [campo]: valor } : r)));
   };
 
-  // ✅ Atualiza o comentário no espelho E na linha original (se mapeamento existir)
   const handleComentarioBlur = async (id, novoComentario) => {
     try {
       // 1. Salvar no espelho
@@ -133,7 +132,6 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
           .eq("id", itemOriginalId);
         if (originalError) {
           console.error("Erro ao atualizar comentário na linha original:", originalError);
-          // Não interrompe o fluxo — apenas registra
         }
       }
     } catch (err) {
@@ -206,36 +204,54 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
     }
   };
 
-  const handleSave = async () => {
-    if (!notaEspelhoId) return;
-    setStatusEnvio("enviando");
-    try {
-      await Promise.all(
-        rows.map(async (row) => {
-          const updateData = {
-            selecionado: row.selecionado,
-          };
+  // ✅ CORREÇÃO PRINCIPAL: atualiza a NOTA ORIGINAL ao responder
+    const handleSave = async () => {
+      if (!notaEspelhoId) return;
+      setStatusEnvio("enviando");
+      try {
+        // Salvar os itens (mesmo que antes)
+        await Promise.all(
+          rows.map(async (row) => {
+            const updateData = { selecionado: row.selecionado };
+            if (row.isCriar) {
+              updateData.codigo = row.codigo?.trim() || null;
+              updateData.descricao = row.descricao || null;
+            }
+            await supabase.from("planilha_itens").update(updateData).eq("id", row.id);
+          })
+        );
 
-          if (row.isCriar) {
-            updateData.codigo = row.codigo?.trim() || null;
-            updateData.descricao = row.descricao || null;
-          }
+        // Buscar nota espelho para obter a original
+        const { data: notaEspelhoData } = await supabase
+          .from("notas")
+          .select("nota_original_id")
+          .eq("id", notaEspelhoId)
+          .single();
 
-          await supabase
-            .from("planilha_itens")
-            .update(updateData)
-            .eq("id", row.id);
-        })
-      );
+        if (!notaEspelhoData?.nota_original_id) {
+          throw new Error("Nota original não encontrada.");
+        }
 
-      setStatusEnvio("sucesso");
-      setTimeout(() => setStatusEnvio(null), 2000);
-    } catch (err) {
-      console.error("Erro ao salvar:", err);
-      alert("Erro ao salvar a lista.");
-      setStatusEnvio(null);
-    }
-  };
+        const notaOriginalId = notaEspelhoData.nota_original_id;
+
+        // ✅ Atualizar AMBAS as notas como respondidas
+        await supabase.from("notas").update({ respondida: true }).eq("id", notaOriginalId);
+        await supabase.from("notas").update({ respondida: true }).eq("id", notaEspelhoId);
+
+        // ✅ Atualizar UI de AMBAS
+        if (onStatusUpdate) {
+          onStatusUpdate(notaOriginalId, { respondida: true, enviada: true });
+          onStatusUpdate(notaEspelhoId, { respondida: true, enviada: true }); // ← agora a espelho também vira verde
+        }
+
+        setStatusEnvio("sucesso");
+        setTimeout(() => setStatusEnvio(null), 2000);
+      } catch (err) {
+        console.error("Erro ao salvar:", err);
+        alert("Erro ao salvar a lista.");
+        setStatusEnvio(null);
+      }
+    };
 
   if (loading) {
     return (

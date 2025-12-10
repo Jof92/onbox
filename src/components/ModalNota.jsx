@@ -36,6 +36,7 @@ export default function ModalNota({
   notaProgresso,
   setNotaProgresso,
   donoContainerId,
+  onStatusUpdate, // ✅ Adicionado
 }) {
   const handleProgressoChange = useCallback((progresso) => {
     if (notaSelecionada?.id) {
@@ -136,7 +137,7 @@ export default function ModalNota({
                     onProgressoChange={handleProgressoChange}
                     user={{ id: usuarioId }}
                     onClose={onCloseVisualizarNota}
-                    containerAtual={{ id: donoContainerId }} // 👈 IMPORTANTE!                    
+                    containerAtual={{ id: donoContainerId }}
                   />
                 );
               } else if (notaSelecionada.tipo === "Tarefas") {
@@ -150,7 +151,7 @@ export default function ModalNota({
                     pilhaAtual={pilhaAtual}
                     usuarioAtual={usuarioAtual}
                     onClose={onCloseVisualizarNota}
-                    containerAtual={{ id: donoContainerId }} // 👈 IMPORTANTE!
+                    containerAtual={{ id: donoContainerId }}
                   />
                 );
               } else if (notaSelecionada.tipo === "Metas") {
@@ -168,9 +169,10 @@ export default function ModalNota({
                   <Listagem
                     projetoAtual={project}
                     notaAtual={notaSelecionada}
-                    containerAtual={{ id: donoContainerId }} // 👈 IMPORTANTE!
+                    containerAtual={{ id: donoContainerId }}
                     usuarioAtual={usuarioAtual}
                     onClose={onCloseVisualizarNota}
+                    onStatusUpdate={onStatusUpdate} // ✅ Passado aqui
                   />
                 );
               }

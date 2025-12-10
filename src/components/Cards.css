@@ -666,12 +666,6 @@
  
 }
 
-/*/* Estilo base da nota */
-.card-item {
-  position: relative;
-  /* Mantenha seu estilo atual de borda colorida por tipo aqui (ex: border-left, ::before, etc.) */
-}
-
 /* Container do checkbox: fixo no canto superior esquerdo */
 .concluir-checkbox-wrapper {
   position: absolute;

@@ -46,6 +46,18 @@ export default function Cards() {
 
   const colorTrackRefs = useRef({});
 
+  // ✅ Função para atualizar status de uma nota localmente (enviada/respondida)
+  const atualizarStatusNota = (notaId, updates) => {
+    setColumns((prev) =>
+      prev.map((col) => ({
+        ...col,
+        notas: col.notas.map((nota) =>
+          nota.id === notaId ? { ...nota, ...updates } : nota
+        ),
+      }))
+    );
+  };
+
   const updateUrlWithNota = (notaId) => {
     if (notaId) {
       navigate(`${location.pathname}?nota=${notaId}`, { replace: true });
@@ -103,9 +115,16 @@ export default function Cards() {
 
         if (!entityData) return navigate("/containers", { replace: true });
 
+        // ✅ Incluímos os campos 'enviada' e 'respondida'
         const { data: pilhas } = await supabase
           .from("pilhas")
-          .select("*, notas(id, nome, tipo, responsavel, progresso, concluida, data_conclusao)")
+          .select(`
+            *,
+            notas(
+              id, nome, tipo, responsavel, progresso, concluida, data_conclusao,
+              enviada, respondida
+            )
+          `)
           .eq(type === "project" ? "project_id" : "setor_id", entityId)
           .order("created_at");
 
@@ -123,7 +142,7 @@ export default function Cards() {
               concluidasInicial.add(String(nota.id));
             }
             if (nota.data_conclusao) {
-              dataConclusaoInicial[nota.id] = nota.data_conclusao.split("T")[0]; // ISO date -> YYYY-MM-DD
+              dataConclusaoInicial[nota.id] = nota.data_conclusao.split("T")[0];
             }
           });
         });
@@ -714,6 +733,18 @@ export default function Cards() {
                         const isConcluida = notasConcluidas.has(String(nota.id));
                         const isEditingDate = dataConclusaoEdit.hasOwnProperty(String(nota.id));
 
+                        // ✅ Definir cor de fundo com base em 'enviada' e 'respondida'
+                        let cardBackgroundColor = "#ffffff";
+                        let cardBorderLeft = "none";
+
+                        if (nota.respondida) {
+                          cardBackgroundColor = "#e6f4ea"; // verde claro
+                          cardBorderLeft = "4px solid #34a853";
+                        } else if (nota.enviada) {
+                          cardBackgroundColor = "#fce8e6"; // vermelho claro
+                          cardBorderLeft = "4px solid #ea4335";
+                        }
+
                         return (
                           <Draggable key={String(nota.id)} draggableId={String(nota.id)} index={index}>
                             {(prov, snapshot) => (
@@ -722,7 +753,12 @@ export default function Cards() {
                                 ref={prov.innerRef}
                                 {...prov.draggableProps}
                                 {...prov.dragHandleProps}
-                                style={{ ...prov.draggableProps.style, userSelect: "none" }}
+                                style={{
+                                  ...prov.draggableProps.style,
+                                  userSelect: "none",
+                                  backgroundColor: cardBackgroundColor,
+                                  borderLeft: cardBorderLeft,
+                                }}
                                 onClick={() => handleOpenNota(nota)}
                               >
                                 <div
@@ -756,7 +792,7 @@ export default function Cards() {
                                     <div
                                       className="data-conclusao-container"
                                       data-nota-id={nota.id}
-                                      onClick={(e) => e.stopPropagation()} // ←←← CORREÇÃO PRINCIPAL AQUI
+                                      onClick={(e) => e.stopPropagation()}
                                     >
                                       {isEditingDate ? (
                                         <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "4px" }}>
@@ -769,7 +805,7 @@ export default function Cards() {
                                                 [nota.id]: e.target.value,
                                               }))
                                             }
-                                            onClick={(e) => e.stopPropagation()} // ←←← também aqui, para clicar no input
+                                            onClick={(e) => e.stopPropagation()}
                                             style={{ fontSize: "0.85em", padding: "2px 4px" }}
                                           />
                                           <button
@@ -864,6 +900,8 @@ export default function Cards() {
               notaOrigem={notaOrigem}
               notaEspelhoId={notaSelecionada.id}
               onClose={handleCloseNota}
+              // ✅ Passa a função para atualizar o status localmente
+              onStatusUpdate={atualizarStatusNota}
             />
           </div>
         </div>
@@ -888,6 +926,8 @@ export default function Cards() {
           notaProgresso={notaProgresso}
           setNotaProgresso={setNotaProgresso}
           donoContainerId={donoContainerId}
+          // ✅ Passa a função para atualizar o status localmente
+          onStatusUpdate={atualizarStatusNota}
         />
       )}
     </div>

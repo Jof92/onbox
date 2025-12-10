@@ -9,7 +9,7 @@ import Check from "./Check";
 import Loading from "./Loading";
 import BuscaInsumo from "./BuscaInsumo";
 
-export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
+export default function Listagem({ projetoAtual, notaAtual, containerAtual, onStatusUpdate }) {
   const [rows, setRows] = useState([]);
   const [ultimaAlteracao, setUltimaAlteracao] = useState("");
   const [locacoes, setLocacoes] = useState([]);
@@ -500,7 +500,8 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
             tipo: "Lista",
             pilha_id: pilhaRecebidosId,
             projeto_origem_id: projetoAtual.id,
-            nota_original_id: notaAtual.id
+            nota_original_id: notaAtual.id,
+            enviada: true,
           })
           .select("id")
           .single();
@@ -556,6 +557,17 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual }) {
           });
           localStorage.setItem(`mapa_itens_${notaEspelhoId}`, JSON.stringify(mapeamento));
         }
+      }
+
+      // ✅ MARCAR A NOTA ORIGINAL COMO ENVIADA
+      await supabase
+        .from("notas")
+        .update({ enviada: true })
+        .eq("id", notaAtual.id);
+
+      // ✅ Atualizar UI localmente (sem recarregar)
+      if (onStatusUpdate) {
+        onStatusUpdate(notaAtual.id, { enviada: true, respondida: false });
       }
 
       localStorage.removeItem(`listagem_draft_${notaAtual.id}`);
