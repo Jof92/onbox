@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import "./Task.css";
 import { FiUploadCloud, FiUser, FiCalendar } from "react-icons/fi";
+import { FaTimes } from "react-icons/fa"; // ✅ Adicionado
 import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
 import "./loader.css";
@@ -107,7 +108,7 @@ const MencoesTooltip = ({ children, userId, projetoAtual, containerId, supabaseC
         color: "#1E88E5",
         textDecoration: "underline",
         cursor: "pointer",
-        fontWeight: "bold", // ✅ CORREÇÃO CRUCIAL: GARANTE O NEGRITO
+        fontWeight: "bold",
       }}
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
@@ -216,7 +217,6 @@ const renderMencoes = (conteudo, perfilesPorId, projetoAtual, containerId, supab
         </MencoesTooltip>
       );
     } else {
-      // Mesmo sem usuário encontrado, aplica destaque visual
       partes.push(
         <span
           key={match.index}
@@ -261,6 +261,21 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
   const [loadingExcluir, setLoadingExcluir] = useState(false);
   const [sugestoesMencoes, setSugestoesMencoes] = useState([]);
   const textareaRef = useRef(null);
+  const modalRef = useRef(null); // ✅ para detectar clique fora
+
+  // ✅ Fechar ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (onClose && modalRef.current && !modalRef.current.contains(e.target)) {
+        onClose();
+      }
+    };
+
+    if (onClose) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [onClose]);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -454,7 +469,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     try {
       const conteudoTrim = comentario.trim();
 
-      // ✅ INSERT + SELECT para obter o ID REAL
       const { data: novoComentario, error: insertError } = await supabase
         .from("comentarios")
         .insert({
@@ -490,7 +504,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
       setComentario("");
       setSugestoesMencoes([]);
 
-      // Notificações de menção
       const mencionados = conteudoTrim.match(/@(\S+)/g);
       if (mencionados?.length > 0) {
         const nomesMencionados = mencionados.map((m) => m.slice(1));
@@ -596,14 +609,12 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     }
   };
 
-  // ✅ Função handleAddAnexos CORRIGIDA (única alteração no arquivo)
   const handleAddAnexos = async (e) => {
     const files = Array.from(e.target.files || []);
     if (!notaAtual?.id || !userId || files.length === 0) return;
     setLoading(true);
     try {
       for (const file of files) {
-        // Sanitiza o nome do arquivo para evitar "Invalid key"
         const sanitizeFileName = (name) => {
           return name
             .normalize('NFD')
@@ -626,7 +637,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
           .insert({
             nota_id: notaAtual.id,
             user_id: userId,
-            file_name: originalName, // Mantém o nome original para exibição
+            file_name: originalName,
             file_url: fileUrl,
           })
           .select()
@@ -670,14 +681,16 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
 
   if (loading) {
     return (
-      <div className="task-loading-container">
-        <Loading size={200} />
+      <div className="task-modal" ref={modalRef}>
+        <div className="task-loading-container">
+          <Loading size={200} />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="task-modal">
+    <div className="task-modal" ref={modalRef}>
       <div className="task-header">
         <div className="task-header-titles">
           <span className="project-name">{getNomeProjeto()}</span>
@@ -685,6 +698,15 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
             <span className="nota-name">{getNomeNota()}</span>
           </div>
         </div>
+        {onClose && (
+          <button
+            className="listagem-close-btn" // ✅ reutiliza a mesma classe
+            onClick={onClose}
+            aria-label="Fechar"
+          >
+            <FaTimes />
+          </button>
+        )}
       </div>
 
       <h2 className="task-title">{getNomeNota()}</h2>

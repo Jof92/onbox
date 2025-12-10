@@ -1,17 +1,19 @@
 // AtaCard.jsx
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
 import "./loader.css";
 import "./AtaCard.css";
 import AtaObjetivos from "./AtaObjetivos"; // ✅ Novo componente
+import { FaTimes } from "react-icons/fa"; // ✅ Ícone de fechar
 
 export default function AtaCard({ 
   projetoAtual, 
   notaAtual, 
   ultimaAlteracao, 
   onProgressoChange,
-  containerAtual  // 👈 RECEBE O CONTAINER DO MODAL
+  containerAtual,
+  onClose // ✅ Nova prop obrigatória
 }) {
   const [projetoNome, setProjetoNome] = useState("");
   const [pauta, setPauta] = useState("");
@@ -33,6 +35,22 @@ export default function AtaCard({
   const [alteradoEm, setAlteradoEm] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [salvoComSucesso, setSalvoComSucesso] = useState(false);
+
+  const cardRef = useRef(null); // ✅ para detectar clique fora
+
+  // ✅ Fechar ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (onClose && cardRef.current && !cardRef.current.contains(e.target)) {
+        onClose();
+      }
+    };
+
+    if (onClose) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [onClose]);
 
   // Fetch projeto nome
   const fetchProjeto = useCallback(async () => {
@@ -105,7 +123,7 @@ export default function AtaCard({
             } else {
               return {
                 id: p.profile_id,
-                nome: "Usuário excluíedido",
+                nome: "Usuário excluído",
                 funcao: "Membro"
               };
             }
@@ -125,7 +143,6 @@ export default function AtaCard({
       let nomeAutor = "Você";
 
       if (ata.redigido_por) {
-        // Busca pelo ID do profile
         const { data: perfil1 } = await supabase
           .from("profiles")
           .select("nome")
@@ -135,7 +152,6 @@ export default function AtaCard({
         if (perfil1?.nome) {
           nomeAutor = perfil1.nome;
         } else {
-          // Tenta pelo user_id (fallback)
           const { data: perfil2 } = await supabase
             .from("profiles")
             .select("nome")
@@ -144,7 +160,6 @@ export default function AtaCard({
           if (perfil2?.nome) {
             nomeAutor = perfil2.nome;
           } else if (usuarioId) {
-            // ✅ Fallback: se não encontrar, usa o nome do usuário logado
             const { data: meuPerfil } = await supabase
               .from("profiles")
               .select("nome")
@@ -156,7 +171,6 @@ export default function AtaCard({
           }
         }
       } else if (usuarioId && !ataId) {
-        // ATA ainda não salva → usa o nome do usuário logado
         const { data: meuPerfil } = await supabase
           .from("profiles")
           .select("nome")
@@ -164,7 +178,6 @@ export default function AtaCard({
           .single();
         nomeAutor = meuPerfil?.nome || "Você";
       } else if (usuarioId) {
-        // ATA existe mas redigido_por ausente ou inválido → usa login atual como fallback
         const { data: meuPerfil } = await supabase
           .from("profiles")
           .select("nome")
@@ -225,7 +238,6 @@ export default function AtaCard({
       const termo = v.slice(1).toLowerCase();
 
       try {
-        // Buscar convites ACEITOS para o container ATUAL (containerAtual.id)
         const { data: convites, error: convitesError } = await supabase
           .from("convites")
           .select("user_id")
@@ -240,14 +252,13 @@ export default function AtaCard({
 
         const userIds = convites
           .map(c => c.user_id)
-          .filter(id => id); // Remove nulos
+          .filter(id => id);
 
         if (userIds.length === 0) {
           setSugestoesParticipantes([]);
           return;
         }
 
-        // Buscar perfis desses membros
         const { data: profiles, error: profilesError } = await supabase
           .from("profiles")
           .select("id, nickname, nome, funcao")
@@ -259,13 +270,11 @@ export default function AtaCard({
           return;
         }
 
-        // Filtrar por nickname ou nome (case-insensitive)
         const sugestoes = profiles.filter(p =>
           (p.nickname?.toLowerCase().includes(termo)) ||
           (p.nome?.toLowerCase().includes(termo))
         );
 
-        // Remover duplicatas por ID
         const seen = new Set();
         const unicos = sugestoes.filter(p => {
           if (seen.has(p.id)) return false;
@@ -385,19 +394,40 @@ export default function AtaCard({
     ataId, usuarioId, notaAtual, projetoAtual, pauta, local, texto, proxima, dataLocal, participantes, containerAtual
   ]);
 
-  if (loading) return <div className="ata-card-loading"><Loading size={200} /></div>;
+  if (loading) {
+    return (
+      <div className="ata-card" ref={cardRef}>
+        <div className="ata-card-loading">
+          <Loading size={200} />
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="ata-card">
+    <div className="ata-card" ref={cardRef}>
       <div className="listagem-card">
         <div className="listagem-header-container">
+          {/* ✅ ESQUERDA: título e subtítulo */}
           <div className="listagem-header-titles">
             <span className="project-name">{projetoNome}</span>
             <div className="sub-info">
               <span className="nota-name">{notaAtual?.nome || "Sem nota"}</span>
             </div>
           </div>
-          <div className="alteracao-info">{ultimaAlteracao}</div>
+          {/* ✅ DIREITA: botão de fechar + info de alteração (agrupados para não centralizar) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {onClose && (
+              <button
+                className="listagem-close-btn"
+                onClick={onClose}
+                aria-label="Fechar"
+              >
+                <FaTimes />
+              </button>
+            )}
+            <div className="alteracao-info">{ultimaAlteracao}</div>
+          </div>
         </div>
       </div>
 

@@ -119,14 +119,6 @@ export default function ModalNota({
 
         {showVisualizarNota && notaSelecionada && (
           <>
-            <button
-              className="modal-close-btn"
-              onClick={onCloseVisualizarNota}
-              title="Fechar"
-            >
-              <FaTimes />
-            </button>
-
             {/* Renderização condicional por tipo da nota */}
             {(() => {
               if (notaSelecionada.tipo === "Atas") {

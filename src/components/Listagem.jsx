@@ -1,15 +1,15 @@
 // src/components/Listagem.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabaseClient";
 import "./Listagem.css";
 import "./loader.css";
-import { FaTrash, FaPaperPlane, FaComment } from "react-icons/fa";
+import { FaTrash, FaPaperPlane, FaComment, FaTimes } from "react-icons/fa";
 import { FaMagnifyingGlass } from "react-icons/fa6";
 import Check from "./Check";
 import Loading from "./Loading";
 import BuscaInsumo from "./BuscaInsumo";
 
-export default function Listagem({ projetoAtual, notaAtual, containerAtual, onStatusUpdate }) {
+export default function Listagem({ projetoAtual, notaAtual, containerAtual, onStatusUpdate, onClose }) {
   const [rows, setRows] = useState([]);
   const [ultimaAlteracao, setUltimaAlteracao] = useState("");
   const [locacoes, setLocacoes] = useState([]);
@@ -26,8 +26,24 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
   const [buscaInsumoAberta, setBuscaInsumoAberta] = useState(false);
   const [linhaBuscaAtiva, setLinhaBuscaAtiva] = useState(null);
 
+  const cardRef = useRef(null);
+
   // 🔁 Estado para forçar re-carregamento após atualizações externas (ex: do espelho)
   const [forcarAtualizacao, setForcarAtualizacao] = useState(0);
+
+  // Fechar ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (onClose && cardRef.current && !cardRef.current.contains(e.target)) {
+        onClose();
+      }
+    };
+
+    if (onClose) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [onClose]);
 
   // Carrega perfil do usuário logado
   useEffect(() => {
@@ -225,7 +241,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
     };
 
     carregarRascunhoOuBanco();
-  }, [projetoAtual, notaAtual, forcarAtualizacao]); // ✅ Inclui forcarAtualizacao
+  }, [projetoAtual, notaAtual, forcarAtualizacao]);
 
   useEffect(() => {
     if (notaAtual?.id && rows.length > 0) {
@@ -246,7 +262,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
       try {
         const { data, error } = await supabase
           .from("planilha_itens")
-          .select("id, codigo, descricao, comentario") // ✅ inclui 'comentario'
+          .select("id, codigo, descricao, comentario")
           .eq("nota_id", notaAtual.id);
 
         if (error) throw error;
@@ -257,13 +273,13 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
             if (itemAtualizado && (
               r.codigo !== itemAtualizado.codigo ||
               r.descricao !== itemAtualizado.descricao ||
-              r.comentario !== itemAtualizado.comentario // ✅ compara comentário
+              r.comentario !== itemAtualizado.comentario
             )) {
               return {
                 ...r,
                 codigo: itemAtualizado.codigo,
                 descricao: itemAtualizado.descricao,
-                comentario: itemAtualizado.comentario, // ✅ atualiza comentário
+                comentario: itemAtualizado.comentario,
               };
             }
             return r;
@@ -587,7 +603,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
 
   if (loading) {
     return (
-      <div className="listagem-card">
+      <div className="listagem-card" ref={cardRef}>
         <Loading />
       </div>
     );
@@ -596,12 +612,21 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
   const rowsParaExibir = [...rows].reverse();
 
   return (
-    <div className="listagem-card">
+    <div className="listagem-card" ref={cardRef}>
       <div className="listagem-header-container">
         <div className="listagem-header-titles">
           <span className="project-name">{projetoAtual?.name || "Sem projeto"}</span>
           <div className="sub-info"><span className="nota-name">{notaAtual?.nome || "Sem nota"}</span></div>
         </div>
+        {onClose && (
+          <button
+            className="listagem-close-btn"
+            onClick={onClose}
+            aria-label="Fechar"
+          >
+            <FaTimes />
+          </button>
+        )}
       </div>
 
       <div className="action-buttons">
@@ -649,7 +674,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
               <th>EAP</th>
               <th>Observação</th>
               <th>Comentário</th>
-              <th>Ações</th>
+              <th style={{ width: '40px' }}>Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -797,7 +822,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                       )}
                     </td>
                     <td>
-                      {/* ✅ Comentário: exibe o valor atualizado (via polling ou reload) */}
                       <div className="observacao-rendered">
                         {row.comentario || ""}
                       </div>
