@@ -7,13 +7,45 @@ import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
 import ComentariosSection from "./TaskComentarios";
 
+// Componente de chip de responsável
+const ChipResponsavel = ({ responsavel, onRemove, disabled }) => {
+  const nomeExibicao = responsavel.nome_exibicao || "Usuário";
+  const isExterno = !responsavel.usuario_id;
+
+  return (
+    <span className={`chip-responsavel ${isExterno ? 'chip-externo' : ''}`}>
+      {nomeExibicao}
+      {!disabled && (
+        <span
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove(responsavel);
+          }}
+          className="chip-remove"
+        >
+          ×
+        </span>
+      )}
+    </span>
+  );
+};
+
 export default function Task({ onClose, projetoAtual, notaAtual, containerId }) {
   const [descricao, setDescricao] = useState("");
   const [anexosSalvos, setAnexosSalvos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
+  const [meuNome, setMeuNome] = useState("Você");
+  const [dataEntregaTarefa, setDataEntregaTarefa] = useState(""); // ✅ Novo estado
   const modalRef = useRef(null);
+
+  // Estados dos Objetivos
+  const [objetivos, setObjetivos] = useState([]);
+  const [showObjetivos, setShowObjetivos] = useState(false);
+  const [novoObjetivoTexto, setNovoObjetivoTexto] = useState("");
+  const [inputResponsavel, setInputResponsavel] = useState({});
+  const [sugestoesResponsavel, setSugestoesResponsavel] = useState({});
 
   // Fechar modal ao clicar fora
   useEffect(() => {
@@ -39,17 +71,21 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
           .select("nome, nickname, avatar_url")
           .eq("id", user.id)
           .single();
-        setUserProfile(profile);
+
+        const safeProfile = profile || { nome: "Você", nickname: "usuario", avatar_url: null };
+        setUserProfile(safeProfile);
+        setMeuNome(safeProfile.nome || "Você");
       }
     };
     fetchUser();
   }, []);
 
-  // Carregar dados da nota (descrição e anexos)
+  // Carregar dados da nota
   useEffect(() => {
     if (!notaAtual?.id) {
       setDescricao("");
       setAnexosSalvos([]);
+      setDataEntregaTarefa(""); // ✅ Reset da data
       return;
     }
 
@@ -59,10 +95,13 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
       try {
         const { data: nota } = await supabase
           .from("notas")
-          .select("descricao")
+          .select("descricao, data_entrega") // ✅ Inclui data_entrega
           .eq("id", notaAtual.id)
           .single();
-        if (isMounted) setDescricao(nota?.descricao || "");
+        if (isMounted) {
+          setDescricao(nota?.descricao || "");
+          setDataEntregaTarefa(nota?.data_entrega || ""); // ✅ Define a data
+        }
 
         const { data: anexos } = await supabase
           .from("anexos")
@@ -80,7 +119,80 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     return () => { isMounted = false; };
   }, [notaAtual?.id]);
 
-  // Salvar descrição ao perder foco
+  // Carregar objetivos ao abrir a nota
+  useEffect(() => {
+    if (!notaAtual?.id) {
+      setObjetivos([]);
+      setShowObjetivos(false);
+      return;
+    }
+
+    const fetchObjetivos = async () => {
+      setLoading(true);
+      try {
+        const { data: checklist } = await supabase
+          .from("checklists")
+          .select("id")
+          .eq("nota_id", notaAtual.id)
+          .single();
+
+        if (!checklist) {
+          setObjetivos([]);
+          setShowObjetivos(false);
+          return;
+        }
+
+        const { data: items } = await supabase
+          .from("checklist_items")
+          .select("*")
+          .eq("checklist_id", checklist.id)
+          .order("created_at", { ascending: true });
+
+        const itemIds = items.map(i => i.id);
+        let respMap = {};
+        if (itemIds.length > 0) {
+          const { data: responsaveis } = await supabase
+            .from("checklist_responsaveis")
+            .select("*")
+            .in("checklist_item_id", itemIds);
+
+          if (responsaveis) {
+            respMap = responsaveis.reduce((acc, r) => {
+              if (!acc[r.checklist_item_id]) acc[r.checklist_item_id] = [];
+              acc[r.checklist_item_id].push({
+                id: r.id,
+                usuario_id: r.usuario_id,
+                nome_externo: r.nome_externo,
+                nome_exibicao: r.nome_externo || "Usuário"
+              });
+              return acc;
+            }, {});
+          }
+        }
+
+        const objetivosCompletos = items.map(item => ({
+          id: item.id,
+          texto: item.description || "",
+          concluido: item.is_completed || false,
+          dataEntrega: item.data_entrega || null,
+          responsaveis: respMap[item.id] || [],
+          checklist_id: checklist.id
+        }));
+
+        setObjetivos(objetivosCompletos);
+        setShowObjetivos(true);
+      } catch (err) {
+        console.error("Erro ao carregar objetivos:", err);
+        setObjetivos([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchObjetivos();
+  }, [notaAtual?.id]);
+
+  // Salvar descrição
   const handleSaveDescricao = async () => {
     if (!notaAtual?.id) return;
     setLoading(true);
@@ -97,7 +209,25 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     }
   };
 
-  // Adicionar anexos (via botão ou drag-and-drop)
+  // ✅ Nova função: salvar data de entrega da tarefa
+  const handleSalvarDataEntregaTarefa = async (novaData) => {
+    if (!notaAtual?.id) return;
+    setLoading(true);
+    try {
+      await supabase
+        .from("notas")
+        .update({ data_entrega: novaData || null })
+        .eq("id", notaAtual.id);
+      setDataEntregaTarefa(novaData || "");
+    } catch (err) {
+      console.error("Erro ao salvar data de entrega da tarefa:", err);
+      alert("Erro ao salvar data de entrega.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Adicionar anexos
   const handleAddAnexos = async (e) => {
     const files = Array.from(e.target.files || []);
     if (!notaAtual?.id || !userId || files.length === 0) return;
@@ -163,10 +293,270 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     }
   };
 
+  // ============= Objetivos =============
+
+  const criarChecklistSeNecessario = async () => {
+    if (!notaAtual?.id) return null;
+
+    const { data: checklist, error: selectError } = await supabase
+      .from("checklists")
+      .select("id")
+      .eq("nota_id", notaAtual.id)
+      .single();
+
+    if (checklist) {
+      return checklist.id;
+    }
+
+    const { data: novo, error: insertError } = await supabase
+      .from("checklists")
+      .insert({ nota_id: notaAtual.id })
+      .select("id")
+      .single();
+
+    if (insertError || !novo) {
+      console.error("Erro ao criar checklist:", insertError);
+      return null;
+    }
+
+    return novo.id;
+  };
+
+  const adicionarObjetivo = async () => {
+    if (!novoObjetivoTexto.trim()) return;
+    setLoading(true);
+    try {
+      const checklistId = await criarChecklistSeNecessario();
+      if (!checklistId) {
+        alert("Não foi possível acessar o checklist da nota.");
+        return;
+      }
+
+      const { data: item, error } = await supabase
+        .from("checklist_items")
+        .insert({
+          checklist_id: checklistId,
+          description: novoObjetivoTexto.trim(),
+          is_completed: false,
+          data_entrega: null
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Erro do Supabase ao inserir objetivo:", error);
+        alert("Erro ao salvar objetivo: " + (error.message || "Verifique o console."));
+        return;
+      }
+
+      if (!item) {
+        console.error("Inserção bem-sucedida, mas nenhum dado retornado");
+        alert("Erro inesperado: objetivo não retornado.");
+        return;
+      }
+
+      setObjetivos(prev => [...prev, {
+        id: item.id,
+        texto: item.description,
+        concluido: item.is_completed,
+        dataEntrega: item.data_entrega,
+        responsaveis: [],
+        checklist_id: checklistId
+      }]);
+      setNovoObjetivoTexto("");
+      setShowObjetivos(true);
+    } catch (err) {
+      console.error("Erro inesperado na função adicionarObjetivo:", err);
+      alert("Erro inesperado ao adicionar objetivo.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleConclusao = async (id, concluidoAtual) => {
+    const novoValor = !concluidoAtual;
+    setObjetivos(prev => prev.map(o => o.id === id ? { ...o, concluido: novoValor } : o));
+    try {
+      await supabase
+        .from("checklist_items")
+        .update({ is_completed: novoValor })
+        .eq("id", id);
+    } catch (err) {
+      console.error("Erro ao atualizar conclusão:", err);
+      setObjetivos(prev => prev.map(o => o.id === id ? { ...o, concluido: concluidoAtual } : o));
+    }
+  };
+
+  const atualizarDataEntrega = async (id, data) => {
+    setObjetivos(prev => prev.map(o => o.id === id ? { ...o, dataEntrega: data } : o));
+    try {
+      await supabase
+        .from("checklist_items")
+        .update({ data_entrega: data || null })
+        .eq("id", id);
+    } catch (err) {
+      console.error("Erro ao atualizar data de entrega:", err);
+    }
+  };
+
+  const removerObjetivo = async (id) => {
+    if (!window.confirm("Deseja realmente excluir este objetivo?")) return;
+    setObjetivos(prev => prev.filter(o => o.id !== id));
+    try {
+      await supabase
+        .from("checklist_items")
+        .delete()
+        .eq("id", id);
+    } catch (err) {
+      console.error("Erro ao excluir objetivo:", err);
+    }
+  };
+
+  // ============= Responsáveis =============
+
+  const handleResponsavelInputChange = (e, objetivoId) => {
+    const valor = e.target.value;
+    setInputResponsavel(prev => ({ ...prev, [objetivoId]: valor }));
+    if (valor.startsWith("@") && valor.length > 1 && containerId) {
+      const termo = valor.slice(1).toLowerCase();
+      supabase
+        .from("convites")
+        .select("user_id")
+        .eq("container_id", containerId)
+        .eq("status", "aceito")
+        .then(async ({ data: convites }) => {
+          const userIds = convites?.map(c => c.user_id).filter(Boolean) || [];
+          if (userIds.length === 0) {
+            setSugestoesResponsavel(prev => ({ ...prev, [objetivoId]: [] }));
+            return;
+          }
+          const { data: profiles } = await supabase
+            .from("profiles")
+            .select("id, nickname, nome")
+            .in("id", userIds);
+          const sugestoes = profiles?.filter(p =>
+            (p.nickname?.toLowerCase().includes(termo)) ||
+            (p.nome?.toLowerCase().includes(termo))
+          ) || [];
+          setSugestoesResponsavel(prev => ({ ...prev, [objetivoId]: sugestoes.slice(0, 10) }));
+        });
+    } else {
+      setSugestoesResponsavel(prev => ({ ...prev, [objetivoId]: [] }));
+    }
+  };
+
+  const adicionarResponsavelExterno = async (nome, objetivoId) => {
+    if (!nome.trim()) return;
+    const item = objetivos.find(o => o.id === objetivoId);
+    if (!item || item.concluido) return;
+    if (item.responsaveis.some(r => r.nome_externo === nome && !r.usuario_id)) return;
+
+    try {
+      const { data } = await supabase
+        .from("checklist_responsaveis")
+        .insert({
+          checklist_item_id: objetivoId,
+          nome_externo: nome.trim(),
+          usuario_id: null
+        })
+        .select()
+        .single();
+
+      if (!data) return;
+
+      setObjetivos(prev =>
+        prev.map(o =>
+          o.id === objetivoId
+            ? {
+                ...o,
+                responsaveis: [
+                  ...o.responsaveis,
+                  {
+                    id: data.id,
+                    nome_externo: nome.trim(),
+                    nome_exibicao: nome.trim(),
+                    usuario_id: null
+                  }
+                ]
+              }
+            : o
+        )
+      );
+      setInputResponsavel(prev => ({ ...prev, [objetivoId]: "" }));
+    } catch (err) {
+      console.error("Erro ao adicionar responsável externo:", err);
+    }
+  };
+
+  const adicionarResponsavelInterno = async (perfil, objetivoId) => {
+    const item = objetivos.find(o => o.id === objetivoId);
+    if (!item || item.concluido) return;
+    if (item.responsaveis.some(r => r.usuario_id === perfil.id)) return;
+
+    try {
+      const { data } = await supabase
+        .from("checklist_responsaveis")
+        .insert({
+          checklist_item_id: objetivoId,
+          usuario_id: perfil.id,
+          nome_externo: null
+        })
+        .select()
+        .single();
+
+      if (!data) return;
+
+      setObjetivos(prev =>
+        prev.map(o =>
+          o.id === objetivoId
+            ? {
+                ...o,
+                responsaveis: [
+                  ...o.responsaveis,
+                  {
+                    id: data.id,
+                    usuario_id: perfil.id,
+                    nome_exibicao: perfil.nome || perfil.nickname || "Usuário",
+                    nome: perfil.nome,
+                    nickname: perfil.nickname
+                  }
+                ]
+              }
+            : o
+        )
+      );
+      setInputResponsavel(prev => ({ ...prev, [objetivoId]: "" }));
+      setSugestoesResponsavel(prev => ({ ...prev, [objetivoId]: [] }));
+    } catch (err) {
+      console.error("Erro ao adicionar responsável interno:", err);
+    }
+  };
+
+  const removerResponsavel = async (responsavelId, objetivoId) => {
+    setObjetivos(prev =>
+      prev.map(o =>
+        o.id === objetivoId
+          ? { ...o, responsaveis: o.responsaveis.filter(r => r.id !== responsavelId) }
+          : o
+      )
+    );
+    try {
+      await supabase
+        .from("checklist_responsaveis")
+        .delete()
+        .eq("id", responsavelId);
+    } catch (err) {
+      console.error("Erro ao remover responsável:", err);
+    }
+  };
+
+  // ============= Utilitários =============
   const getNomeProjeto = () => projetoAtual?.nome || projetoAtual?.name || "Sem projeto";
   const getNomeNota = () => notaAtual?.nome || notaAtual?.name || "Sem nota";
+  const progressoPercent = objetivos.length
+    ? Math.round((objetivos.filter(o => o.concluido).length / objetivos.length) * 100)
+    : 0;
 
-  // Estado de loading inicial
   if (loading) {
     return (
       <div className="task-modal" ref={modalRef}>
@@ -197,7 +587,21 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
         )}
       </div>
 
-      <h2 className="task-title">{getNomeNota()}</h2>
+      {/* ✅ Título com data de entrega no canto direito */}
+      <div className="task-title-container">
+        <h2 className="task-title">{getNomeNota()}</h2>
+        <div className="data-entrega-wrapper">
+          <label className="data-entrega-label">Data de entrega</label>
+          <input
+            type="date"
+            value={dataEntregaTarefa || ""}
+            onChange={(e) => setDataEntregaTarefa(e.target.value)} // só atualiza UI
+            onBlur={(e) => handleSalvarDataEntregaTarefa(e.target.value || null)} // salva no banco
+            className="data-entrega-input"
+            disabled={loading}
+          />
+        </div>
+      </div>
 
       {/* Seção de Descrição */}
       <div className="descricao-section">
@@ -222,7 +626,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
         />
       </div>
 
-      {/* ✅ Seção de Anexos com drag-and-drop e dois botões */}
+      {/* Seção de Anexos */}
       <div
         className="anexos-section"
         onDragOver={(e) => e.preventDefault()}
@@ -239,18 +643,15 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
           e.currentTarget.classList.remove('drag-over');
           const files = Array.from(e.dataTransfer.files || []);
           if (files.length > 0) {
-            // Simulamos um evento compatível com handleAddAnexos
             const fakeEvent = { target: { files } };
             handleAddAnexos(fakeEvent);
           }
         }}
       >
         <div className="anexos-header">
-            <div className="anexos-botoes">
-              
-            {/* Botão Anexo */}
+          <div className="anexos-botoes">
             <label htmlFor="fileInputAnexo" className="upload-btn checklist-btn">
-              <span >Anexo</span>
+              <span>Anexo</span>
             </label>
             <input
               type="file"
@@ -261,23 +662,18 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
               disabled={loading}
             />
 
-            {/* Botão Checklist (novo) */}
             <button
               type="button"
               className="upload-btn checklist-btn"
-              onClick={() => {
-                alert("Funcionalidade de checklist em desenvolvimento.");
-                // Aqui você implementará a criação de checklist vinculado à nota
-              }}
+              onClick={() => setShowObjetivos(!showObjetivos)}
               disabled={loading}
-              title="Criar checklist"
+              title="Gerenciar objetivos"
             >
-              <span>Checklist</span>
+              <span>{showObjetivos ? "Ocultar" : "Ver"} Objetivos</span>
             </button>
           </div>
         </div>
 
-        {/* Lista de anexos já salvos */}
         <div className="anexos-lista">
           {anexosSalvos.map((anexo) => (
             <div key={anexo.id} className="anexo-item">
@@ -297,11 +693,114 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
           ))}
         </div>
 
-        {/* Dica visual para drag-and-drop */}
         <div className="drag-hint">
           Arraste arquivos aqui para anexar
         </div>
       </div>
+
+      {/* Seção de Objetivos */}
+      {showObjetivos && (
+        <div className="objetivos-section">
+          <div className="progress-container">
+            <div className="progress-bar" style={{ width: `${progressoPercent}%` }}></div>
+            <span className="progress-percent">{progressoPercent}%</span>
+          </div>
+
+          <div className="objetivos-add-form">
+            <input
+              type="text"
+              value={novoObjetivoTexto}
+              onChange={(e) => setNovoObjetivoTexto(e.target.value)}
+              placeholder="Digite um novo objetivo..."
+              onKeyDown={(e) => e.key === "Enter" && adicionarObjetivo()}
+              disabled={loading}
+            />
+            <button
+              type="button"
+              className="objetivos-add-btn"
+              onClick={adicionarObjetivo}
+              disabled={!novoObjetivoTexto.trim() || loading}
+            >
+              Adicionar
+            </button>
+          </div>
+
+          <div className="objetivos-lista">
+            {objetivos.map((o, idx) => (
+              <div
+                key={o.id}
+                className={`objetivo-item1 ${o.concluido ? 'objetivo-concluido' : ''}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={o.concluido}
+                  onChange={() => toggleConclusao(o.id, o.concluido)}
+                  disabled={loading}
+                />
+                <span>
+                  <strong>{idx + 1}.</strong> {o.texto}
+                </span>
+
+                <div className="objetivo-responsaveis">
+                  {o.responsaveis.map(resp => (
+                    <ChipResponsavel
+                      key={resp.id}
+                      responsavel={resp}
+                      onRemove={(r) => removerResponsavel(r.id, o.id)}
+                      disabled={o.concluido}
+                    />
+                  ))}
+                  {!o.concluido && (
+                    <input
+                      type="text"
+                      placeholder={o.responsaveis.length === 0 ? "Nome ou @" : ""}
+                      value={inputResponsavel[o.id] || ""}
+                      onChange={(e) => handleResponsavelInputChange(e, o.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !inputResponsavel[o.id]?.startsWith("@")) {
+                          adicionarResponsavelExterno(inputResponsavel[o.id], o.id);
+                          setInputResponsavel(prev => ({ ...prev, [o.id]: "" }));
+                        }
+                      }}
+                      disabled={loading}
+                    />
+                  )}
+                  {sugestoesResponsavel[o.id]?.length > 0 && !o.concluido && (
+                    <div className="sugestoes-list">
+                      {sugestoesResponsavel[o.id].map(item => (
+                        <div
+                          key={item.id}
+                          className="sugestao-item"
+                          onClick={() => adicionarResponsavelInterno(item, o.id)}
+                        >
+                          @{item.nickname || item.nome}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="objetivo-acao">
+                  <input
+                    type="date"
+                    value={o.dataEntrega || ""}
+                    onChange={(e) => atualizarDataEntrega(o.id, e.target.value || null)}
+                    disabled={o.concluido || loading}
+                  />
+                  {!o.concluido && (
+                    <span
+                      className="objetivo-excluir"
+                      onClick={() => removerObjetivo(o.id)}
+                    >
+                      ×
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Seção de Comentários */}
       {notaAtual?.id && userId && userProfile && (

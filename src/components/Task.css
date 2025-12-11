@@ -491,3 +491,561 @@
   border-radius: 6px;
   padding: 12px;
 }
+
+/* Checklist Section */
+.checklist-section {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background-color: #fafafa;
+}
+
+.checklist-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.checklist-header h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.checklist-delete-btn {
+  background: #f8d7da;
+  color: #721c24;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.2s;
+}
+
+.checklist-delete-btn:hover {
+  background: #f5c6cb;
+}
+
+.progress-bar-container {
+  height: 8px;
+  background: #e9ecef;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: #28a745;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.8rem;
+  color: #6c757d;
+}
+
+.checklist-items {
+  margin-bottom: 1rem;
+}
+
+.checklist-item {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+  background: white;
+  transition: background 0.2s;
+}
+
+.checklist-item.completed {
+  background: #e9f7ef;
+}
+
+/* ✅ Reset e estilo do checkbox */
+.checklist-item input[type="checkbox"] {
+  all: unset;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #adb5bd;
+  border-radius: 4px;
+  margin-right: 0.75rem;
+  cursor: pointer;
+  display: inline-block;
+  position: relative;
+}
+
+.checklist-item input[type="checkbox"]:checked {
+  background-color: #007bff;
+  border-color: #007bff;
+}
+
+.checklist-item input[type="checkbox"]:checked::after {
+  content: "✓";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+.checklist-item .item-text {
+  flex: 1;
+  cursor: pointer;
+  padding: 0.25rem 0;
+  font: inherit;
+  color: inherit;
+}
+
+.checklist-item .item-text:hover {
+  text-decoration: underline;
+}
+
+/* ✅ Reset e estilo do input de edição */
+.checklist-item input[type="text"] {
+  all: unset;
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  color: inherit;
+  outline: none;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.remove-item-btn {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  color: #dc3545;
+  margin-left: 0.5rem;
+}
+
+.remove-item-btn:hover {
+  color: #c82333;
+}
+
+.checklist-add-form {
+  margin-top: 1rem;
+}
+
+/* ✅ Reset e estilo do input de adição */
+.checklist-add-form input[type="text"] {
+  all: unset;
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 1rem;
+  font-family: inherit;
+  color: inherit;
+  outline: none;
+  box-sizing: border-box;
+  margin-bottom: 0.5rem;
+}
+
+.checklist-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.add-btn {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.add-btn:hover {
+  background: #0056b3;
+}
+
+.cancel-btn {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.cancel-btn:hover {
+  background: #545b62;
+}
+
+.checklist-footer-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.footer-action-btn {
+  background: #e9ecef;
+  border: 1px solid #dee2e6;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background 0.2s;
+}
+
+.footer-action-btn:hover {
+  background: #dee2e6;
+}
+
+/* Drag and Drop */
+.anexos-section.drag-over {
+  border: 2px dashed #007bff;
+  background: #e3f2fd;
+}
+
+.drag-hint {
+  text-align: center;
+  font-size: 0.9rem;
+  color: #6c757d;
+  margin-top: 1rem;
+  padding: 1rem;
+  border-top: 1px dashed #ddd;
+}
+
+/* ========== Seção de Objetivos ========== */
+
+.objetivos-section {
+  margin: 1rem;
+  padding: 1rem;
+  border-radius: 8px;
+  background-color: #fafafa;
+}
+
+/* Barra de progresso */
+.progress-container {
+  border-radius: 4px;
+  margin-bottom: 1.2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background: #28a745;
+  transition: width 0.3s ease;
+}
+
+.progress-percent {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.8rem;
+  color: #6c757d;
+  font-weight: 600;
+}
+
+/* Formulário para adicionar novo objetivo */
+.objetivos-add-form {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.2rem;
+  align-items: center;
+}
+
+.objetivos-add-form input[type="text"] {
+  all: unset;
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  color: inherit;
+  background: white;
+  box-sizing: border-box;
+}
+
+.objetivos-add-btn {
+  all: unset;
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.objetivos-add-btn:hover:not(:disabled) {
+  background: #218838;
+}
+
+.objetivos-add-btn:disabled {
+  background: #d6d8d9;
+  cursor: not-allowed;
+}
+
+/* Lista de objetivos */
+.objetivos-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.objetivo-item1 {
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  background: white;
+  transition: background 0.2s;
+  gap: 5px;
+}
+
+.objetivo-item1 .objetivo-concluido {
+  background: #e9f7ef;
+  opacity: 0.9;
+}
+
+.objetivo-item1 > input[type="checkbox"] {
+  all: unset;
+  width: 15px;
+  height: 15px;
+  border: 1px solid #adb5bd;
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+  display: inline-block;
+}
+
+.objetivo-item1 > input[type="checkbox"]:checked {
+  background-color: #28a745;
+  border-color: #28a745;
+}
+
+.objetivo-item1 > input[type="checkbox"]:checked::after {
+  content: "✓";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+/* Texto do objetivo */
+.objetivo-item1 > span {
+  flex: 1;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  min-width: 0;
+  word-break: break-word;
+}
+
+/* Responsáveis */
+.objetivo-responsaveis {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Chip de responsável */
+.chip-responsavel {
+  display: inline-flex;
+  align-items: center;
+  background: #e0f2fe;
+  color: #0369a1;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  border: 1px solid #bae6fd;
+  max-width: 120px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.chip-responsavel[data-externo="true"] {
+  background: #fde68a;
+  color: #854d0e;
+  border: 1px solid #fcd34d;
+}
+
+.chip-remove {
+  margin-left: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.chip-remove:hover {
+  color: #025a7d;
+}
+
+/* Input de adição de responsável */
+.objetivo-responsaveis input[type="text"] {
+  all: unset;
+  padding: 2px 6px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+  color: inherit;
+  background: white;
+  box-sizing: border-box;
+}
+
+/* Sugestões de responsáveis */
+.sugestoes-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  z-index: 20;
+  margin-top: 4px;
+  width: 100%;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.sugestao-item {
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #000;
+}
+
+.sugestao-item:hover {
+  background: #f1f5f9;
+}
+
+/* Ações (data + excluir) */
+.objetivo-acao {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 160px;
+  justify-content: flex-end;
+}
+
+.objetivo-acao input[type="date"] {
+  all: unset;
+  padding: 0.5px 6px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+  color: inherit;
+  background: white;
+  box-sizing: border-box;
+  width: 130px;
+}
+
+.objetivo-excluir {
+  cursor: pointer;
+  color: #dc3545;
+  font-weight: bold;
+  font-size: 1.2rem;
+  line-height: 1;
+  padding: 2px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+}
+
+.objetivo-excluir:hover {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+/* Drag & Drop (mantido do original) */
+.anexos-section.drag-over {
+  border: 2px dashed #007bff;
+  background: #e3f2fd;
+}
+
+.drag-hint {
+  text-align: center;
+  font-size: 0.9rem;
+  color: #6c757d;
+  margin-top: 1rem;
+  padding: 1rem;
+  border-top: 1px dashed #ddd;
+}
+
+.task-title-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+
+.modal-content .data-entrega-input {
+  padding: 0.2rem 0.4rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  width: 140px;
+  text-align: center;
+  background: white;
+  margin: 10px;
+}
+
+.data-entrega-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.data-entrega-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.modal-content .data-entrega-label {
+  font-size: 0.875rem;
+  margin-bottom: -0.5rem;
+  color: #555;
+}
+
+.comentario-resposta{
+  width: 90%;
+  margin-left: 5em;
+  background: #d3e3f3;
+}

@@ -1,7 +1,7 @@
 // src/components/ComentariosSection.jsx
 import React, { useState, useEffect, useRef } from "react";
 import { FiUser, FiCalendar } from "react-icons/fi";
-import { IoReturnUpBack } from "react-icons/io5"; // ✅ Ícone de resposta
+import { IoReturnUpBack } from "react-icons/io5";
 import "./Task.css";
 
 const MencoesTooltip = ({ children, userId, projetoAtual, containerId, supabaseClient }) => {
@@ -228,7 +228,9 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
   const [loading, setLoading] = useState(false);
   const [loadingExcluir, setLoadingExcluir] = useState(false);
   const [menuAberto, setMenuAberto] = useState(null);
+  const [respondendoA, setRespondendoA] = useState(null);
   const textareaRef = useRef(null);
+  const respostaTextareaRef = useRef(null);
 
   const formatarDataComentario = (dateString) => {
     const date = new Date(dateString);
@@ -253,17 +255,17 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
     return diffMin < 60;
   };
 
-  // Carregar comentários
   useEffect(() => {
     let isMounted = true;
     const fetchComentarios = async () => {
       setLoading(true);
       try {
+        // ✅ Incluímos 'respondendo_a' na query
         const { data: comentariosData } = await supabaseClient
           .from("comentarios")
-          .select("id, conteudo, created_at, user_id, agendado_por")
+          .select("id, conteudo, created_at, user_id, agendado_por, respondendo_a")
           .eq("nota_id", notaId)
-          .order("created_at", { ascending: false });
+          .order("created_at", { ascending: true }); // ordem cronológica
 
         if (comentariosData?.length > 0) {
           const userIds = [...new Set(comentariosData.map((c) => c.user_id))];
@@ -282,6 +284,7 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
             editValue: undefined,
             mencionaUsuarioLogado: mencionaUsuario(c.conteudo, userProfile),
             estaAgendadoPeloUsuario: c.agendado_por === userId,
+            ehResposta: !!c.respondendo_a,
           }));
           if (isMounted) setComentarios(comentariosComUsuario);
         } else if (isMounted) {
@@ -318,15 +321,26 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
   };
 
   const inserirMencoes = (usuario) => {
-    const textarea = textareaRef.current;
+    const textarea = respondendoA ? respostaTextareaRef.current : textareaRef.current;
     if (!textarea) return;
     const cursorPos = textarea.selectionStart;
-    const textoAntes = comentario.slice(0, cursorPos);
-    const textoDepois = comentario.slice(cursorPos);
+    const valorAtual = respondendoA
+      ? comentarios.find(c => c.id === respondendoA)?.respostaTemp || ""
+      : comentario;
+    const textoAntes = valorAtual.slice(0, cursorPos);
+    const textoDepois = valorAtual.slice(cursorPos);
     const nomeParaMencoes = usuario.nickname || usuario.nome;
     const novoTextoAntes = textoAntes.replace(/@[\p{L}\p{N}_-]*$/u, `@${nomeParaMencoes}`);
     const novoTexto = novoTextoAntes + " " + textoDepois;
-    setComentario(novoTexto);
+
+    if (respondendoA) {
+      setComentarios(prev =>
+        prev.map(c => (c.id === respondendoA ? { ...c, respostaTemp: novoTexto } : c))
+      );
+    } else {
+      setComentario(novoTexto);
+    }
+
     setSugestoesMencoes([]);
     setTimeout(() => {
       const novaPos = novoTextoAntes.length + 1;
@@ -335,37 +349,32 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
     }, 0);
   };
 
-  // ✅ Nova função: responder a um comentário
-// ✅ Função corrigida: responder a um comentário
-        const handleResponder = (profile) => {
-        const nomeMencionavel = profile.nickname || profile.nome || "Usuário";
-        const mencao = `@${nomeMencionavel} `;
-        const novoValor = comentario + mencao;
+  const iniciarResposta = (comentarioId) => {
+    setComentarios(prev =>
+      prev.map(c =>
+        c.id === comentarioId
+          ? { ...c, respostaTemp: "", respostaAtiva: true }
+          : { ...c, respostaAtiva: false }
+      )
+    );
+    setRespondendoA(comentarioId);
+  };
 
-        setComentario(novoValor);
+  const enviarResposta = async (comentarioPaiId) => {
+    const comentarioPai = comentarios.find(c => c.id === comentarioPaiId);
+    if (!comentarioPai || !comentarioPai.respostaTemp?.trim()) return;
 
-        setTimeout(() => {
-            const textarea = textareaRef.current;
-            if (textarea) {
-            textarea.focus();
-            textarea.setSelectionRange(novoValor.length, novoValor.length);
-            }
-        }, 0);
-        };
-
-  const handleAddComentario = async () => {
-    if (!comentario.trim()) return;
     setComentando(true);
     try {
-      const conteudoTrim = comentario.trim();
       const { data: novoComentario, error: insertError } = await supabaseClient
         .from("comentarios")
         .insert({
           nota_id: notaId,
           user_id: userId,
-          conteudo: conteudoTrim,
+          conteudo: comentarioPai.respostaTemp.trim(),
+          respondendo_a: comentarioPaiId, // ✅ vincula à resposta pai
         })
-        .select('id, nota_id, user_id, conteudo, created_at, agendado_por')
+        .select('id, nota_id, user_id, conteudo, created_at, agendado_por, respondendo_a')
         .single();
 
       if (insertError) throw insertError;
@@ -375,25 +384,25 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
         id,
         nota_id: notaId,
         user_id: userId,
-        conteudo: conteudoTrim,
+        conteudo: novoComentario.conteudo,
         created_at,
         agendado_por: null,
+        respondendo_a: comentarioPaiId,
         profiles: userProfile || { nome: "Você", nickname: null, avatar_url: null },
         formattedDate: formatarDataComentario(created_at),
         isEditing: false,
         editValue: undefined,
-        mencionaUsuarioLogado: mencionaUsuario(conteudoTrim, userProfile),
+        mencionaUsuarioLogado: mencionaUsuario(novoComentario.conteudo, userProfile),
         estaAgendadoPeloUsuario: false,
+        ehResposta: true,
       };
 
-      setComentarios((prev) => [novoComentarioLocal, ...prev]);
-      setComentario("");
-      setSugestoesMencoes([]);
+      setComentarios(prev => [...prev, novoComentarioLocal]); // mantém ordem cronológica
 
       // Notificações
-      const mencionados = conteudoTrim.match(/@(\S+)/g);
+      const mencionados = novoComentario.conteudo.match(/@(\S+)/g);
       if (mencionados?.length > 0) {
-        const nomesMencionados = mencionados.map((m) => m.slice(1));
+        const nomesMencionados = mencionados.map(m => m.slice(1));
         const { data: candidatos } = await supabaseClient
           .from("profiles")
           .select("id, nickname, nome")
@@ -415,6 +424,64 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
           });
         }
       }
+
+      setComentarios(prev =>
+        prev.map(c => c.id === comentarioPaiId ? { ...c, respostaAtiva: false, respostaTemp: undefined } : c)
+      );
+      setRespondendoA(null);
+    } catch (err) {
+      console.error("Erro ao enviar resposta:", err);
+      alert("Erro ao enviar resposta.");
+    } finally {
+      setComentando(false);
+    }
+  };
+
+  const cancelarResposta = (comentarioId) => {
+    setComentarios(prev =>
+      prev.map(c => c.id === comentarioId ? { ...c, respostaAtiva: false, respostaTemp: undefined } : c)
+    );
+    setRespondendoA(null);
+  };
+
+  const handleAddComentario = async () => {
+    if (!comentario.trim()) return;
+    setComentando(true);
+    try {
+      const { data: novoComentario, error: insertError } = await supabaseClient
+        .from("comentarios")
+        .insert({
+          nota_id: notaId,
+          user_id: userId,
+          conteudo: comentario.trim(),
+          respondendo_a: null,
+        })
+        .select('id, nota_id, user_id, conteudo, created_at, agendado_por, respondendo_a')
+        .single();
+
+      if (insertError) throw insertError;
+
+      const { id, created_at } = novoComentario;
+      const novoComentarioLocal = {
+        id,
+        nota_id: notaId,
+        user_id: userId,
+        conteudo: novoComentario.conteudo,
+        created_at,
+        agendado_por: null,
+        respondendo_a: null,
+        profiles: userProfile || { nome: "Você", nickname: null, avatar_url: null },
+        formattedDate: formatarDataComentario(created_at),
+        isEditing: false,
+        editValue: undefined,
+        mencionaUsuarioLogado: mencionaUsuario(novoComentario.conteudo, userProfile),
+        estaAgendadoPeloUsuario: false,
+        ehResposta: false,
+      };
+
+      setComentarios(prev => [...prev, novoComentarioLocal]);
+      setComentario("");
+      setSugestoesMencoes([]);
     } catch (err) {
       console.error("Erro ao salvar comentário:", err);
       alert("Erro ao salvar comentário.");
@@ -509,10 +576,29 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
     }
   };
 
+  // ✅ Agrupar comentários com suas respostas
+  const agruparComentarios = () => {
+    const principais = comentarios.filter(c => !c.ehResposta);
+    const respostas = comentarios.filter(c => c.ehResposta);
+    const mapaRespostas = {};
+
+    respostas.forEach(r => {
+      if (!mapaRespostas[r.respondendo_a]) mapaRespostas[r.respondendo_a] = [];
+      mapaRespostas[r.respondendo_a].push(r);
+    });
+
+    return principais.map(pai => ({
+      ...pai,
+      respostasFilhas: mapaRespostas[pai.id] || [],
+    }));
+  };
+
   const perfilesPorId = {};
   comentarios.forEach(c => {
     if (c.profiles?.id) perfilesPorId[c.profiles.id] = c.profiles;
   });
+
+  const comentariosAgrupados = agruparComentarios();
 
   return (
     <div className="comentarios-section">
@@ -524,7 +610,7 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
           value={comentario}
           onChange={handleComentarioChange}
           rows={3}
-          disabled={loading}
+          disabled={loading || respondendoA}
         />
         {sugestoesMencoes.length > 0 && (
           <div
@@ -577,7 +663,7 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
           type="button"
           className="coment-btn"
           onClick={handleAddComentario}
-          disabled={loading || comentando || !comentario.trim()}
+          disabled={loading || comentando || !comentario.trim() || respondendoA}
         >
           Comentar
         </button>
@@ -585,123 +671,202 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
       </div>
 
       <div className="comentarios-lista">
-        {comentarios.map((c) => {
-          const profile = c.profiles || { nome: "Usuário", nickname: null, avatar_url: null };
+        {comentariosAgrupados.map((pai) => {
+          const profile = pai.profiles || { nome: "Usuário", nickname: null, avatar_url: null };
           const nomeExibicao = profile.nickname || profile.nome;
-          const editavel = podeEditarComentario(c.created_at, c.user_id);
-          const podeEnviarParaAgenda = c.mencionaUsuarioLogado && !c.estaAgendadoPeloUsuario;
+          const editavel = podeEditarComentario(pai.created_at, pai.user_id);
+          const podeEnviarParaAgenda = pai.mencionaUsuarioLogado && !pai.estaAgendadoPeloUsuario;
 
           return (
-            <div key={c.id} className="comentario-item">
-              <div className="comentario-avatar">
-                {profile.avatar_url ? (
-                  <img
-                    src={profile.avatar_url}
-                    alt={nomeExibicao}
-                    onError={(e) => {
-                      e.target.style.display = "none";
-                      e.target.nextSibling.style.display = "block";
-                    }}
-                  />
-                ) : (
-                  <FiUser className="avatar-placeholder" />
-                )}
-              </div>
-              <div className="comentario-conteudo">
-                <div className="comentario-header">
-                  <div className="comentario-autor">
-                    <strong>{nomeExibicao}</strong>
-                  </div>
-                  <div className="comentario-meta" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    {/* ✅ Botão de resposta (antes da data) */}
-                    <button
-                      type="button"
-                      title={`Responder a ${nomeExibicao}`}
-                      onClick={() => handleResponder(profile)}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        color: "#666",
-                        fontSize: "16px",
-                        display: "flex",
-                        alignItems: "center",
+            <React.Fragment key={pai.id}>
+              {/* Comentário principal */}
+              <div className="comentario-item">
+                <div className="comentario-avatar">
+                  {profile.avatar_url ? (
+                    <img
+                      src={profile.avatar_url}
+                      alt={nomeExibicao}
+                      onError={(e) => {
+                        e.target.style.display = "none";
+                        e.target.nextSibling.style.display = "block";
                       }}
-                      aria-label={`Responder a ${nomeExibicao}`}
-                    >
-                      <IoReturnUpBack style={{ transform: "rotateY(180deg)" }} />
-                    </button>
-
-                    <span>{c.formattedDate}</span>
-
-                    <div style={{ display: "flex", gap: "6px" }}>
-                      {podeEnviarParaAgenda && (
-                        <button
-                          type="button"
-                          title="Adicionar à minha agenda"
-                          onClick={() => handleEnviarParaAgenda(c.id)}
-                          style={{ background: "none", border: "none", cursor: "pointer", color: "#1E88E5", fontSize: "16px" }}
-                          aria-label="Adicionar à agenda"
-                        >
-                          <FiCalendar />
-                        </button>
-                      )}
-                      {editavel && !c.isEditing && (
-                        <button
-                          type="button"
-                          className="comentario-menu-btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setMenuAberto(menuAberto === c.id ? null : c.id);
-                          }}
-                          aria-label="Opções"
-                        >
-                          ⋮
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {c.isEditing ? (
-                  <div>
-                    <textarea
-                      value={c.editValue !== undefined ? c.editValue : c.conteudo}
-                      onChange={(e) =>
-                        setComentarios(prev =>
-                          prev.map(x => (x.id === c.id ? { ...x, editValue: e.target.value } : x))
-                        )
-                      }
-                      rows={3}
-                      style={{ width: "100%", resize: "none", marginTop: "4px" }}
                     />
-                    <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
-                      <button type="button" onClick={() => handleSaveEdit(c.id)} disabled={loading}>
-                        Salvar
+                  ) : (
+                    <FiUser className="avatar-placeholder" />
+                  )}
+                </div>
+                <div className="comentario-conteudo">
+                  <div className="comentario-header">
+                    <div className="comentario-autor">
+                      <strong>{nomeExibicao}</strong>
+                    </div>
+                    <div className="comentario-meta" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <button
+                        type="button"
+                        title={`Responder a ${nomeExibicao}`}
+                        onClick={() => iniciarResposta(pai.id)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          color: "#666",
+                          fontSize: "16px",
+                          display: "flex",
+                          alignItems: "center",
+                        }}
+                        aria-label={`Responder a ${nomeExibicao}`}
+                      >
+                        <IoReturnUpBack />
                       </button>
-                      <button type="button" onClick={() => handleCancelEdit(c.id)} disabled={loading}>
-                        Cancelar
-                      </button>
+                      <span>{pai.formattedDate}</span>
+                      <div style={{ display: "flex", gap: "6px" }}>
+                        {podeEnviarParaAgenda && (
+                          <button
+                            type="button"
+                            title="Adicionar à minha agenda"
+                            onClick={() => handleEnviarParaAgenda(pai.id)}
+                            style={{ background: "none", border: "none", cursor: "pointer", color: "#1E88E5", fontSize: "16px" }}
+                            aria-label="Adicionar à agenda"
+                          >
+                            <FiCalendar />
+                          </button>
+                        )}
+                        {editavel && !pai.isEditing && (
+                          <button
+                            type="button"
+                            className="comentario-menu-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMenuAberto(menuAberto === pai.id ? null : pai.id);
+                            }}
+                            aria-label="Opções"
+                          >
+                            ⋮
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
-                ) : (
-                  <div className="comentario-texto">
-                    {renderMencoes(c.conteudo, perfilesPorId, projetoAtual, containerId, supabaseClient)}
-                  </div>
-                )}
 
-                {menuAberto === c.id && editavel && !c.isEditing && (
-                  <div className="comentario-menu">
-                    <button type="button" onClick={() => handleStartEdit(c.id)}>
-                      Editar
-                    </button>
-                    <button type="button" onClick={() => handleExcluirComentario(c.id)}>
-                      Excluir
-                    </button>
-                  </div>
-                )}
+                  {pai.isEditing ? (
+                    <div>
+                      <textarea
+                        value={pai.editValue !== undefined ? pai.editValue : pai.conteudo}
+                        onChange={(e) =>
+                          setComentarios(prev =>
+                            prev.map(x => (x.id === pai.id ? { ...x, editValue: e.target.value } : x))
+                          )
+                        }
+                        rows={3}
+                        style={{ width: "100%", resize: "none", marginTop: "4px" }}
+                      />
+                      <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+                        <button type="button" onClick={() => handleSaveEdit(pai.id)} disabled={loading}>
+                          Salvar
+                        </button>
+                        <button type="button" onClick={() => handleCancelEdit(pai.id)} disabled={loading}>
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="comentario-texto">
+                      {renderMencoes(pai.conteudo, perfilesPorId, projetoAtual, containerId, supabaseClient)}
+                    </div>
+                  )}
+
+                  {menuAberto === pai.id && editavel && !pai.isEditing && (
+                    <div className="comentario-menu">
+                      <button type="button" onClick={() => handleStartEdit(pai.id)}>
+                        Editar
+                      </button>
+                      <button type="button" onClick={() => handleExcluirComentario(pai.id)}>
+                        Excluir
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Campo de resposta (2 linhas, abaixo do comentário pai) */}
+                  {pai.respostaAtiva && (
+                    <div style={{ marginTop: "12px", marginLeft: "40px", width: "calc(100% - 40px)" }}>
+                      <textarea
+                        ref={respostaTextareaRef}
+                        placeholder="Escreva sua resposta..."
+                        value={pai.respostaTemp || ""}
+                        onChange={(e) =>
+                          setComentarios(prev =>
+                            prev.map(x =>
+                              x.id === pai.id ? { ...x, respostaTemp: e.target.value } : x
+                            )
+                          )
+                        }
+                        rows={2}
+                        style={{
+                          width: "100%",
+                          fontSize: "14px",
+                          padding: "6px",
+                          border: "1px solid #ddd",
+                          borderRadius: "4px",
+                          resize: "none",
+                        }}
+                      />
+                      <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+                        <button
+                          type="button"
+                          className="coment-btn"
+                          onClick={() => enviarResposta(pai.id)}
+                          disabled={!pai.respostaTemp?.trim()}
+                        >
+                          Responder
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => cancelarResposta(pai.id)}
+                          style={{ background: "none", color: "#666" }}
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+
+              {/* Respostas já enviadas (ficam abaixo do pai) */}
+              {pai.respostasFilhas.map((resposta) => {
+                const respProfile = resposta.profiles || { nome: "Usuário", nickname: null, avatar_url: null };
+                const respNome = respProfile.nickname || respProfile.nome;
+                return (
+                  <div key={resposta.id} className="comentario-item comentario-resposta">
+                    <div className="comentario-avatar">
+                      {respProfile.avatar_url ? (
+                        <img
+                          src={respProfile.avatar_url}
+                          alt={respNome}
+                          onError={(e) => {
+                            e.target.style.display = "none";
+                            e.target.nextSibling.style.display = "block";
+                          }}
+                        />
+                      ) : (
+                        <FiUser className="avatar-placeholder" />
+                      )}
+                    </div>
+                    <div className="comentario-conteudo">
+                      <div className="comentario-header">
+                        <div className="comentario-autor">
+                          <strong>{respNome}</strong>
+                        </div>
+                        <span style={{ fontSize: "0.9em", color: "#888" }}>{resposta.formattedDate}</span>
+                      </div>
+                      <div className="comentario-texto">
+                        {renderMencoes(resposta.conteudo, perfilesPorId, projetoAtual, containerId, supabaseClient)}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </React.Fragment>
           );
         })}
       </div>
