@@ -260,12 +260,12 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
     const fetchComentarios = async () => {
       setLoading(true);
       try {
-        // ✅ Incluímos 'respondendo_a' na query
+        // ✅ Mudança principal: ordem DESC (mais novo primeiro)
         const { data: comentariosData } = await supabaseClient
           .from("comentarios")
           .select("id, conteudo, created_at, user_id, agendado_por, respondendo_a")
           .eq("nota_id", notaId)
-          .order("created_at", { ascending: true }); // ordem cronológica
+          .order("created_at", { ascending: false }); // ⬅️ inversão aqui
 
         if (comentariosData?.length > 0) {
           const userIds = [...new Set(comentariosData.map((c) => c.user_id))];
@@ -372,7 +372,7 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
           nota_id: notaId,
           user_id: userId,
           conteudo: comentarioPai.respostaTemp.trim(),
-          respondendo_a: comentarioPaiId, // ✅ vincula à resposta pai
+          respondendo_a: comentarioPaiId,
         })
         .select('id, nota_id, user_id, conteudo, created_at, agendado_por, respondendo_a')
         .single();
@@ -397,9 +397,8 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
         ehResposta: true,
       };
 
-      setComentarios(prev => [...prev, novoComentarioLocal]); // mantém ordem cronológica
+      setComentarios(prev => [novoComentarioLocal, ...prev]); // ⬅️ novo comentário no topo
 
-      // Notificações
       const mencionados = novoComentario.conteudo.match(/@(\S+)/g);
       if (mencionados?.length > 0) {
         const nomesMencionados = mencionados.map(m => m.slice(1));
@@ -479,7 +478,7 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
         ehResposta: false,
       };
 
-      setComentarios(prev => [...prev, novoComentarioLocal]);
+      setComentarios(prev => [novoComentarioLocal, ...prev]); // ⬅️ novo comentário no topo
       setComentario("");
       setSugestoesMencoes([]);
     } catch (err) {
@@ -576,10 +575,11 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
     }
   };
 
-  // ✅ Agrupar comentários com suas respostas
+  // ✅ Agrupar mantendo respostas sob seus pais — mesmo com ordem invertida
   const agruparComentarios = () => {
-    const principais = comentarios.filter(c => !c.ehResposta);
-    const respostas = comentarios.filter(c => c.ehResposta);
+    const todos = [...comentarios];
+    const principais = todos.filter(c => !c.ehResposta);
+    const respostas = todos.filter(c => c.ehResposta);
     const mapaRespostas = {};
 
     respostas.forEach(r => {
@@ -587,10 +587,13 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
       mapaRespostas[r.respondendo_a].push(r);
     });
 
-    return principais.map(pai => ({
-      ...pai,
-      respostasFilhas: mapaRespostas[pai.id] || [],
-    }));
+    // Garantimos que as respostas apareçam logo após seu comentário pai,
+    // mesmo com a lista principal invertida
+    const resultado = [];
+    principais.forEach(pai => {
+      resultado.push({ ...pai, respostasFilhas: mapaRespostas[pai.id] || [] });
+    });
+    return resultado;
   };
 
   const perfilesPorId = {};

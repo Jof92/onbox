@@ -1,7 +1,6 @@
 // src/components/Task.jsx
 import React, { useState, useEffect, useRef } from "react";
 import "./Task.css";
-import { FiUploadCloud, FiUser } from "react-icons/fi";
 import { FaTimes } from "react-icons/fa";
 import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
