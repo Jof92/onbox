@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { supabase } from "../supabaseClient";
 import "./Agenda.css";
+import { FaTimes } from "react-icons/fa"; // ✅ Importado
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 
 const Agenda = ({ user, currentContainerId, onClose }) => {
@@ -17,6 +18,29 @@ const Agenda = ({ user, currentContainerId, onClose }) => {
   const [hideSemData, setHideSemData] = useState(true);
   const [hoveredNotaId, setHoveredNotaId] = useState(null);
   const [showSidebarAgenda, setShowSidebarAgenda] = useState(false);
+
+  // ✅ Fechar com ESC ou clique fora
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+
+    const handleClickOutside = (e) => {
+      if (e.target.classList.contains("agenda-modal-overlay")) {
+        onClose();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [onClose]);
 
   const normalizarTexto = (str) => {
     if (!str) return "";
@@ -53,8 +77,6 @@ const Agenda = ({ user, currentContainerId, onClose }) => {
       console.warn("Exceção ao carregar preferência", err);
     }
 
-    // ... (restante da lógica de fetchData permanece igual — omitido por brevidade)
-    // [Mantive sua lógica completa de busca de objetivos e comentários]
     try {
       // ========== Objetivos ==========
       const { data: responsaveis, error: err1 } = await supabase
@@ -446,7 +468,6 @@ const Agenda = ({ user, currentContainerId, onClose }) => {
     }
   };
 
-  // ✅ SALVA PREFERÊNCIA E DISPARA EVENTO GLOBAL
   const toggleSidebarAgenda = async (checked) => {
     if (!user?.id || !currentContainerId) return;
 
@@ -468,8 +489,6 @@ const Agenda = ({ user, currentContainerId, onClose }) => {
     }
 
     setShowSidebarAgenda(checked);
-
-    // 👇 DISPARA EVENTO PARA O SIDEBAR ATUALIZAR
     window.dispatchEvent(new CustomEvent('agendaPreferenceUpdated'));
   };
 
@@ -515,11 +534,13 @@ const Agenda = ({ user, currentContainerId, onClose }) => {
 
   if (itensComData.length === 0 && itensSemData.length === 0 && !loading && !error) {
     return (
-      <div className="agenda-modal-overlay" onClick={onClose}>
-        <div className="agenda-modal" onClick={e => e.stopPropagation()}>
+      <div className="agenda-modal-overlay">
+        <div className="agenda-modal">
           <div className="agenda-header">
             <h2>Minha Agenda</h2>
-            <button className="agenda-close-btn" onClick={onClose}>✕</button>
+            <button className="agenda-close-btn" onClick={onClose} aria-label="Fechar">
+              <FaTimes />
+            </button>
           </div>
           <div className="agenda-content">
             <p className="agenda-empty">Você não tem itens na agenda.</p>
@@ -530,11 +551,13 @@ const Agenda = ({ user, currentContainerId, onClose }) => {
   }
 
   return (
-    <div className="agenda-modal-overlay" onClick={onClose}>
-      <div className="agenda-modal" onClick={e => e.stopPropagation()}>
+    <div className="agenda-modal-overlay">
+      <div className="agenda-modal">
         <div className="agenda-header">
           <h2>Minha Agenda</h2>
-          <button className="agenda-close-btn" onClick={onClose}>✕</button>
+          <button className="agenda-close-btn" onClick={onClose} aria-label="Fechar">
+            <FaTimes />
+          </button>
         </div>
 
         <div className="agenda-content">
@@ -552,7 +575,6 @@ const Agenda = ({ user, currentContainerId, onClose }) => {
 
           {!loading && !error && (
             <div className="container">
-              {/* Checkbox de exibição no container */}
               <div className="agenda-sidebar-toggle">
                 <label>
                   <input
@@ -564,7 +586,6 @@ const Agenda = ({ user, currentContainerId, onClose }) => {
                 </label>
               </div>
 
-              {/* Botões de ano */}
               {anosComItens.length > 0 && (
                 <div className="years">
                   {anosComItens.map(ano => (
@@ -579,7 +600,6 @@ const Agenda = ({ user, currentContainerId, onClose }) => {
                 </div>
               )}
 
-              {/* Botões de mês */}
               <div className="months">
                 {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => (
                   <button
@@ -592,7 +612,6 @@ const Agenda = ({ user, currentContainerId, onClose }) => {
                 ))}
               </div>
 
-              {/* Itens com data */}
               {diasDoMesSelecionado.length > 0 ? (
                 diasDoMesSelecionado.map(dateKey => {
                   const itens = itensPorData[dateKey];
@@ -679,7 +698,6 @@ const Agenda = ({ user, currentContainerId, onClose }) => {
                 </div>
               )}
 
-              {/* Tarefas sem data */}
               {itensSemData.length > 0 && (
                 <>
                   <div

@@ -1,8 +1,7 @@
-// src/components/Collab.jsx
 import React, { useState, useEffect, useCallback } from "react";
 import "./Collab.css";
 import "./loader.css";
-import { FaPaperPlane, FaUserPlus, FaEllipsisV, FaBell, FaArchive } from "react-icons/fa";
+import { FaPaperPlane, FaUserPlus, FaEllipsisV, FaBell, FaArchive, FaTimes } from "react-icons/fa";
 import { supabase } from "../supabaseClient";
 
 export default function Collab({ onClose, user, onOpenTask }) {
@@ -15,10 +14,32 @@ export default function Collab({ onClose, user, onOpenTask }) {
   const [removendo, setRemovendo] = useState(null);
   const [loadingNotificacoes, setLoadingNotificacoes] = useState(true);
   const [loadingIntegrantes, setLoadingIntegrantes] = useState(true);
-  // ✅ Aba inicial alterada para "notificacoes"
   const [activeTab, setActiveTab] = useState("notificacoes");
 
-  // 🔔 Buscar convites recebidos e menções separadamente
+  // ✅ Fechar com ESC ou clique fora
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+
+    const handleClickOutside = (e) => {
+      if (e.target.classList.contains("collab-modal-overlay")) {
+        onClose();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [onClose]);
+
+  // 🔔 Buscar notificações
   const fetchNotificacoes = useCallback(async () => {
     if (!user?.id || !user?.email) {
       setConvitesRecebidos([]);
@@ -29,7 +50,6 @@ export default function Collab({ onClose, user, onOpenTask }) {
 
     setLoadingNotificacoes(true);
     try {
-      // === Convites recebidos ===
       const { data: convites, error: convitesError } = await supabase
         .from("convites")
         .select("*")
@@ -50,7 +70,6 @@ export default function Collab({ onClose, user, onOpenTask }) {
         );
       }
 
-      // === Menções ===
       const { data: notificacoesMencoes, error: mencaoError } = await supabase
         .from("notificacoes")
         .select(`
@@ -68,20 +87,17 @@ export default function Collab({ onClose, user, onOpenTask }) {
           projeto:projects(id, name)
         `)
         .eq("user_id", user.id)
-        .order("created_at", { ascending: false }); // ✅ Mais recente primeiro
+        .order("created_at", { ascending: false });
 
       let mencoesFormatadas = [];
       if (!mencaoError && notificacoesMencoes?.length) {
-        mencoesFormatadas = notificacoesMencoes.map((m) => ({
-          ...m,
-          tipo: m.tipo || "menção",
-        }));
+        mencoesFormatadas = notificacoesMencoes.map((m) => ({ ...m, tipo: m.tipo || "menção" }));
       }
 
       setConvitesRecebidos(convitesFormatados);
       setMencoes(mencoesFormatadas);
     } catch (err) {
-      console.error("Erro geral ao buscar notificações:", err);
+      console.error("Erro ao buscar notificações:", err);
       setConvitesRecebidos([]);
       setMencoes([]);
     } finally {
@@ -144,7 +160,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
     fetchIntegrantes();
   }, [fetchNotificacoes, fetchIntegrantes]);
 
-  // ✉️ ENVIAR CONVITE
+  // ✉️ Enviar convite
   const enviarConvite = async () => {
     if (!emailConvite.trim()) return alert("Digite um e-mail válido.");
     setEnviando(true);
@@ -199,7 +215,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
     }
   };
 
-  // ✅ ACEITAR CONVITE
+  // ✅ Aceitar convite
   const aceitarConvite = async (convite) => {
     try {
       await supabase.from("convites").update({ status: "aceito" }).eq("id", convite.id);
@@ -211,7 +227,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
     }
   };
 
-  // 🔗 ABRIR MENÇÃO
+  // 🔗 Abrir menção
   const lerMensagemMencoes = async (notificacao) => {
     if (notificacao.lido) return;
 
@@ -232,7 +248,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
     }
   };
 
-  // ❌ REMOVER INTEGRANTE
+  // ❌ Remover integrante
   const removerIntegrante = async (item) => {
     const ok = window.confirm(`Remover ${item.nome} do seu container?`);
     if (!ok) return;
@@ -251,34 +267,40 @@ export default function Collab({ onClose, user, onOpenTask }) {
   return (
     <div className="collab-modal-overlay">
       <div className="collab-modal">
-        <button className="overlay-close-btn" onClick={onClose}>
-          ×
-        </button>
-
+        {/* Cabeçalho — botão de fechar ao lado dos tabs */}
         <div className="collab-header">
           <h2>Colaborações</h2>
-          <div className="collab-tabs">
-            {/* ✅ Nova ordem dos botões */}
+          <div className="collab-header-actions">
+            <div className="collab-tabs">
+              <button
+                className={`tab-btn ${activeTab === "notificacoes" ? "active" : ""}`}
+                onClick={() => setActiveTab("notificacoes")}
+                aria-label="Menções"
+              >
+                <FaBell className="icon" />
+              </button>
+              <button
+                className={`tab-btn ${activeTab === "enviar" ? "active" : ""}`}
+                onClick={() => setActiveTab("enviar")}
+                aria-label="Enviar convite"
+              >
+                <FaUserPlus className="icon" />
+              </button>
+              <button
+                className={`tab-btn ${activeTab === "convites-recebidos" ? "active" : ""}`}
+                onClick={() => setActiveTab("convites-recebidos")}
+                aria-label="Convites recebidos"
+              >
+                <FaArchive className="icon" />
+              </button>
+            </div>
+            {/* ✅ Botão de fechar ao lado dos tabs, SEMPRE visível */}
             <button
-              className={`tab-btn ${activeTab === "notificacoes" ? "active" : ""}`}
-              onClick={() => setActiveTab("notificacoes")}
-              aria-label="Menções"
+              className="collab-close-btn"
+              onClick={onClose}
+              aria-label="Fechar"
             >
-              <FaBell className="icon" />
-            </button>
-            <button
-              className={`tab-btn ${activeTab === "enviar" ? "active" : ""}`}
-              onClick={() => setActiveTab("enviar")}
-              aria-label="Enviar convite"
-            >
-              <FaUserPlus className="icon" />
-            </button>
-            <button
-              className={`tab-btn ${activeTab === "convites-recebidos" ? "active" : ""}`}
-              onClick={() => setActiveTab("convites-recebidos")}
-              aria-label="Convites recebidos"
-            >
-              <FaArchive className="icon" />
+              <FaTimes />
             </button>
           </div>
         </div>
@@ -329,7 +351,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
           </div>
         )}
 
-        {/* Aba: Notificações (Menções) — ✅ Agora em ordem: mais recente no topo */}
+        {/* Aba: Menções */}
         {activeTab === "notificacoes" && (
           <div className="collab-section">
             <h3>Menções</h3>
@@ -359,7 +381,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
           </div>
         )}
 
-        {/* Aba: Enviar Convite + Meus Integrantes */}
+        {/* Aba: Enviar + Integrantes */}
         {activeTab === "enviar" && (
           <>
             <div className="collab-section-convite">

@@ -383,3 +383,35 @@
 .remetente-avatar.placeholder {
   border: 1px solid #ddd;
 }
+
+
+
+.collab-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.collab-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+
+.collab-close-btn {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+}
+
+.collab-close-btn:hover {
+  color: #000;
+  background-color: #f0f0f0;
+}

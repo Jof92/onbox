@@ -48,7 +48,7 @@ export default function ContainerGrid({
               </div>
               <h3>{proj.name || "Projeto"}</h3>
               <p>
-                {proj.type === "vertical" ? "Edificação Vertical" : "Edificação Horizontal"}
+                Projeto
               </p>
             </div>
           ))}

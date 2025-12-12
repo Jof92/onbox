@@ -37,6 +37,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
   const [userProfile, setUserProfile] = useState(null);
   const [meuNome, setMeuNome] = useState("Você");
   const [dataEntregaTarefa, setDataEntregaTarefa] = useState(""); // ✅ Novo estado
+  const [imagemAmpliada, setImagemAmpliada] = useState(null); // ✅ Para modal de imagem
   const modalRef = useRef(null);
 
   // Estados dos Objetivos
@@ -84,7 +85,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     if (!notaAtual?.id) {
       setDescricao("");
       setAnexosSalvos([]);
-      setDataEntregaTarefa(""); // ✅ Reset da data
+      setDataEntregaTarefa("");
       return;
     }
 
@@ -94,17 +95,17 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
       try {
         const { data: nota } = await supabase
           .from("notas")
-          .select("descricao, data_entrega") // ✅ Inclui data_entrega
+          .select("descricao, data_entrega")
           .eq("id", notaAtual.id)
           .single();
         if (isMounted) {
           setDescricao(nota?.descricao || "");
-          setDataEntregaTarefa(nota?.data_entrega || ""); // ✅ Define a data
+          setDataEntregaTarefa(nota?.data_entrega || "");
         }
 
         const { data: anexos } = await supabase
           .from("anexos")
-          .select("id, file_name, file_url")
+          .select("id, file_name, file_url, mime_type")
           .eq("nota_id", notaAtual.id)
           .order("created_at", { ascending: true });
         if (isMounted) setAnexosSalvos(anexos || []);
@@ -179,10 +180,16 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
         }));
 
         setObjetivos(objetivosCompletos);
-        setShowObjetivos(true);
+
+        if (objetivosCompletos.length > 0) {
+          setShowObjetivos(true);
+        } else {
+          setShowObjetivos(false);
+        }
       } catch (err) {
         console.error("Erro ao carregar objetivos:", err);
         setObjetivos([]);
+        setShowObjetivos(false);
       } finally {
         setLoading(false);
       }
@@ -190,6 +197,15 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
 
     fetchObjetivos();
   }, [notaAtual?.id]);
+
+  // ✅ Sincroniza visibilidade com conteúdo
+  useEffect(() => {
+    if (objetivos.length > 0) {
+      setShowObjetivos(true);
+    } else {
+      setShowObjetivos(false);
+    }
+  }, [objetivos.length]);
 
   // Salvar descrição
   const handleSaveDescricao = async () => {
@@ -208,7 +224,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     }
   };
 
-  // ✅ Nova função: salvar data de entrega da tarefa
+  // Salvar data de entrega da tarefa
   const handleSalvarDataEntregaTarefa = async (novaData) => {
     if (!notaAtual?.id) return;
     setLoading(true);
@@ -226,9 +242,9 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     }
   };
 
-  // Adicionar anexos
-  const handleAddAnexos = async (e) => {
-    const files = Array.from(e.target.files || []);
+  // ✅ Função para adicionar imagens
+  const handleAddImagens = async (e) => {
+    const files = Array.from(e.target.files || []).filter(file => file.type.startsWith('image/'));
     if (!notaAtual?.id || !userId || files.length === 0) return;
 
     setLoading(true);
@@ -260,6 +276,56 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
             user_id: userId,
             file_name: originalName,
             file_url: fileUrl,
+            mime_type: file.type || 'image/unknown',
+          })
+          .select()
+          .single();
+
+        setAnexosSalvos((prev) => [...prev, insertedAnexo]);
+      }
+    } catch (err) {
+      console.error("Erro ao enviar imagem:", err);
+      alert("Erro ao enviar uma ou mais imagens.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Adicionar anexos (não imagens)
+  const handleAddAnexos = async (e) => {
+    const files = Array.from(e.target.files || []).filter(file => !file.type.startsWith('image/'));
+    if (!notaAtual?.id || !userId || files.length === 0) return;
+
+    setLoading(true);
+    try {
+      for (const file of files) {
+        const sanitizeFileName = (name) => {
+          return name
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-zA-Z0-9._-]/g, '_')
+            .replace(/_+/g, '_')
+            .trim()
+            .replace(/^_+|_+$/g, '');
+        };
+
+        const originalName = file.name;
+        const safeName = sanitizeFileName(originalName);
+        const fileName = `anexos/${notaAtual.id}_${Date.now()}_${safeName}`;
+        const { error: uploadError } = await supabase.storage.from("anexos").upload(fileName, file);
+        if (uploadError) throw uploadError;
+
+        const { data } = supabase.storage.from("anexos").getPublicUrl(fileName);
+        const fileUrl = data.publicUrl;
+
+        const { data: insertedAnexo } = await supabase
+          .from("anexos")
+          .insert({
+            nota_id: notaAtual.id,
+            user_id: userId,
+            file_name: originalName,
+            file_url: fileUrl,
+            mime_type: file.type || null,
           })
           .select()
           .single();
@@ -274,7 +340,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     }
   };
 
-  // Remover anexo
+  // Remover anexo (ou imagem)
   const handleRemoverAnexo = async (anexoId, fileUrl) => {
     if (!window.confirm("Deseja realmente excluir este anexo?")) return;
     setLoading(true);
@@ -363,7 +429,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
         checklist_id: checklistId
       }]);
       setNovoObjetivoTexto("");
-      setShowObjetivos(true);
     } catch (err) {
       console.error("Erro inesperado na função adicionarObjetivo:", err);
       alert("Erro inesperado ao adicionar objetivo.");
@@ -586,7 +651,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
         )}
       </div>
 
-      {/* ✅ Título com data de entrega no canto direito */}
       <div className="task-title-container">
         <h2 className="task-title">{getNomeNota()}</h2>
         <div className="data-entrega-wrapper">
@@ -594,15 +658,14 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
           <input
             type="date"
             value={dataEntregaTarefa || ""}
-            onChange={(e) => setDataEntregaTarefa(e.target.value)} // só atualiza UI
-            onBlur={(e) => handleSalvarDataEntregaTarefa(e.target.value || null)} // salva no banco
+            onChange={(e) => setDataEntregaTarefa(e.target.value)}
+            onBlur={(e) => handleSalvarDataEntregaTarefa(e.target.value || null)}
             className="data-entrega-input"
             disabled={loading}
           />
         </div>
       </div>
 
-      {/* Seção de Descrição */}
       <div className="descricao-section">
         <h3>Descrição</h3>
         <textarea
@@ -625,7 +688,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
         />
       </div>
 
-      {/* Seção de Anexos */}
+      {/* ✅ Seção de Anexos e Imagens */}
       <div
         className="anexos-section"
         onDragOver={(e) => e.preventDefault()}
@@ -642,8 +705,16 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
           e.currentTarget.classList.remove('drag-over');
           const files = Array.from(e.dataTransfer.files || []);
           if (files.length > 0) {
-            const fakeEvent = { target: { files } };
-            handleAddAnexos(fakeEvent);
+            const images = files.filter(file => file.type.startsWith('image/'));
+            const others = files.filter(file => !file.type.startsWith('image/'));
+            if (images.length > 0) {
+              const fakeEvent = { target: { files: images } };
+              handleAddImagens(fakeEvent);
+            }
+            if (others.length > 0) {
+              const fakeEvent = { target: { files: others } };
+              handleAddAnexos(fakeEvent);
+            }
           }
         }}
       >
@@ -661,6 +732,20 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
               disabled={loading}
             />
 
+            {/* ✅ NOVO BOTÃO: Imagens */}
+            <label htmlFor="fileInputImagem" className="upload-btn checklist-btn">
+              <span>Imagens</span>
+            </label>
+            <input
+              type="file"
+              id="fileInputImagem"
+              hidden
+              multiple
+              accept="image/*"
+              onChange={handleAddImagens}
+              disabled={loading}
+            />
+
             <button
               type="button"
               className="upload-btn checklist-btn"
@@ -673,27 +758,46 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
           </div>
         </div>
 
+        {/* ✅ Miniaturas de imagens */}
+        <div className="imagens-miniaturas">
+          {anexosSalvos
+            .filter(anexo => anexo.mime_type?.startsWith('image/'))
+            .map((anexo) => (
+              <div key={`img-${anexo.id}`} className="miniatura-item">
+                <img
+                  src={anexo.file_url}
+                  alt={anexo.file_name}
+                  onClick={() => setImagemAmpliada(anexo.file_url)}
+                  loading="lazy"
+                />
+              </div>
+            ))}
+        </div>
+
+        {/* Lista de anexos não-imagem */}
         <div className="anexos-lista">
-          {anexosSalvos.map((anexo) => (
-            <div key={anexo.id} className="anexo-item">
-              <a href={anexo.file_url} target="_blank" rel="noopener noreferrer">
-                {anexo.file_name}
-              </a>
-              <button
-                type="button"
-                title="Remover"
-                onClick={() => handleRemoverAnexo(anexo.id, anexo.file_url)}
-                aria-label="Remover anexo"
-                disabled={loading}
-              >
-                ×
-              </button>
-            </div>
-          ))}
+          {anexosSalvos
+            .filter(anexo => !anexo.mime_type?.startsWith('image/'))
+            .map((anexo) => (
+              <div key={anexo.id} className="anexo-item">
+                <a href={anexo.file_url} target="_blank" rel="noopener noreferrer">
+                  {anexo.file_name}
+                </a>
+                <button
+                  type="button"
+                  title="Remover"
+                  onClick={() => handleRemoverAnexo(anexo.id, anexo.file_url)}
+                  aria-label="Remover anexo"
+                  disabled={loading}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
         </div>
 
         <div className="drag-hint">
-          Arraste arquivos aqui para anexar
+          Arraste arquivos aqui para anexar (imagens ou documentos)
         </div>
       </div>
 
@@ -811,6 +915,25 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
           containerId={containerId}
           supabaseClient={supabase}
         />
+      )}
+
+      {/* ✅ Modal de Imagem Ampliada */}
+      {imagemAmpliada && (
+        <div
+          className="imagem-ampliada-modal"
+          onClick={() => setImagemAmpliada(null)}
+        >
+          <div className="imagem-ampliada-conteudo" onClick={(e) => e.stopPropagation()}>
+            <img src={imagemAmpliada} alt="Visualização ampliada" />
+            <button
+              className="imagem-ampliada-fechar"
+              onClick={() => setImagemAmpliada(null)}
+              aria-label="Fechar imagem"
+            >
+              <FaTimes />
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

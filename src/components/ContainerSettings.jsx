@@ -1,19 +1,42 @@
 // src/components/ContainerSettings.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { supabase } from "../supabaseClient";
-import { FaSave } from "react-icons/fa";
+import { FaSave, FaTimes } from "react-icons/fa";
 import Loading from "./Loading";
 import "./ContainerSettings.css";
 
 export default function ContainerSettings({ onClose, containerId, user }) {
   const [dono, setDono] = useState("");
-  const [nomeContainer, setNomeContainer] = useState(""); // ← nome do container = nome do dono
+  const [nomeContainer, setNomeContainer] = useState("");
   const [projetos, setProjetos] = useState([]);
   const [setores, setSetores] = useState([]);
   const [colaboradores, setColaboradores] = useState([]);
   const [loading, setLoading] = useState(true);
   const [emailGerenteContainer, setEmailGerenteContainer] = useState("");
   const [emailsGerentesCaixa, setEmailsGerentesCaixa] = useState({});
+
+  // ✅ Fechar com ESC ou clique fora
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+
+    const handleClickOutside = (e) => {
+      if (e.target.classList.contains("container-settings-overlay")) {
+        onClose();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [onClose]);
 
   useEffect(() => {
     if (!containerId) return;
@@ -31,7 +54,7 @@ export default function ContainerSettings({ onClose, containerId, user }) {
 
         const nomeDono = perfil?.nome || "Desconhecido";
         setDono(nomeDono);
-        setNomeContainer(nomeDono); // o "nome do container" é o nome do dono
+        setNomeContainer(nomeDono);
 
         // 2. Colaboradores (convites aceitos)
         const { data: convites, error: convitesError } = await supabase
@@ -71,7 +94,7 @@ export default function ContainerSettings({ onClose, containerId, user }) {
           setEmailGerenteContainer(gerente?.email || "");
         }
 
-        // Preenche gerentes de caixa (projetos + setores)
+        // Preenche gerentes de caixa
         const initialEmails = {};
         [...proj, ...set].forEach(item => {
           if (item.gerente_caixa_id) {
@@ -95,7 +118,6 @@ export default function ContainerSettings({ onClose, containerId, user }) {
     const colab = colaboradores.find(c => c.email === emailGerenteContainer);
     if (!colab) return alert("E-mail não é de um colaborador aceito.");
 
-    // Atualiza o gerente_container_id
     const { error: updateError } = await supabase
       .from("profiles")
       .update({ gerente_container_id: colab.id })
@@ -106,7 +128,6 @@ export default function ContainerSettings({ onClose, containerId, user }) {
       return alert("Erro ao salvar gerente de container.");
     }
 
-    // Cria notificação
     const mensagem = `${dono} nomeou você gerente do container ${nomeContainer}.`;
 
     const { error: notifError } = await supabase
@@ -124,7 +145,6 @@ export default function ContainerSettings({ onClose, containerId, user }) {
 
     if (notifError) {
       console.warn("Notificação não enviada:", notifError);
-      // Mesmo sem notificação, o gerente foi salvo
     }
 
     alert("Gerente de container salvo!");
@@ -155,11 +175,15 @@ export default function ContainerSettings({ onClose, containerId, user }) {
   return (
     <div className="container-settings-overlay">
       <div className="container-settings-modal">
-        <button className="close-btn" onClick={onClose}>
-          ×
-        </button>
         <div className="settings-header">
           <h2>Configurações</h2>
+          <button
+            className="settings-close-btn"
+            onClick={onClose}
+            aria-label="Fechar"
+          >
+            <FaTimes />
+          </button>
         </div>
 
         {/* Administrador */}

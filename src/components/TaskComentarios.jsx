@@ -576,25 +576,33 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
   };
 
   // ✅ Agrupar mantendo respostas sob seus pais — mesmo com ordem invertida
-  const agruparComentarios = () => {
-    const todos = [...comentarios];
-    const principais = todos.filter(c => !c.ehResposta);
-    const respostas = todos.filter(c => c.ehResposta);
-    const mapaRespostas = {};
+    const agruparComentarios = () => {
+      const todos = [...comentarios];
+      const principais = todos.filter(c => !c.ehResposta);
+      const respostas = todos.filter(c => c.ehResposta);
 
-    respostas.forEach(r => {
-      if (!mapaRespostas[r.respondendo_a]) mapaRespostas[r.respondendo_a] = [];
-      mapaRespostas[r.respondendo_a].push(r);
-    });
+      // Agrupar respostas por comentário pai
+      const mapaRespostas = {};
+      respostas.forEach(r => {
+        if (!mapaRespostas[r.respondendo_a]) {
+          mapaRespostas[r.respondendo_a] = [];
+        }
+        mapaRespostas[r.respondendo_a].push(r);
+      });
 
-    // Garantimos que as respostas apareçam logo após seu comentário pai,
-    // mesmo com a lista principal invertida
-    const resultado = [];
-    principais.forEach(pai => {
-      resultado.push({ ...pai, respostasFilhas: mapaRespostas[pai.id] || [] });
-    });
-    return resultado;
-  };
+      // ✅ Ordenar as respostas de cada pai por created_at ASC (mais antiga primeiro)
+      Object.keys(mapaRespostas).forEach(paiId => {
+        mapaRespostas[paiId].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      });
+
+      // Montar resultado com pais (em ordem decrescente) + suas respostas (em ordem crescente)
+      const resultado = [];
+      principais.forEach(pai => {
+        resultado.push({ ...pai, respostasFilhas: mapaRespostas[pai.id] || [] });
+      });
+
+      return resultado;
+    };
 
   const perfilesPorId = {};
   comentarios.forEach(c => {
