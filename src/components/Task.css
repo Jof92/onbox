@@ -1011,7 +1011,6 @@
 .task-title-container {
   display: flex;
   justify-content: space-between;
-  align-items: center;
 }
 
 
@@ -1073,46 +1072,287 @@
   box-shadow: 0 4px 8px rgba(0,0,0,0.2);
 }
 
-/* Modal de imagem ampliada */
+/* --- Modal de Imagem Ampliada --- */
 .imagem-ampliada-modal {
   position: fixed;
   top: 0;
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(0, 0, 0, 0.9);
+  background-color: rgba(0, 0, 0, 0.9);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 10000;
+  padding: 20px;
+  box-sizing: border-box;
 }
 
-.imagem-ampliada-conteudo {
-  position: relative;
-  max-width: 90vw;
-  max-height: 90vh;
+.imagem-ampliada-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  max-width: 100%;
+  max-height: 100%;
+  overflow: hidden;
 }
 
-.imagem-ampliada-conteudo img {
+.imagem-ampliada-wrapper img {
   max-width: 100%;
   max-height: 90vh;
   object-fit: contain;
-  border: 2px solid white;
+  outline: none;
 }
 
+/* Botão de fechar — canto superior direito */
 .imagem-ampliada-fechar {
   position: absolute;
-  top: -40px;
-  right: 0;
-  background: white;
+  top: 20px;
+  right: 20px;
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
   border: none;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
+  font-size: 24px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  z-index: 10001;
+}
+
+/* Setas de navegação — fixas no modal */
+.seta-navegacao {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  border: none;
+  width: 50px;
+  height: 50px;
+  font-size: 32px;
   font-weight: bold;
-  color: #333;
+  cursor: pointer;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  user-select: none;
+  z-index: 10001;
+  /* Desativar hover indesejado */
+  opacity: 1 !important;
+  transform: translateY(-50%) !important;
+}
+
+.seta-navegacao:hover {
+  opacity: 1 !important;
+  transform: translateY(-50%) !important;
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.seta-navegacao.esquerda {
+  left: 20px;
+}
+
+.seta-navegacao.direita {
+  right: 20px;
+}
+
+/* --- Miniaturas com lixeira --- */
+.miniatura-item {
+  position: relative;
+  display: inline-block;
+  margin: 4px;
+}
+
+.miniatura-item img {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.miniatura-item:hover img {
+  opacity: 0.8;
+}
+
+/* Botão de lixeira sobre a miniatura */
+.botao-lixeira-miniatura {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  border: 2px solid white;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  transform: scale(0.8);
+}
+
+.miniatura-item:hover .botao-lixeira-miniatura {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.botao-lixeira-miniatura:hover {
+  background: rgba(200, 0, 0, 0.9);
+}
+
+/* ✅ Único componente: avatares + botão */
+.grupo-responsaveis-tarefa {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  position: relative;
+}
+
+.lista-avatares-responsaveis {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.avatar-responsavel {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid #e0e0e0;
+  background-color: #f5f5f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 12px;
+  color: #555;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.avatar-responsavel img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e0e0e0;
+}
+
+.btn-adicionar-responsavel {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid #ccc;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #555;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.btn-adicionar-responsavel:hover {
+  background-color: #f8f9fa;
+  border-color: #999;
+}
+
+.btn-adicionar-responsavel:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Input flutuante */
+.input-responsavel-flutuante {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 8px;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  width: 260px;
+}
+
+.input-responsavel-flutuante input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.input-responsavel-flutuante input:focus {
+  outline: none;
+  border-color: #4a90e2;
+}
+
+.sugestoes-responsaveis-lista {
+  margin-top: 6px;
+  max-height: 150px;
+  overflow-y: auto;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  background: white;
+}
+
+.sugestao-responsavel-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.sugestao-responsavel-item:hover {
+  background-color: #f0f8ff;
+}
+
+.sugestao-responsavel-item img,
+.avatar-placeholder-small {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+
+.avatar-placeholder-small {
+  background: #e0e0e0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: #555;
+}
+
+/* ✅ Wrapper de data — exatamente como estava */
+
+
+.data-entrega-label {
+  font-size: 13px;
+  color: #555;
+  margin-bottom: 4px;
+  font-weight: 500;
 }

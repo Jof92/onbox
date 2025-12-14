@@ -2,63 +2,44 @@
 import React, { useState, useEffect, useRef } from "react";
 import "./Task.css";
 import { FaTimes } from "react-icons/fa";
+import { MdPersonAddAlt1 } from "react-icons/md";
 import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
 import ComentariosSection from "./TaskComentarios";
+import TaskAnexos from "./TaskAnexos";
 
-// Componente de chip de responsável
-const ChipResponsavel = ({ responsavel, onRemove, disabled }) => {
-  const nomeExibicao = responsavel.nome_exibicao || "Usuário";
-  const isExterno = !responsavel.usuario_id;
-
-  return (
-    <span className={`chip-responsavel ${isExterno ? 'chip-externo' : ''}`}>
-      {nomeExibicao}
-      {!disabled && (
-        <span
-          onClick={(e) => {
-            e.stopPropagation();
-            onRemove(responsavel);
-          }}
-          className="chip-remove"
-        >
-          ×
-        </span>
-      )}
-    </span>
-  );
-};
-
-export default function Task({ onClose, projetoAtual, notaAtual, containerId }) {
+export default function Task({ onClose, projetoAtual, notaAtual, containerId: containerIdProp }) {
   const [descricao, setDescricao] = useState("");
   const [anexosSalvos, setAnexosSalvos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [meuNome, setMeuNome] = useState("Você");
-  const [dataEntregaTarefa, setDataEntregaTarefa] = useState(""); // ✅ Novo estado
-  const [imagemAmpliada, setImagemAmpliada] = useState(null); // ✅ Para modal de imagem
+  const [dataEntregaTarefa, setDataEntregaTarefa] = useState("");
+  const [imagemAmpliada, setImagemAmpliada] = useState(null);
+  const [containerIdValidado, setContainerIdValidado] = useState(null);
+  const [responsaveisTarefa, setResponsaveisTarefa] = useState([]);
+  const [showInputResponsaveis, setShowInputResponsaveis] = useState(false);
+  const [inputResponsavelTarefa, setInputResponsavelTarefa] = useState("");
+  const [sugestoesMembros, setSugestoesMembros] = useState([]);
   const modalRef = useRef(null);
+  const inputRef = useRef(null);
 
-  // Estados dos Objetivos
-  const [objetivos, setObjetivos] = useState([]);
-  const [showObjetivos, setShowObjetivos] = useState(false);
-  const [novoObjetivoTexto, setNovoObjetivoTexto] = useState("");
-  const [inputResponsavel, setInputResponsavel] = useState({});
-  const [sugestoesResponsavel, setSugestoesResponsavel] = useState({});
-
-  // Fechar modal ao clicar fora
+  // Fechar input ao clicar fora
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (onClose && modalRef.current && !modalRef.current.contains(e.target)) {
         onClose();
       }
+      if (showInputResponsaveis && inputRef.current && !inputRef.current.contains(e.target)) {
+        setShowInputResponsaveis(false);
+        setInputResponsavelTarefa("");
+        setSugestoesMembros([]);
+      }
     };
-    if (onClose) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [onClose]);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [onClose, showInputResponsaveis]);
 
   // Carregar usuário logado
   useEffect(() => {
@@ -79,6 +60,49 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     };
     fetchUser();
   }, []);
+
+  // Validar container_id e carregar responsáveis
+  useEffect(() => {
+    if (!notaAtual?.id) {
+      setContainerIdValidado(null);
+      setResponsaveisTarefa([]);
+      return;
+    }
+
+    const fetchContainerId = async () => {
+      const { data: nota, error } = await supabase
+        .from("notas")
+        .select("container_id")
+        .eq("id", notaAtual.id)
+        .single();
+
+      if (error || !nota?.container_id) {
+        console.error("Não foi possível obter container_id da nota", error);
+        setContainerIdValidado(null);
+        return;
+      }
+
+      setContainerIdValidado(nota.container_id);
+
+      const { data: responsaveis } = await supabase
+        .from("nota_responsaveis")
+        .select("usuario_id")
+        .eq("nota_id", notaAtual.id);
+
+      if (responsaveis?.length > 0) {
+        const userIds = responsaveis.map(r => r.usuario_id);
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, nome, nickname, avatar_url")
+          .in("id", userIds);
+        setResponsaveisTarefa(profiles || []);
+      } else {
+        setResponsaveisTarefa([]);
+      }
+    };
+
+    fetchContainerId();
+  }, [notaAtual?.id]);
 
   // Carregar dados da nota
   useEffect(() => {
@@ -119,9 +143,15 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     return () => { isMounted = false; };
   }, [notaAtual?.id]);
 
-  // Carregar objetivos ao abrir a nota
+  // Carregar objetivos
+  const [objetivos, setObjetivos] = useState([]);
+  const [showObjetivos, setShowObjetivos] = useState(false);
+  const [novoObjetivoTexto, setNovoObjetivoTexto] = useState("");
+  const [inputResponsavel, setInputResponsavel] = useState({});
+  const [sugestoesResponsavel, setSugestoesResponsavel] = useState({});
+
   useEffect(() => {
-    if (!notaAtual?.id) {
+    if (!notaAtual?.id || !containerIdValidado) {
       setObjetivos([]);
       setShowObjetivos(false);
       return;
@@ -180,12 +210,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
         }));
 
         setObjetivos(objetivosCompletos);
-
-        if (objetivosCompletos.length > 0) {
-          setShowObjetivos(true);
-        } else {
-          setShowObjetivos(false);
-        }
+        setShowObjetivos(objetivosCompletos.length > 0);
       } catch (err) {
         console.error("Erro ao carregar objetivos:", err);
         setObjetivos([]);
@@ -196,9 +221,8 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     };
 
     fetchObjetivos();
-  }, [notaAtual?.id]);
+  }, [notaAtual?.id, containerIdValidado]);
 
-  // ✅ Sincroniza visibilidade com conteúdo
   useEffect(() => {
     if (objetivos.length > 0) {
       setShowObjetivos(true);
@@ -207,7 +231,86 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     }
   }, [objetivos.length]);
 
-  // Salvar descrição
+  // Funções de responsáveis da tarefa
+  const handleInputResponsavelChange = (e) => {
+    const valor = e.target.value;
+    setInputResponsavelTarefa(valor);
+    if (valor.startsWith("@") && valor.length > 1 && containerIdValidado) {
+      const termo = valor.slice(1).toLowerCase();
+      supabase
+        .from("convites")
+        .select("user_id")
+        .eq("container_id", containerIdValidado)
+        .eq("status", "aceito")
+        .then(async ({ data: convites }) => {
+          const userIds = convites?.map(c => c.user_id).filter(Boolean) || [];
+          if (userIds.length === 0) {
+            setSugestoesMembros([]);
+            return;
+          }
+          const { data: profiles } = await supabase
+            .from("profiles")
+            .select("id, nome, nickname, avatar_url")
+            .in("id", userIds);
+          const sugestoes = profiles?.filter(p =>
+            (p.nickname?.toLowerCase().includes(termo)) ||
+            (p.nome?.toLowerCase().includes(termo))
+          ) || [];
+          setSugestoesMembros(sugestoes.slice(0, 5));
+        });
+    } else {
+      setSugestoesMembros([]);
+    }
+  };
+
+  const adicionarResponsavelTarefa = async (perfil) => {
+    if (responsaveisTarefa.some(r => r.id === perfil.id)) return;
+
+    const novoResponsavel = {
+      id: perfil.id,
+      nome: perfil.nome,
+      nickname: perfil.nickname,
+      avatar_url: perfil.avatar_url
+    };
+    setResponsaveisTarefa(prev => [...prev, novoResponsavel]);
+
+    try {
+      await supabase
+        .from("nota_responsaveis")
+        .insert({
+          nota_id: notaAtual.id,
+          usuario_id: perfil.id
+        });
+    } catch (err) {
+      console.error("Erro ao salvar responsável:", err);
+      setResponsaveisTarefa(prev => prev.filter(r => r.id !== perfil.id));
+    }
+
+    setInputResponsavelTarefa("");
+    setSugestoesMembros([]);
+  };
+
+  const removerResponsavelTarefa = async (usuarioId) => {
+    setResponsaveisTarefa(prev => prev.filter(r => r.id !== usuarioId));
+    try {
+      await supabase
+        .from("nota_responsaveis")
+        .delete()
+        .eq("nota_id", notaAtual.id)
+        .eq("usuario_id", usuarioId);
+    } catch (err) {
+      console.error("Erro ao remover responsável:", err);
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id, nome, nickname, avatar_url")
+        .eq("id", usuarioId)
+        .single();
+      if (profile) {
+        setResponsaveisTarefa(prev => [...prev, profile]);
+      }
+    }
+  };
+
   const handleSaveDescricao = async () => {
     if (!notaAtual?.id) return;
     setLoading(true);
@@ -224,7 +327,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     }
   };
 
-  // Salvar data de entrega da tarefa
   const handleSalvarDataEntregaTarefa = async (novaData) => {
     if (!notaAtual?.id) return;
     setLoading(true);
@@ -242,386 +344,10 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
     }
   };
 
-  // ✅ Função para adicionar imagens
-  const handleAddImagens = async (e) => {
-    const files = Array.from(e.target.files || []).filter(file => file.type.startsWith('image/'));
-    if (!notaAtual?.id || !userId || files.length === 0) return;
-
-    setLoading(true);
-    try {
-      for (const file of files) {
-        const sanitizeFileName = (name) => {
-          return name
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '')
-            .replace(/[^a-zA-Z0-9._-]/g, '_')
-            .replace(/_+/g, '_')
-            .trim()
-            .replace(/^_+|_+$/g, '');
-        };
-
-        const originalName = file.name;
-        const safeName = sanitizeFileName(originalName);
-        const fileName = `anexos/${notaAtual.id}_${Date.now()}_${safeName}`;
-        const { error: uploadError } = await supabase.storage.from("anexos").upload(fileName, file);
-        if (uploadError) throw uploadError;
-
-        const { data } = supabase.storage.from("anexos").getPublicUrl(fileName);
-        const fileUrl = data.publicUrl;
-
-        const { data: insertedAnexo } = await supabase
-          .from("anexos")
-          .insert({
-            nota_id: notaAtual.id,
-            user_id: userId,
-            file_name: originalName,
-            file_url: fileUrl,
-            mime_type: file.type || 'image/unknown',
-          })
-          .select()
-          .single();
-
-        setAnexosSalvos((prev) => [...prev, insertedAnexo]);
-      }
-    } catch (err) {
-      console.error("Erro ao enviar imagem:", err);
-      alert("Erro ao enviar uma ou mais imagens.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Adicionar anexos (não imagens)
-  const handleAddAnexos = async (e) => {
-    const files = Array.from(e.target.files || []).filter(file => !file.type.startsWith('image/'));
-    if (!notaAtual?.id || !userId || files.length === 0) return;
-
-    setLoading(true);
-    try {
-      for (const file of files) {
-        const sanitizeFileName = (name) => {
-          return name
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '')
-            .replace(/[^a-zA-Z0-9._-]/g, '_')
-            .replace(/_+/g, '_')
-            .trim()
-            .replace(/^_+|_+$/g, '');
-        };
-
-        const originalName = file.name;
-        const safeName = sanitizeFileName(originalName);
-        const fileName = `anexos/${notaAtual.id}_${Date.now()}_${safeName}`;
-        const { error: uploadError } = await supabase.storage.from("anexos").upload(fileName, file);
-        if (uploadError) throw uploadError;
-
-        const { data } = supabase.storage.from("anexos").getPublicUrl(fileName);
-        const fileUrl = data.publicUrl;
-
-        const { data: insertedAnexo } = await supabase
-          .from("anexos")
-          .insert({
-            nota_id: notaAtual.id,
-            user_id: userId,
-            file_name: originalName,
-            file_url: fileUrl,
-            mime_type: file.type || null,
-          })
-          .select()
-          .single();
-
-        setAnexosSalvos((prev) => [...prev, insertedAnexo]);
-      }
-    } catch (err) {
-      console.error("Erro ao enviar anexo:", err);
-      alert("Erro ao enviar um ou mais anexos.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Remover anexo (ou imagem)
-  const handleRemoverAnexo = async (anexoId, fileUrl) => {
-    if (!window.confirm("Deseja realmente excluir este anexo?")) return;
-    setLoading(true);
-    try {
-      const url = new URL(fileUrl);
-      const fileName = url.pathname.split("/").pop();
-      await supabase.storage.from("anexos").remove([fileName]);
-      await supabase.from("anexos").delete().eq("id", anexoId).eq("user_id", userId);
-      setAnexosSalvos((prev) => prev.filter((a) => a.id !== anexoId));
-    } catch (err) {
-      console.error("Erro ao excluir anexo:", err);
-      alert("Erro ao excluir anexo.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ============= Objetivos =============
-
-  const criarChecklistSeNecessario = async () => {
-    if (!notaAtual?.id) return null;
-
-    const { data: checklist, error: selectError } = await supabase
-      .from("checklists")
-      .select("id")
-      .eq("nota_id", notaAtual.id)
-      .single();
-
-    if (checklist) {
-      return checklist.id;
-    }
-
-    const { data: novo, error: insertError } = await supabase
-      .from("checklists")
-      .insert({ nota_id: notaAtual.id })
-      .select("id")
-      .single();
-
-    if (insertError || !novo) {
-      console.error("Erro ao criar checklist:", insertError);
-      return null;
-    }
-
-    return novo.id;
-  };
-
-  const adicionarObjetivo = async () => {
-    if (!novoObjetivoTexto.trim()) return;
-    setLoading(true);
-    try {
-      const checklistId = await criarChecklistSeNecessario();
-      if (!checklistId) {
-        alert("Não foi possível acessar o checklist da nota.");
-        return;
-      }
-
-      const { data: item, error } = await supabase
-        .from("checklist_items")
-        .insert({
-          checklist_id: checklistId,
-          description: novoObjetivoTexto.trim(),
-          is_completed: false,
-          data_entrega: null
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error("Erro do Supabase ao inserir objetivo:", error);
-        alert("Erro ao salvar objetivo: " + (error.message || "Verifique o console."));
-        return;
-      }
-
-      if (!item) {
-        console.error("Inserção bem-sucedida, mas nenhum dado retornado");
-        alert("Erro inesperado: objetivo não retornado.");
-        return;
-      }
-
-      setObjetivos(prev => [...prev, {
-        id: item.id,
-        texto: item.description,
-        concluido: item.is_completed,
-        dataEntrega: item.data_entrega,
-        responsaveis: [],
-        checklist_id: checklistId
-      }]);
-      setNovoObjetivoTexto("");
-    } catch (err) {
-      console.error("Erro inesperado na função adicionarObjetivo:", err);
-      alert("Erro inesperado ao adicionar objetivo.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const toggleConclusao = async (id, concluidoAtual) => {
-    const novoValor = !concluidoAtual;
-    setObjetivos(prev => prev.map(o => o.id === id ? { ...o, concluido: novoValor } : o));
-    try {
-      await supabase
-        .from("checklist_items")
-        .update({ is_completed: novoValor })
-        .eq("id", id);
-    } catch (err) {
-      console.error("Erro ao atualizar conclusão:", err);
-      setObjetivos(prev => prev.map(o => o.id === id ? { ...o, concluido: concluidoAtual } : o));
-    }
-  };
-
-  const atualizarDataEntrega = async (id, data) => {
-    setObjetivos(prev => prev.map(o => o.id === id ? { ...o, dataEntrega: data } : o));
-    try {
-      await supabase
-        .from("checklist_items")
-        .update({ data_entrega: data || null })
-        .eq("id", id);
-    } catch (err) {
-      console.error("Erro ao atualizar data de entrega:", err);
-    }
-  };
-
-  const removerObjetivo = async (id) => {
-    if (!window.confirm("Deseja realmente excluir este objetivo?")) return;
-    setObjetivos(prev => prev.filter(o => o.id !== id));
-    try {
-      await supabase
-        .from("checklist_items")
-        .delete()
-        .eq("id", id);
-    } catch (err) {
-      console.error("Erro ao excluir objetivo:", err);
-    }
-  };
-
-  // ============= Responsáveis =============
-
-  const handleResponsavelInputChange = (e, objetivoId) => {
-    const valor = e.target.value;
-    setInputResponsavel(prev => ({ ...prev, [objetivoId]: valor }));
-    if (valor.startsWith("@") && valor.length > 1 && containerId) {
-      const termo = valor.slice(1).toLowerCase();
-      supabase
-        .from("convites")
-        .select("user_id")
-        .eq("container_id", containerId)
-        .eq("status", "aceito")
-        .then(async ({ data: convites }) => {
-          const userIds = convites?.map(c => c.user_id).filter(Boolean) || [];
-          if (userIds.length === 0) {
-            setSugestoesResponsavel(prev => ({ ...prev, [objetivoId]: [] }));
-            return;
-          }
-          const { data: profiles } = await supabase
-            .from("profiles")
-            .select("id, nickname, nome")
-            .in("id", userIds);
-          const sugestoes = profiles?.filter(p =>
-            (p.nickname?.toLowerCase().includes(termo)) ||
-            (p.nome?.toLowerCase().includes(termo))
-          ) || [];
-          setSugestoesResponsavel(prev => ({ ...prev, [objetivoId]: sugestoes.slice(0, 10) }));
-        });
-    } else {
-      setSugestoesResponsavel(prev => ({ ...prev, [objetivoId]: [] }));
-    }
-  };
-
-  const adicionarResponsavelExterno = async (nome, objetivoId) => {
-    if (!nome.trim()) return;
-    const item = objetivos.find(o => o.id === objetivoId);
-    if (!item || item.concluido) return;
-    if (item.responsaveis.some(r => r.nome_externo === nome && !r.usuario_id)) return;
-
-    try {
-      const { data } = await supabase
-        .from("checklist_responsaveis")
-        .insert({
-          checklist_item_id: objetivoId,
-          nome_externo: nome.trim(),
-          usuario_id: null
-        })
-        .select()
-        .single();
-
-      if (!data) return;
-
-      setObjetivos(prev =>
-        prev.map(o =>
-          o.id === objetivoId
-            ? {
-                ...o,
-                responsaveis: [
-                  ...o.responsaveis,
-                  {
-                    id: data.id,
-                    nome_externo: nome.trim(),
-                    nome_exibicao: nome.trim(),
-                    usuario_id: null
-                  }
-                ]
-              }
-            : o
-        )
-      );
-      setInputResponsavel(prev => ({ ...prev, [objetivoId]: "" }));
-    } catch (err) {
-      console.error("Erro ao adicionar responsável externo:", err);
-    }
-  };
-
-  const adicionarResponsavelInterno = async (perfil, objetivoId) => {
-    const item = objetivos.find(o => o.id === objetivoId);
-    if (!item || item.concluido) return;
-    if (item.responsaveis.some(r => r.usuario_id === perfil.id)) return;
-
-    try {
-      const { data } = await supabase
-        .from("checklist_responsaveis")
-        .insert({
-          checklist_item_id: objetivoId,
-          usuario_id: perfil.id,
-          nome_externo: null
-        })
-        .select()
-        .single();
-
-      if (!data) return;
-
-      setObjetivos(prev =>
-        prev.map(o =>
-          o.id === objetivoId
-            ? {
-                ...o,
-                responsaveis: [
-                  ...o.responsaveis,
-                  {
-                    id: data.id,
-                    usuario_id: perfil.id,
-                    nome_exibicao: perfil.nome || perfil.nickname || "Usuário",
-                    nome: perfil.nome,
-                    nickname: perfil.nickname
-                  }
-                ]
-              }
-            : o
-        )
-      );
-      setInputResponsavel(prev => ({ ...prev, [objetivoId]: "" }));
-      setSugestoesResponsavel(prev => ({ ...prev, [objetivoId]: [] }));
-    } catch (err) {
-      console.error("Erro ao adicionar responsável interno:", err);
-    }
-  };
-
-  const removerResponsavel = async (responsavelId, objetivoId) => {
-    setObjetivos(prev =>
-      prev.map(o =>
-        o.id === objetivoId
-          ? { ...o, responsaveis: o.responsaveis.filter(r => r.id !== responsavelId) }
-          : o
-      )
-    );
-    try {
-      await supabase
-        .from("checklist_responsaveis")
-        .delete()
-        .eq("id", responsavelId);
-    } catch (err) {
-      console.error("Erro ao remover responsável:", err);
-    }
-  };
-
-  // ============= Utilitários =============
   const getNomeProjeto = () => projetoAtual?.nome || projetoAtual?.name || "Sem projeto";
   const getNomeNota = () => notaAtual?.nome || notaAtual?.name || "Sem nota";
-  const progressoPercent = objetivos.length
-    ? Math.round((objetivos.filter(o => o.concluido).length / objetivos.length) * 100)
-    : 0;
 
-  if (loading) {
+  if (loading || (notaAtual?.id && containerIdValidado === null)) {
     return (
       <div className="task-modal" ref={modalRef}>
         <div className="task-loading-container">
@@ -641,11 +367,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
           </div>
         </div>
         {onClose && (
-          <button
-            className="listagem-close-btn"
-            onClick={onClose}
-            aria-label="Fechar"
-          >
+          <button className="listagem-close-btn" onClick={onClose} aria-label="Fechar">
             <FaTimes />
           </button>
         )}
@@ -653,6 +375,72 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
 
       <div className="task-title-container">
         <h2 className="task-title">{getNomeNota()}</h2>
+
+        {/* ✅ ÚNICO COMPONENTE: avatares + botão */}
+        <div className="grupo-responsaveis-tarefa">
+          <div className="lista-avatares-responsaveis">
+            {responsaveisTarefa.map(resp => (
+              <div
+                key={resp.id}
+                className="avatar-responsavel"
+                title={resp.nickname || resp.nome}
+                onClick={() => removerResponsavelTarefa(resp.id)}
+              >
+                {resp.avatar_url ? (
+                  <img src={resp.avatar_url} alt={resp.nickname || resp.nome} />
+                ) : (
+                  <div className="avatar-placeholder">
+                    {(resp.nickname || resp.nome || '?').charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="btn-adicionar-responsavel"
+            onClick={() => setShowInputResponsaveis(!showInputResponsaveis)}
+            disabled={loading || !containerIdValidado}
+            title="Adicionar responsáveis"
+          >
+            <MdPersonAddAlt1 />
+          </button>
+
+          {/* Input flutuante de menção */}
+          {showInputResponsaveis && (
+            <div ref={inputRef} className="input-responsavel-flutuante">
+              <input
+                type="text"
+                value={inputResponsavelTarefa}
+                onChange={handleInputResponsavelChange}
+                placeholder="Digite @ para mencionar membros"
+                autoFocus
+              />
+              {sugestoesMembros.length > 0 && (
+                <div className="sugestoes-responsaveis-lista">
+                  {sugestoesMembros.map(perfil => (
+                    <div
+                      key={perfil.id}
+                      onClick={() => adicionarResponsavelTarefa(perfil)}
+                      className="sugestao-responsavel-item"
+                    >
+                      {perfil.avatar_url ? (
+                        <img src={perfil.avatar_url} alt={perfil.nickname || perfil.nome} />
+                      ) : (
+                        <div className="avatar-placeholder-small">
+                          {(perfil.nickname || perfil.nome || '?').charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <span>{perfil.nickname || perfil.nome}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ✅ Wrapper de data — intacto, como sempre esteve */}
         <div className="data-entrega-wrapper">
           <label className="data-entrega-label">Data de entrega</label>
           <input
@@ -679,259 +467,87 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId }) 
           onBlur={handleSaveDescricao}
           placeholder="Clique aqui para adicionar uma descrição..."
           rows={3}
-          style={{
-            minHeight: "3.25em",
-            height: "8em",
-            resize: "none",
-          }}
+          style={{ minHeight: "3.25em", height: "8em", resize: "none" }}
           disabled={loading}
         />
       </div>
 
-      {/* ✅ Seção de Anexos e Imagens */}
-      <div
-        className="anexos-section"
-        onDragOver={(e) => e.preventDefault()}
-        onDragEnter={(e) => {
-          e.preventDefault();
-          e.currentTarget.classList.add('drag-over');
-        }}
-        onDragLeave={(e) => {
-          e.preventDefault();
-          e.currentTarget.classList.remove('drag-over');
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          e.currentTarget.classList.remove('drag-over');
-          const files = Array.from(e.dataTransfer.files || []);
-          if (files.length > 0) {
-            const images = files.filter(file => file.type.startsWith('image/'));
-            const others = files.filter(file => !file.type.startsWith('image/'));
-            if (images.length > 0) {
-              const fakeEvent = { target: { files: images } };
-              handleAddImagens(fakeEvent);
-            }
-            if (others.length > 0) {
-              const fakeEvent = { target: { files: others } };
-              handleAddAnexos(fakeEvent);
-            }
-          }
-        }}
-      >
-        <div className="anexos-header">
-          <div className="anexos-botoes">
-            <label htmlFor="fileInputAnexo" className="upload-btn checklist-btn">
-              <span>Anexo</span>
-            </label>
-            <input
-              type="file"
-              id="fileInputAnexo"
-              hidden
-              multiple
-              onChange={handleAddAnexos}
-              disabled={loading}
-            />
-
-            {/* ✅ NOVO BOTÃO: Imagens */}
-            <label htmlFor="fileInputImagem" className="upload-btn checklist-btn">
-              <span>Imagens</span>
-            </label>
-            <input
-              type="file"
-              id="fileInputImagem"
-              hidden
-              multiple
-              accept="image/*"
-              onChange={handleAddImagens}
-              disabled={loading}
-            />
-
-            <button
-              type="button"
-              className="upload-btn checklist-btn"
-              onClick={() => setShowObjetivos(!showObjetivos)}
-              disabled={loading}
-              title="Gerenciar objetivos"
-            >
-              <span>{showObjetivos ? "Ocultar" : "Ver"} Objetivos</span>
-            </button>
-          </div>
-        </div>
-
-        {/* ✅ Miniaturas de imagens */}
-        <div className="imagens-miniaturas">
-          {anexosSalvos
-            .filter(anexo => anexo.mime_type?.startsWith('image/'))
-            .map((anexo) => (
-              <div key={`img-${anexo.id}`} className="miniatura-item">
-                <img
-                  src={anexo.file_url}
-                  alt={anexo.file_name}
-                  onClick={() => setImagemAmpliada(anexo.file_url)}
-                  loading="lazy"
-                />
-              </div>
-            ))}
-        </div>
-
-        {/* Lista de anexos não-imagem */}
-        <div className="anexos-lista">
-          {anexosSalvos
-            .filter(anexo => !anexo.mime_type?.startsWith('image/'))
-            .map((anexo) => (
-              <div key={anexo.id} className="anexo-item">
-                <a href={anexo.file_url} target="_blank" rel="noopener noreferrer">
-                  {anexo.file_name}
-                </a>
-                <button
-                  type="button"
-                  title="Remover"
-                  onClick={() => handleRemoverAnexo(anexo.id, anexo.file_url)}
-                  aria-label="Remover anexo"
-                  disabled={loading}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-        </div>
-
-        <div className="drag-hint">
-          Arraste arquivos aqui para anexar (imagens ou documentos)
-        </div>
-      </div>
-
-      {/* Seção de Objetivos */}
-      {showObjetivos && (
-        <div className="objetivos-section">
-          <div className="progress-container">
-            <div className="progress-bar" style={{ width: `${progressoPercent}%` }}></div>
-            <span className="progress-percent">{progressoPercent}%</span>
-          </div>
-
-          <div className="objetivos-add-form">
-            <input
-              type="text"
-              value={novoObjetivoTexto}
-              onChange={(e) => setNovoObjetivoTexto(e.target.value)}
-              placeholder="Digite um novo objetivo..."
-              onKeyDown={(e) => e.key === "Enter" && adicionarObjetivo()}
-              disabled={loading}
-            />
-            <button
-              type="button"
-              className="objetivos-add-btn"
-              onClick={adicionarObjetivo}
-              disabled={!novoObjetivoTexto.trim() || loading}
-            >
-              Adicionar
-            </button>
-          </div>
-
-          <div className="objetivos-lista">
-            {objetivos.map((o, idx) => (
-              <div
-                key={o.id}
-                className={`objetivo-item1 ${o.concluido ? 'objetivo-concluido' : ''}`}
-              >
-                <input
-                  type="checkbox"
-                  checked={o.concluido}
-                  onChange={() => toggleConclusao(o.id, o.concluido)}
-                  disabled={loading}
-                />
-                <span>
-                  <strong>{idx + 1}.</strong> {o.texto}
-                </span>
-
-                <div className="objetivo-responsaveis">
-                  {o.responsaveis.map(resp => (
-                    <ChipResponsavel
-                      key={resp.id}
-                      responsavel={resp}
-                      onRemove={(r) => removerResponsavel(r.id, o.id)}
-                      disabled={o.concluido}
-                    />
-                  ))}
-                  {!o.concluido && (
-                    <input
-                      type="text"
-                      placeholder={o.responsaveis.length === 0 ? "Nome ou @" : ""}
-                      value={inputResponsavel[o.id] || ""}
-                      onChange={(e) => handleResponsavelInputChange(e, o.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !inputResponsavel[o.id]?.startsWith("@")) {
-                          adicionarResponsavelExterno(inputResponsavel[o.id], o.id);
-                          setInputResponsavel(prev => ({ ...prev, [o.id]: "" }));
-                        }
-                      }}
-                      disabled={loading}
-                    />
-                  )}
-                  {sugestoesResponsavel[o.id]?.length > 0 && !o.concluido && (
-                    <div className="sugestoes-list">
-                      {sugestoesResponsavel[o.id].map(item => (
-                        <div
-                          key={item.id}
-                          className="sugestao-item"
-                          onClick={() => adicionarResponsavelInterno(item, o.id)}
-                        >
-                          @{item.nickname || item.nome}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="objetivo-acao">
-                  <input
-                    type="date"
-                    value={o.dataEntrega || ""}
-                    onChange={(e) => atualizarDataEntrega(o.id, e.target.value || null)}
-                    disabled={o.concluido || loading}
-                  />
-                  {!o.concluido && (
-                    <span
-                      className="objetivo-excluir"
-                      onClick={() => removerObjetivo(o.id)}
-                    >
-                      ×
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+      {containerIdValidado && (
+        <TaskAnexos
+          notaAtual={notaAtual}
+          userId={userId}
+          loading={loading}
+          anexosSalvos={anexosSalvos}
+          setAnexosSalvos={setAnexosSalvos}
+          objetivos={objetivos}
+          setObjetivos={setObjetivos}
+          showObjetivos={showObjetivos}
+          setShowObjetivos={setShowObjetivos}
+          novoObjetivoTexto={novoObjetivoTexto}
+          setNovoObjetivoTexto={setNovoObjetivoTexto}
+          inputResponsavel={inputResponsavel}
+          setInputResponsavel={setInputResponsavel}
+          sugestoesResponsavel={sugestoesResponsavel}
+          setSugestoesResponsavel={setSugestoesResponsavel}
+          containerId={containerIdValidado}
+          setImagemAmpliada={setImagemAmpliada}
+        />
       )}
 
-      {/* Seção de Comentários */}
-      {notaAtual?.id && userId && userProfile && (
+      {notaAtual?.id && userId && userProfile && containerIdValidado && (
         <ComentariosSection
           notaId={notaAtual.id}
           userId={userId}
           userProfile={userProfile}
           projetoAtual={projetoAtual}
-          containerId={containerId}
+          containerId={containerIdValidado}
           supabaseClient={supabase}
         />
       )}
 
-      {/* ✅ Modal de Imagem Ampliada */}
       {imagemAmpliada && (
         <div
           className="imagem-ampliada-modal"
           onClick={() => setImagemAmpliada(null)}
+          onKeyDown={(e) => e.key === 'Escape' && setImagemAmpliada(null)}
+          tabIndex={-1}
         >
-          <div className="imagem-ampliada-conteudo" onClick={(e) => e.stopPropagation()}>
-            <img src={imagemAmpliada} alt="Visualização ampliada" />
-            <button
-              className="imagem-ampliada-fechar"
-              onClick={() => setImagemAmpliada(null)}
-              aria-label="Fechar imagem"
-            >
-              <FaTimes />
-            </button>
+          <button className="imagem-ampliada-fechar" onClick={() => setImagemAmpliada(null)} aria-label="Fechar imagem">
+            <FaTimes />
+          </button>
+
+          {imagemAmpliada.imagens.length > 1 && (
+            <>
+              <button
+                className="seta-navegacao esquerda"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const novoIndex = (imagemAmpliada.index - 1 + imagemAmpliada.imagens.length) % imagemAmpliada.imagens.length;
+                  setImagemAmpliada({ ...imagemAmpliada, index: novoIndex });
+                }}
+                aria-label="Imagem anterior"
+              >
+                ‹
+              </button>
+              <button
+                className="seta-navegacao direita"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const novoIndex = (imagemAmpliada.index + 1) % imagemAmpliada.imagens.length;
+                  setImagemAmpliada({ ...imagemAmpliada, index: novoIndex });
+                }}
+                aria-label="Próxima imagem"
+              >
+                ›
+              </button>
+            </>
+          )}
+
+          <div className="imagem-ampliada-wrapper">
+            <img
+              src={imagemAmpliada.imagens[imagemAmpliada.index]?.file_url}
+              alt={imagemAmpliada.imagens[imagemAmpliada.index]?.file_name || "Imagem"}
+            />
           </div>
         </div>
       )}

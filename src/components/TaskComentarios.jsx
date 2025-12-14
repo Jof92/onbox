@@ -232,6 +232,25 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
   const textareaRef = useRef(null);
   const respostaTextareaRef = useRef(null);
 
+  // ✅ Carregar container_id da nota (para garantir que usamos o correto)
+  const [containerIdDaNota, setContainerIdDaNota] = useState(containerId);
+
+  // ✅ Buscar container_id da nota (caso não tenha sido passado corretamente)
+  useEffect(() => {
+    if (!notaId) return;
+    const fetchNotaContainer = async () => {
+      const { data, error } = await supabaseClient
+        .from("notas")
+        .select("container_id")
+        .eq("id", notaId)
+        .single();
+      if (!error && data?.container_id) {
+        setContainerIdDaNota(data.container_id);
+      }
+    };
+    fetchNotaContainer();
+  }, [notaId, supabaseClient]);
+
   const formatarDataComentario = (dateString) => {
     const date = new Date(dateString);
     const hoje = new Date();
@@ -260,12 +279,11 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
     const fetchComentarios = async () => {
       setLoading(true);
       try {
-        // ✅ Mudança principal: ordem DESC (mais novo primeiro)
         const { data: comentariosData } = await supabaseClient
           .from("comentarios")
           .select("id, conteudo, created_at, user_id, agendado_por, respondendo_a")
           .eq("nota_id", notaId)
-          .order("created_at", { ascending: false }); // ⬅️ inversão aqui
+          .order("created_at", { ascending: false });
 
         if (comentariosData?.length > 0) {
           const userIds = [...new Set(comentariosData.map((c) => c.user_id))];
@@ -300,6 +318,7 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
     return () => { isMounted = false; };
   }, [notaId, userId, userProfile, supabaseClient]);
 
+  // ✅ Nova lógica: carregar sugestões APENAS dos membros do container atual
   const handleComentarioChange = (e) => {
     const valor = e.target.value;
     setComentario(valor);
@@ -307,17 +326,43 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
     const textoAteCursor = valor.slice(0, cursor);
     const match = textoAteCursor.match(/@([\p{L}\p{N}_-]*)$/u);
 
-    if (match?.[1]) {
+    if (match?.[1] && containerIdDaNota) {
       const termo = match[1];
       if (termo.length >= 1) {
+        // ✅ Buscar membros ACEITOS do container via convites
         supabaseClient
-          .from("profiles")
-          .select("id, nome, nickname, avatar_url")
-          .ilike("nickname", `%${termo}%`)
-          .limit(5)
-          .then(({ data }) => setSugestoesMencoes(data || []));
-      } else setSugestoesMencoes([]);
-    } else setSugestoesMencoes([]);
+          .from("convites")
+          .select("user_id")
+          .eq("container_id", containerIdDaNota)
+          .eq("status", "aceito")
+          .then(({ data: convitesAceitos, error }) => {
+            if (error) {
+              console.error("Erro ao buscar convites:", error);
+              setSugestoesMencoes([]);
+              return;
+            }
+            const userIdsDoContainer = convitesAceitos.map(c => c.user_id);
+            if (userIdsDoContainer.length === 0) {
+              setSugestoesMencoes([]);
+              return;
+            }
+            supabaseClient
+              .from("profiles")
+              .select("id, nome, nickname, avatar_url")
+              .in("id", userIdsDoContainer)
+              .ilike("nickname", `%${termo}%`)
+              .or(`nome.ilike.%${termo}%`)
+              .limit(5)
+              .then(({ data }) => {
+                setSugestoesMencoes(data || []);
+              });
+          });
+      } else {
+        setSugestoesMencoes([]);
+      }
+    } else {
+      setSugestoesMencoes([]);
+    }
   };
 
   const inserirMencoes = (usuario) => {
@@ -397,7 +442,7 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
         ehResposta: true,
       };
 
-      setComentarios(prev => [novoComentarioLocal, ...prev]); // ⬅️ novo comentário no topo
+      setComentarios(prev => [novoComentarioLocal, ...prev]);
 
       const mencionados = novoComentario.conteudo.match(/@(\S+)/g);
       if (mencionados?.length > 0) {
@@ -478,7 +523,7 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
         ehResposta: false,
       };
 
-      setComentarios(prev => [novoComentarioLocal, ...prev]); // ⬅️ novo comentário no topo
+      setComentarios(prev => [novoComentarioLocal, ...prev]);
       setComentario("");
       setSugestoesMencoes([]);
     } catch (err) {
@@ -575,34 +620,30 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
     }
   };
 
-  // ✅ Agrupar mantendo respostas sob seus pais — mesmo com ordem invertida
-    const agruparComentarios = () => {
-      const todos = [...comentarios];
-      const principais = todos.filter(c => !c.ehResposta);
-      const respostas = todos.filter(c => c.ehResposta);
+  const agruparComentarios = () => {
+    const todos = [...comentarios];
+    const principais = todos.filter(c => !c.ehResposta);
+    const respostas = todos.filter(c => c.ehResposta);
 
-      // Agrupar respostas por comentário pai
-      const mapaRespostas = {};
-      respostas.forEach(r => {
-        if (!mapaRespostas[r.respondendo_a]) {
-          mapaRespostas[r.respondendo_a] = [];
-        }
-        mapaRespostas[r.respondendo_a].push(r);
-      });
+    const mapaRespostas = {};
+    respostas.forEach(r => {
+      if (!mapaRespostas[r.respondendo_a]) {
+        mapaRespostas[r.respondendo_a] = [];
+      }
+      mapaRespostas[r.respondendo_a].push(r);
+    });
 
-      // ✅ Ordenar as respostas de cada pai por created_at ASC (mais antiga primeiro)
-      Object.keys(mapaRespostas).forEach(paiId => {
-        mapaRespostas[paiId].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-      });
+    Object.keys(mapaRespostas).forEach(paiId => {
+      mapaRespostas[paiId].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    });
 
-      // Montar resultado com pais (em ordem decrescente) + suas respostas (em ordem crescente)
-      const resultado = [];
-      principais.forEach(pai => {
-        resultado.push({ ...pai, respostasFilhas: mapaRespostas[pai.id] || [] });
-      });
+    const resultado = [];
+    principais.forEach(pai => {
+      resultado.push({ ...pai, respostasFilhas: mapaRespostas[pai.id] || [] });
+    });
 
-      return resultado;
-    };
+    return resultado;
+  };
 
   const perfilesPorId = {};
   comentarios.forEach(c => {
@@ -782,7 +823,7 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
                     </div>
                   ) : (
                     <div className="comentario-texto">
-                      {renderMencoes(pai.conteudo, perfilesPorId, projetoAtual, containerId, supabaseClient)}
+                      {renderMencoes(pai.conteudo, perfilesPorId, projetoAtual, containerIdDaNota, supabaseClient)}
                     </div>
                   )}
 
@@ -797,7 +838,6 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
                     </div>
                   )}
 
-                  {/* Campo de resposta (2 linhas, abaixo do comentário pai) */}
                   {pai.respostaAtiva && (
                     <div style={{ marginTop: "12px", marginLeft: "40px", width: "calc(100% - 40px)" }}>
                       <textarea
@@ -843,7 +883,6 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
                 </div>
               </div>
 
-              {/* Respostas já enviadas (ficam abaixo do pai) */}
               {pai.respostasFilhas.map((resposta) => {
                 const respProfile = resposta.profiles || { nome: "Usuário", nickname: null, avatar_url: null };
                 const respNome = respProfile.nickname || respProfile.nome;
@@ -871,7 +910,7 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
                         <span style={{ fontSize: "0.9em", color: "#888" }}>{resposta.formattedDate}</span>
                       </div>
                       <div className="comentario-texto">
-                        {renderMencoes(resposta.conteudo, perfilesPorId, projetoAtual, containerId, supabaseClient)}
+                        {renderMencoes(resposta.conteudo, perfilesPorId, projetoAtual, containerIdDaNota, supabaseClient)}
                       </div>
                     </div>
                   </div>

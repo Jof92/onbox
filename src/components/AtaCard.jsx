@@ -480,7 +480,7 @@ export default function AtaCard({
             }}
           />
           {sugestoesParticipantes.length > 0 && (
-            <div className="sugestoes-list">
+            <div className="sugestoes-list1">
               {sugestoesParticipantes.map(item => (
                 <div key={item.id} className="sugestao-item" onClick={() => selecionarSugestao(item)}>
                   <span>@{item.nickname || item.nome}</span>

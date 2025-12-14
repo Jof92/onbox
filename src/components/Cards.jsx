@@ -1,6 +1,6 @@
 // src/components/Cards.jsx
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import "./Cards.css";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import { FaPlus, FaArrowLeft, FaEllipsisV, FaEdit, FaTrash, FaTimes } from "react-icons/fa";
@@ -12,6 +12,7 @@ import ListagemEspelho from "./ListagemEspelho";
 export default function Cards() {
   const location = useLocation();
   const navigate = useNavigate();
+  const params = useParams();
 
   const [entity, setEntity] = useState(null);
   const [columns, setColumns] = useState([]);
@@ -36,11 +37,7 @@ export default function Cards() {
   const [isNotaRecebidos, setIsNotaRecebidos] = useState(false);
 
   const [showColorPicker, setShowColorPicker] = useState({});
-
-  // Estado para controlar notas concluídas
   const [notasConcluidas, setNotasConcluidas] = useState(new Set());
-
-  // ✅ Novo estado para controlar edição de data de conclusão
   const [dataConclusaoEdit, setDataConclusaoEdit] = useState({});
   const [dataConclusaoSalva, setDataConclusaoSalva] = useState({});
 
@@ -68,6 +65,13 @@ export default function Cards() {
 
   useEffect(() => {
     const loadInitialData = async () => {
+      // ✅ Tenta recuperar dados da URL primeiro
+      const urlParams = new URLSearchParams(location.search);
+      const entityIdFromUrl = urlParams.get('entityId');
+      const entityTypeFromUrl = urlParams.get('type');
+      const containerIdFromUrl = urlParams.get('containerId');
+
+      // Tenta pegar do location.state
       const {
         projectId,
         setorId,
@@ -79,13 +83,26 @@ export default function Cards() {
         containerId: containerIdFromState,
       } = location.state || {};
 
-      const entityId = projectId || setorId;
-      const entityName = projectName || setorName || "Entidade";
-      const entityPhoto = projectPhoto || setorPhoto;
-      const type = typeFromState || (projectId ? "project" : "setor");
+      // ✅ Prioriza URL params (para reload), depois location.state
+      const entityId = entityIdFromUrl || projectId || setorId;
+      const type = entityTypeFromUrl || typeFromState || (projectId ? "project" : "setor");
+      const containerId = containerIdFromUrl || containerIdFromState;
 
-      if (containerIdFromState) setDonoContainerId(containerIdFromState);
-      if (!entityId) return navigate("/containers", { replace: true });
+      if (containerId) setDonoContainerId(containerId);
+      
+      if (!entityId) {
+        return navigate("/containers", { replace: true });
+      }
+
+      // ✅ Atualiza URL com os parâmetros necessários (sem substituir a nota se existir)
+      const currentNotaParam = urlParams.get('nota');
+      const newUrl = new URLSearchParams();
+      newUrl.set('entityId', entityId);
+      newUrl.set('type', type);
+      if (containerId) newUrl.set('containerId', containerId);
+      if (currentNotaParam) newUrl.set('nota', currentNotaParam);
+      
+      navigate(`${location.pathname}?${newUrl.toString()}`, { replace: true });
 
       setEntityType(type);
       setLoading(true);
@@ -115,7 +132,10 @@ export default function Cards() {
 
         if (!entityData) return navigate("/containers", { replace: true });
 
-        // ✅ Incluímos os campos 'enviada' e 'respondida'
+        // ✅ Busca as informações da entidade
+        const entityName = projectName || setorName || entityData.name;
+        const entityPhoto = projectPhoto || setorPhoto || entityData.photo_url;
+
         const { data: pilhas } = await supabase
           .from("pilhas")
           .select(`
@@ -164,7 +184,12 @@ export default function Cards() {
           }))
         );
 
-        setEntity({ id: entityId, name: entityName, photo_url: entityPhoto, type });
+        setEntity({ 
+          id: entityId, 
+          name: entityName, 
+          photo_url: entityPhoto, 
+          type 
+        });
       } catch (err) {
         console.error("Erro ao carregar dados:", err);
         navigate("/containers", { replace: true });
@@ -174,7 +199,7 @@ export default function Cards() {
     };
 
     loadInitialData();
-  }, [location.state, navigate]);
+  }, [location.pathname]); // ✅ Remove location.state da dependência
 
   useEffect(() => {
     const urlParams = new URLSearchParams(location.search);
@@ -199,17 +224,19 @@ export default function Cards() {
           setProjetoOrigem(null);
           setNotaOrigem(null);
         }
-        updateUrlWithNota(notaId);
-      } else {
-        navigate(location.pathname, { replace: true });
+      } else if (notaSelecionada) {
+        // Nota não encontrada mas havia uma selecionada antes
+        const newUrl = new URLSearchParams(location.search);
+        newUrl.delete('nota');
+        navigate(`${location.pathname}?${newUrl.toString()}`, { replace: true });
       }
-    } else {
+    } else if (notaSelecionada && !notaId) {
       setNotaSelecionada(null);
       setIsNotaRecebidos(false);
       setProjetoOrigem(null);
       setNotaOrigem(null);
     }
-  }, [columns, location.search, navigate]);
+  }, [columns, location.search]);
 
   const loadOrigemData = async (notaEspelhoId) => {
     try {
@@ -323,8 +350,6 @@ export default function Cards() {
 
     setupClickHandlers();
   }, [showColorPicker]);
-
-  // === Funções principais ===
 
   const handleAddColumn = async () => {
     if (!entity) return;
@@ -485,7 +510,6 @@ export default function Cards() {
     }
   };
 
-  // ✅ Função para salvar data de conclusão
   const saveDataConclusao = async (notaId, data) => {
     const { error } = await supabase
       .from("notas")
@@ -504,7 +528,6 @@ export default function Cards() {
     }
   };
 
-  // ✅ Clique fora do campo de data
   useEffect(() => {
     const handleClickOutsideDate = (e) => {
       Object.keys(dataConclusaoEdit).forEach((id) => {

@@ -1,6 +1,5 @@
-// src/pages/Containers.jsx
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
 import ThinSidebar from "../components/ThinSidebar";
@@ -8,9 +7,9 @@ import Sidebar from "../components/Sidebar";
 import ProjectManager from "./ProjectManager";
 import "./Containers.css";
 
-export default function Containers({ currentContainerId: containerIdDaUrl }) {
+export default function Containers({ containerIdDaUrl }) {
   const navigate = useNavigate();
-
+  
   const [user, setUser] = useState(null);
   const [containerAtual, setContainerAtual] = useState(null);
   const [nomeContainer, setNomeContainer] = useState("");
@@ -26,7 +25,7 @@ export default function Containers({ currentContainerId: containerIdDaUrl }) {
     currentUserId: null,
     containerOwnerId: null,
     gerenteContainerId: null,
-    currentContainerId: null, // ✅ ADICIONADO
+    currentContainerId: null,
   });
 
   // Carrega usuário logado
@@ -43,12 +42,10 @@ export default function Containers({ currentContainerId: containerIdDaUrl }) {
     loadUser();
   }, [navigate]);
 
-  // Define containerAtual com base no containerIdDaUrl ou user.id
+  // Define containerAtual com base no containerIdDaUrl, localStorage ou user.id
   useEffect(() => {
-    if (user) {
-      const idParaUsar = containerIdDaUrl || user.id;
-      setContainerAtual(idParaUsar);
-    }
+    const idParaUsar = containerIdDaUrl || localStorage.getItem("containerAtual") || user?.id;
+    setContainerAtual(idParaUsar);
   }, [user, containerIdDaUrl]);
 
   // Busca nome do dono do container
@@ -82,9 +79,10 @@ export default function Containers({ currentContainerId: containerIdDaUrl }) {
     fetchNomeDono();
   }, [containerAtual]);
 
-  // Atualiza containerAtual no sidebarProps sempre que mudar
+  // Atualiza containerAtual no localStorage e na sidebarProps sempre que mudar
   useEffect(() => {
     if (containerAtual) {
+      localStorage.setItem("containerAtual", containerAtual); // Salva o container atual no localStorage
       setSidebarProps(prev => ({
         ...prev,
         currentContainerId: containerAtual,
@@ -103,7 +101,6 @@ export default function Containers({ currentContainerId: containerIdDaUrl }) {
           user={user}
         />
 
-        {/* ✅ Passa currentContainerId para Sidebar */}
         <Sidebar {...sidebarProps} currentContainerId={containerAtual} />
 
         <div className="containers-main-with-title">
@@ -111,7 +108,6 @@ export default function Containers({ currentContainerId: containerIdDaUrl }) {
             Container {nomeContainer ? `- ${nomeContainer}` : ""}
           </h1>
 
-          {/* ✅ Passa containerAtual para ProjectManager, que deve repassar para Agenda */}
           <ProjectManager
             containerAtual={containerAtual}
             user={user}
