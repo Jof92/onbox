@@ -49,11 +49,11 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId: co
         setUserId(user.id);
         const { data: profile } = await supabase
           .from("profiles")
-          .select("nome, nickname, avatar_url")
+          .select("nome, nickname, avatar_url, container") // ✅ incluir "container"
           .eq("id", user.id)
           .single();
 
-        const safeProfile = profile || { nome: "Você", nickname: "usuario", avatar_url: null };
+        const safeProfile = profile || { nome: "Você", nickname: "usuario", avatar_url: null, container: "" };
         setUserProfile(safeProfile);
         setMeuNome(safeProfile.nome || "Você");
       }
@@ -263,6 +263,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId: co
     }
   };
 
+  // ✅ Função atualizada: envia notificação ao adicionar responsável
   const adicionarResponsavelTarefa = async (perfil) => {
     if (responsaveisTarefa.some(r => r.id === perfil.id)) return;
 
@@ -275,15 +276,54 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId: co
     setResponsaveisTarefa(prev => [...prev, novoResponsavel]);
 
     try {
-      await supabase
+      // 1. Adicionar na tabela nota_responsaveis
+      const { error: insertError } = await supabase
         .from("nota_responsaveis")
         .insert({
           nota_id: notaAtual.id,
           usuario_id: perfil.id
         });
+
+      if (insertError) {
+        throw new Error(`Erro ao vincular responsável: ${insertError.message}`);
+      }
+
+      // 2. Obter nome do container (vem do perfil do usuário logado)
+      const nomeContainer = userProfile?.container || "";
+
+      // 3. Montar a mensagem
+      const nomeTarefa = getNomeNota();
+      const nomeProjeto = getNomeProjeto();
+      const mensagem = nomeContainer
+        ? `Você foi adicionado a tarefa "${nomeTarefa}" do projeto "${nomeProjeto}" da container "${nomeContainer}" por ${meuNome}.`
+        : `Você foi adicionado a tarefa "${nomeTarefa}" do projeto "${nomeProjeto}" por ${meuNome}.`;
+
+      // 4. Montar URL de redirecionamento
+      const url = `/container/${containerIdValidado}/projeto/${projetoAtual?.id}/nota/${notaAtual.id}`;
+
+      // 5. Inserir notificação
+      const { error: notifError } = await supabase
+        .from("notificacoes")
+        .insert({
+          user_id: perfil.id,
+          remetente_id: userId,
+          mensagem,
+          projeto_id: projetoAtual?.id || null,
+          nota_id: notaAtual.id,
+          tipo: "atribuição",
+          lido: false,
+          url: url
+        });
+
+      if (notifError) {
+        console.warn("Falha ao enviar notificação:", notifError);
+        // Mesmo com falha na notificação, mantemos a atribuição
+      }
     } catch (err) {
-      console.error("Erro ao salvar responsável:", err);
+      console.error("Erro ao atribuir responsável:", err);
       setResponsaveisTarefa(prev => prev.filter(r => r.id !== perfil.id));
+      alert("Erro ao adicionar responsável. Tente novamente.");
+      return;
     }
 
     setInputResponsavelTarefa("");
