@@ -49,7 +49,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId: co
         setUserId(user.id);
         const { data: profile } = await supabase
           .from("profiles")
-          .select("nome, nickname, avatar_url, container") // ✅ incluir "container"
+          .select("nome, nickname, avatar_url, container")
           .eq("id", user.id)
           .single();
 
@@ -263,7 +263,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId: co
     }
   };
 
-  // ✅ Função atualizada: envia notificação ao adicionar responsável
   const adicionarResponsavelTarefa = async (perfil) => {
     if (responsaveisTarefa.some(r => r.id === perfil.id)) return;
 
@@ -276,7 +275,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId: co
     setResponsaveisTarefa(prev => [...prev, novoResponsavel]);
 
     try {
-      // 1. Adicionar na tabela nota_responsaveis
       const { error: insertError } = await supabase
         .from("nota_responsaveis")
         .insert({
@@ -288,20 +286,15 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId: co
         throw new Error(`Erro ao vincular responsável: ${insertError.message}`);
       }
 
-      // 2. Obter nome do container (vem do perfil do usuário logado)
       const nomeContainer = userProfile?.container || "";
-
-      // 3. Montar a mensagem
       const nomeTarefa = getNomeNota();
       const nomeProjeto = getNomeProjeto();
       const mensagem = nomeContainer
         ? `Você foi adicionado a tarefa "${nomeTarefa}" do projeto "${nomeProjeto}" da container "${nomeContainer}" por ${meuNome}.`
         : `Você foi adicionado a tarefa "${nomeTarefa}" do projeto "${nomeProjeto}" por ${meuNome}.`;
 
-      // 4. Montar URL de redirecionamento
       const url = `/container/${containerIdValidado}/projeto/${projetoAtual?.id}/nota/${notaAtual.id}`;
 
-      // 5. Inserir notificação
       const { error: notifError } = await supabase
         .from("notificacoes")
         .insert({
@@ -317,7 +310,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId: co
 
       if (notifError) {
         console.warn("Falha ao enviar notificação:", notifError);
-        // Mesmo com falha na notificação, mantemos a atribuição
       }
     } catch (err) {
       console.error("Erro ao atribuir responsável:", err);
@@ -416,9 +408,9 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId: co
       <div className="task-title-container">
         <h2 className="task-title">{getNomeNota()}</h2>
 
-        {/* ✅ ÚNICO COMPONENTE: avatares + botão */}
-        <div className="grupo-responsaveis-tarefa">
-          <div className="lista-avatares-responsaveis">
+        {/* Linha combinada: avatares + botão + campo de data */}
+        <div className="responsaveis-e-data-wrapper">
+          <div className="grupo-responsaveis-tarefa">
             {responsaveisTarefa.map(resp => (
               <div
                 key={resp.id}
@@ -435,62 +427,64 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId: co
                 )}
               </div>
             ))}
+            <button
+              type="button"
+              className="btn-adicionar-responsavel"
+              onClick={() => setShowInputResponsaveis(!showInputResponsaveis)}
+              disabled={loading || !containerIdValidado}
+              title="Adicionar responsáveis"
+            >
+              <MdPersonAddAlt1 />
+            </button>
+
+            {/* Input flutuante de menção */}
+            {showInputResponsaveis && (
+              <div ref={inputRef} className="input-responsavel-flutuante">
+                <input
+                  type="text"
+                  value={inputResponsavelTarefa}
+                  onChange={handleInputResponsavelChange}
+                  placeholder="Digite @ para mencionar membros"
+                  autoFocus
+                />
+                {sugestoesMembros.length > 0 && (
+                  <div className="sugestoes-responsaveis-lista">
+                    {sugestoesMembros.map(perfil => (
+                      <div
+                        key={perfil.id}
+                        onClick={() => adicionarResponsavelTarefa(perfil)}
+                        className="sugestao-responsavel-item"
+                      >
+                        {perfil.avatar_url ? (
+                          <img src={perfil.avatar_url} alt={perfil.nickname || perfil.nome} />
+                        ) : (
+                          <div className="avatar-placeholder-small">
+                            {(perfil.nickname || perfil.nome || '?').charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <span>{perfil.nickname || perfil.nome}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-          <button
-            type="button"
-            className="btn-adicionar-responsavel"
-            onClick={() => setShowInputResponsaveis(!showInputResponsaveis)}
-            disabled={loading || !containerIdValidado}
-            title="Adicionar responsáveis"
-          >
-            <MdPersonAddAlt1 />
-          </button>
 
-          {/* Input flutuante de menção */}
-          {showInputResponsaveis && (
-            <div ref={inputRef} className="input-responsavel-flutuante">
-              <input
-                type="text"
-                value={inputResponsavelTarefa}
-                onChange={handleInputResponsavelChange}
-                placeholder="Digite @ para mencionar membros"
-                autoFocus
-              />
-              {sugestoesMembros.length > 0 && (
-                <div className="sugestoes-responsaveis-lista">
-                  {sugestoesMembros.map(perfil => (
-                    <div
-                      key={perfil.id}
-                      onClick={() => adicionarResponsavelTarefa(perfil)}
-                      className="sugestao-responsavel-item"
-                    >
-                      {perfil.avatar_url ? (
-                        <img src={perfil.avatar_url} alt={perfil.nickname || perfil.nome} />
-                      ) : (
-                        <div className="avatar-placeholder-small">
-                          {(perfil.nickname || perfil.nome || '?').charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                      <span>{perfil.nickname || perfil.nome}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* ✅ Wrapper de data — intacto, como sempre esteve */}
-        <div className="data-entrega-wrapper">
-          <label className="data-entrega-label">Data de entrega</label>
-          <input
-            type="date"
-            value={dataEntregaTarefa || ""}
-            onChange={(e) => setDataEntregaTarefa(e.target.value)}
-            onBlur={(e) => handleSalvarDataEntregaTarefa(e.target.value || null)}
-            className="data-entrega-input"
-            disabled={loading}
-          />
+          {/* Campo de data com estilo "data para entrega" */}
+          <div className="data-entrega-custom">
+            <input
+              type="date"
+              value={dataEntregaTarefa || ""}
+              onChange={(e) => setDataEntregaTarefa(e.target.value)}
+              onBlur={(e) => handleSalvarDataEntregaTarefa(e.target.value || null)}
+              className="data-entrega-input-custom"
+              disabled={loading}
+            />
+            {!dataEntregaTarefa && (
+              <span className="data-placeholder">data para entrega</span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -507,7 +501,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId: co
           onBlur={handleSaveDescricao}
           placeholder="Clique aqui para adicionar uma descrição..."
           rows={3}
-          style={{ minHeight: "3.25em", height: "8em", resize: "none" }}
+          style={{ minHeight: "3.25em", resize: "none" }}
           disabled={loading}
         />
       </div>

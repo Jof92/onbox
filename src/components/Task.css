@@ -1209,150 +1209,87 @@
   background: rgba(200, 0, 0, 0.9);
 }
 
-/* ✅ Único componente: avatares + botão */
+/* Linha combinada: avatares + botão + data */
+.responsaveis-e-data-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  margin-right: 8px;
+}
+
 .grupo-responsaveis-tarefa {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 8px;
-  position: relative;
 }
 
-.lista-avatares-responsaveis {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.avatar-responsavel {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  overflow: hidden;
-  border: 2px solid #e0e0e0;
-  background-color: #f5f5f5;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  font-size: 12px;
-  color: #555;
-  flex-shrink: 0;
-  cursor: pointer;
-}
-
-.avatar-responsavel img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.avatar-placeholder {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #e0e0e0;
-}
-
+.avatar-responsavel,
 .btn-adicionar-responsavel {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  border: 1px solid #ccc;
-  background: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: #555;
-  padding: 0;
-  flex-shrink: 0;
-}
-
-.btn-adicionar-responsavel:hover {
-  background-color: #f8f9fa;
-  border-color: #999;
-}
-
-.btn-adicionar-responsavel:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Input flutuante */
-.input-responsavel-flutuante {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  padding: 8px;
-  z-index: 1000;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-  width: 260px;
-}
-
-.input-responsavel-flutuante input {
-  width: 100%;
-  padding: 6px 10px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  font-size: 14px;
-  box-sizing: border-box;
-}
-
-.input-responsavel-flutuante input:focus {
-  outline: none;
-  border-color: #4a90e2;
-}
-
-.sugestoes-responsaveis-lista {
-  margin-top: 6px;
-  max-height: 150px;
-  overflow-y: auto;
-  border: 1px solid #eee;
-  border-radius: 4px;
-  background: white;
-}
-
-.sugestao-responsavel-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px;
-  cursor: pointer;
-  border-radius: 4px;
-}
-
-.sugestao-responsavel-item:hover {
-  background-color: #f0f8ff;
-}
-
-.sugestao-responsavel-item img,
-.avatar-placeholder-small {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-}
-
-.avatar-placeholder-small {
   background: #e0e0e0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  cursor: pointer;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.avatar-responsavel img,
+.avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f0f0f0;
   color: #555;
 }
 
-/* ✅ Wrapper de data — exatamente como estava */
+.btn-adicionar-responsavel {
+  background: #e9ecef;
+  border: none;
+  color: #495057;
+}
 
+/* Campo de data customizado */
+.data-entrega-custom {
+  position: relative;
+  min-width: 140px;
+}
 
-.data-entrega-label {
-  font-size: 13px;
-  color: #555;
-  margin-bottom: 4px;
-  font-weight: 500;
+.data-entrega-input-custom {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 14px;
+  background: white;
+}
+
+.data-entrega-input-custom:focus {
+  outline: none;
+  border-color: #80bdff;
+  box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+.data-placeholder {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6c757d;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.data-entrega-input-custom:not(:placeholder-shown) + .data-placeholder,
+.data-entrega-input-custom:focus + .data-placeholder {
+  display: none;
 }
