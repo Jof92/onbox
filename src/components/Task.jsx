@@ -25,11 +25,12 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId: co
   const modalRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Fechar input ao clicar fora
+  // Fechar modal e input ao clicar fora
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (onClose && modalRef.current && !modalRef.current.contains(e.target)) {
         onClose();
+        return;
       }
       if (showInputResponsaveis && inputRef.current && !inputRef.current.contains(e.target)) {
         setShowInputResponsaveis(false);
@@ -408,7 +409,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId: co
       <div className="task-title-container">
         <h2 className="task-title">{getNomeNota()}</h2>
 
-        {/* Linha combinada: avatares + botão + campo de data */}
         <div className="responsaveis-e-data-wrapper">
           <div className="grupo-responsaveis-tarefa">
             {responsaveisTarefa.map(resp => (
@@ -436,42 +436,8 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId: co
             >
               <MdPersonAddAlt1 />
             </button>
-
-            {/* Input flutuante de menção */}
-            {showInputResponsaveis && (
-              <div ref={inputRef} className="input-responsavel-flutuante">
-                <input
-                  type="text"
-                  value={inputResponsavelTarefa}
-                  onChange={handleInputResponsavelChange}
-                  placeholder="Digite @ para mencionar membros"
-                  autoFocus
-                />
-                {sugestoesMembros.length > 0 && (
-                  <div className="sugestoes-responsaveis-lista">
-                    {sugestoesMembros.map(perfil => (
-                      <div
-                        key={perfil.id}
-                        onClick={() => adicionarResponsavelTarefa(perfil)}
-                        className="sugestao-responsavel-item"
-                      >
-                        {perfil.avatar_url ? (
-                          <img src={perfil.avatar_url} alt={perfil.nickname || perfil.nome} />
-                        ) : (
-                          <div className="avatar-placeholder-small">
-                            {(perfil.nickname || perfil.nome || '?').charAt(0).toUpperCase()}
-                          </div>
-                        )}
-                        <span>{perfil.nickname || perfil.nome}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
 
-          {/* Campo de data com estilo "data para entrega" */}
           <div className="data-entrega-custom">
             <input
               type="date"
@@ -487,6 +453,39 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId: co
           </div>
         </div>
       </div>
+
+      {/* ✅ Input flutuante MOVIDO para fora do .grupo-responsaveis-tarefa */}
+      {showInputResponsaveis && (
+        <div ref={inputRef} className="input-responsavel-flutuante">
+          <input
+            type="text"
+            value={inputResponsavelTarefa}
+            onChange={handleInputResponsavelChange}
+            placeholder="Digite @ para mencionar membros"
+            autoFocus
+          />
+          {sugestoesMembros.length > 0 && (
+            <div className="sugestoes-responsaveis-lista">
+              {sugestoesMembros.map(perfil => (
+                <div
+                  key={perfil.id}
+                  onClick={() => adicionarResponsavelTarefa(perfil)}
+                  className="sugestao-responsavel-item"
+                >
+                  {perfil.avatar_url ? (
+                    <img src={perfil.avatar_url} alt={perfil.nickname || perfil.nome} />
+                  ) : (
+                    <div className="avatar-placeholder-small">
+                      {(perfil.nickname || perfil.nome || '?').charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <span>{perfil.nickname || perfil.nome}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="descricao-section">
         <h3>Descrição</h3>

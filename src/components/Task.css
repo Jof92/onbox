@@ -1293,3 +1293,66 @@
 .data-entrega-input-custom:focus + .data-placeholder {
   display: none;
 }
+
+
+.input-responsavel-flutuante {
+  position: absolute;
+  right: 20%;
+  margin-top: 4px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 8px;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  max-width: 500px;
+}
+
+.input-responsavel-flutuante input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+  outline: none;
+}
+
+.sugestoes-responsaveis-lista {
+  margin-top: 6px;
+  max-height: 150px;
+  overflow-y: auto;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  background: white;
+  z-index: 1001;
+}
+
+.sugestao-responsavel-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.sugestao-responsavel-item:hover {
+  background-color: #f0f0f0;
+}
+
+.sugestao-responsavel-item img,
+.sugestao-responsavel-item .avatar-placeholder-small {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.sugestao-responsavel-item .avatar-placeholder-small {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  background: #ddd;
+  color: #555;
+}

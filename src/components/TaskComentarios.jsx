@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { FiUser, FiCalendar } from "react-icons/fi";
 import { IoReturnUpBack } from "react-icons/io5";
+import { formatText } from "../utils/formatText"; // ✅ Import formatting logic
 import "./Task.css";
 
 const MencoesTooltip = ({ children, userId, projetoAtual, containerId, supabaseClient }) => {
@@ -168,48 +169,54 @@ const MencoesTooltip = ({ children, userId, projetoAtual, containerId, supabaseC
   );
 };
 
-const renderMencoes = (conteudo, perfilesPorId, projetoAtual, containerId, supabaseClient) => {
+// ✅ Updated: now applies formatting AND mentions
+const renderTextoFormatadoComMencoes = (
+  conteudo,
+  perfilesPorId,
+  projetoAtual,
+  containerId,
+  supabaseClient
+) => {
   if (!conteudo) return conteudo;
-  const regex = /@([\p{L}\p{N}_-]+)/gu;
-  let match;
-  const partes = [];
-  let lastIndex = 0;
 
-  while ((match = regex.exec(conteudo)) !== null) {
-    const textoAntes = conteudo.slice(lastIndex, match.index);
-    if (textoAntes) partes.push(textoAntes);
+  // First, split by mentions to preserve them as React elements
+  const regex = /(@[\p{L}\p{N}_-]+)/gu;
+  const partes = conteudo.split(regex).filter(Boolean);
 
-    const nickname = match[1];
-    const usuario = Object.values(perfilesPorId).find(
-      (p) => p && p.id && (p.nickname === nickname || p.nome === nickname)
-    );
-
-    if (usuario && usuario.id) {
-      partes.push(
-        <MencoesTooltip
-          key={match.index}
-          userId={usuario.id}
-          projetoAtual={projetoAtual}
-          containerId={containerId}
-          supabaseClient={supabaseClient}
-        >
-          @{nickname}
-        </MencoesTooltip>
+  // Process each part: if it's a mention → wrap; otherwise → format text
+  const elementos = partes.map((parte, index) => {
+    if (parte.startsWith("@")) {
+      const nickname = parte.slice(1);
+      const usuario = Object.values(perfilesPorId).find(
+        (p) => p && p.id && (p.nickname === nickname || p.nome === nickname)
       );
+
+      if (usuario && usuario.id) {
+        return (
+          <MencoesTooltip
+            key={index}
+            userId={usuario.id}
+            projetoAtual={projetoAtual}
+            containerId={containerId}
+            supabaseClient={supabaseClient}
+          >
+            {parte}
+          </MencoesTooltip>
+        );
+      } else {
+        return (
+          <span key={index} style={{ color: "#1E88E5", textDecoration: "underline" }}>
+            {parte}
+          </span>
+        );
+      }
     } else {
-      partes.push(
-        <span key={match.index} style={{ color: "#1E88E5", textDecoration: "underline" }}>
-          @{nickname}
-        </span>
-      );
+      // Apply *bold* and _italic_ formatting
+      return formatText(parte);
     }
-    lastIndex = match.index + match[0].length;
-  }
+  });
 
-  if (lastIndex < conteudo.length) {
-    partes.push(conteudo.slice(lastIndex));
-  }
-  return <>{partes}</>;
+  return <>{elementos}</>;
 };
 
 const mencionaUsuario = (conteudo, userProfile) => {
@@ -232,10 +239,8 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
   const textareaRef = useRef(null);
   const respostaTextareaRef = useRef(null);
 
-  // ✅ Carregar container_id da nota (para garantir que usamos o correto)
   const [containerIdDaNota, setContainerIdDaNota] = useState(containerId);
 
-  // ✅ Buscar container_id da nota (caso não tenha sido passado corretamente)
   useEffect(() => {
     if (!notaId) return;
     const fetchNotaContainer = async () => {
@@ -318,7 +323,6 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
     return () => { isMounted = false; };
   }, [notaId, userId, userProfile, supabaseClient]);
 
-  // ✅ Nova lógica: carregar sugestões APENAS dos membros do container atual
   const handleComentarioChange = (e) => {
     const valor = e.target.value;
     setComentario(valor);
@@ -329,7 +333,6 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
     if (match?.[1] && containerIdDaNota) {
       const termo = match[1];
       if (termo.length >= 1) {
-        // ✅ Buscar membros ACEITOS do container via convites
         supabaseClient
           .from("convites")
           .select("user_id")
@@ -658,7 +661,7 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
       <div style={{ position: "relative" }}>
         <textarea
           ref={textareaRef}
-          placeholder="Escrever um comentário... (use @ para mencionar)"
+          placeholder="Escrever um comentário... (use @ para mencionar, *bold* ou _itálico_)"
           value={comentario}
           onChange={handleComentarioChange}
           rows={3}
@@ -731,7 +734,6 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
 
           return (
             <React.Fragment key={pai.id}>
-              {/* Comentário principal */}
               <div className="comentario-item">
                 <div className="comentario-avatar">
                   {profile.avatar_url ? (
@@ -823,7 +825,7 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
                     </div>
                   ) : (
                     <div className="comentario-texto">
-                      {renderMencoes(pai.conteudo, perfilesPorId, projetoAtual, containerIdDaNota, supabaseClient)}
+                      {renderTextoFormatadoComMencoes(pai.conteudo, perfilesPorId, projetoAtual, containerIdDaNota, supabaseClient)}
                     </div>
                   )}
 
@@ -910,7 +912,7 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
                         <span style={{ fontSize: "0.9em", color: "#888" }}>{resposta.formattedDate}</span>
                       </div>
                       <div className="comentario-texto">
-                        {renderMencoes(resposta.conteudo, perfilesPorId, projetoAtual, containerIdDaNota, supabaseClient)}
+                        {renderTextoFormatadoComMencoes(resposta.conteudo, perfilesPorId, projetoAtual, containerIdDaNota, supabaseClient)}
                       </div>
                     </div>
                   </div>

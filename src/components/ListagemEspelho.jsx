@@ -13,20 +13,6 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
   const [loading, setLoading] = useState(true);
   const [statusEnvio, setStatusEnvio] = useState(null);
 
-  // Carrega dados do perfil (opcional)
-  useEffect(() => {
-    const fetchUserProfile = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("nome")
-        .eq("id", user.id)
-        .single();
-    };
-    fetchUserProfile();
-  }, []);
-
   const carregarDados = async () => {
     setLoading(true);
     try {
@@ -45,6 +31,7 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
 
       const mapped = (itensSalvos || []).map(item => ({
         id: item.id,
+        item_original_id: item.item_original_id, // ✅
         selecionado: Boolean(item.selecionado),
         codigo: item.codigo || "",
         descricao: item.descricao || "",
@@ -75,11 +62,7 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
     carregarDados();
   }, [notaEspelhoId]);
 
-  const toggleSelecionado = async (id) => {
-    const row = rows.find(r => r.id === id);
-    if (!row || !row.isCriar) return;
-
-    const novoValor = !row.selecionado;
+  const toggleSelecionado = async (id, novoValor) => {
     setRows(prev => prev.map(r => (r.id === id ? { ...r, selecionado: novoValor } : r)));
 
     try {
@@ -90,8 +73,8 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
       if (error) throw error;
     } catch (err) {
       console.error("Erro ao salvar seleção:", err);
-      alert("Erro ao salvar a marcação.");
       setRows(prev => prev.map(r => (r.id === id ? { ...r, selecionado: !novoValor } : r)));
+      alert("Erro ao salvar a marcação.");
     }
   };
 
@@ -99,41 +82,37 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
     setRows(prev => prev.map(r => (r.id === id ? { ...r, [campo]: valor } : r)));
   };
 
-  const handleComentarioBlur = async (id, novoComentario) => {
+  const atualizarOriginal = async (itemOriginalId, updateData) => {
+    if (!itemOriginalId) return;
     try {
-      // 1. Salvar no espelho
+      const { error } = await supabase
+        .from("planilha_itens")
+        .update(updateData)
+        .eq("id", itemOriginalId);
+      if (error) {
+        console.error("Erro ao atualizar item original:", error);
+      }
+    } catch (err) {
+      console.error("Exceção ao atualizar original:", err);
+    }
+  };
+
+  const handleComentarioBlur = async (id, novoComentario) => {
+    const row = rows.find(r => r.id === id);
+    if (!row) return;
+
+    try {
+      const updateData = { comentario: novoComentario || null };
+      // Atualizar espelho
       const { error: espelhoError } = await supabase
         .from("planilha_itens")
-        .update({ comentario: novoComentario || null })
+        .update(updateData)
         .eq("id", id);
       if (espelhoError) throw espelhoError;
 
-      // 2. Atualizar localmente
+      // Atualizar original
+      await atualizarOriginal(row.item_original_id, updateData);
       setRows(prev => prev.map(r => (r.id === id ? { ...r, comentario: novoComentario } : r)));
-
-      // 3. Sincronizar com a linha original, se houver mapeamento
-      const mapaKey = `mapa_itens_${notaEspelhoId}`;
-      const mapaStr = localStorage.getItem(mapaKey);
-      let itemOriginalId = null;
-
-      if (mapaStr) {
-        try {
-          const mapa = JSON.parse(mapaStr);
-          itemOriginalId = mapa[id];
-        } catch (parseError) {
-          console.warn("Falha ao parsear mapeamento:", parseError);
-        }
-      }
-
-      if (itemOriginalId) {
-        const { error: originalError } = await supabase
-          .from("planilha_itens")
-          .update({ comentario: novoComentario || null })
-          .eq("id", itemOriginalId);
-        if (originalError) {
-          console.error("Erro ao atualizar comentário na linha original:", originalError);
-        }
-      }
     } catch (err) {
       console.error("Erro ao salvar comentário:", err);
       alert("Erro ao salvar comentário.");
@@ -155,9 +134,16 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
           descricao: row.descricao || "",
           unidade: row.unidade || null,
         });
-      if (insertError) throw insertError;
+      if (insertError && insertError.code !== '23505') { // ignora duplicado
+        throw insertError;
+      }
 
-      // Atualizar linha no espelho
+      // Atualizar espelho
+      const updateData = {
+        codigo: row.codigo.trim(),
+        descricao: row.descricao || "",
+        isCriar: false,
+      };
       const { error: updateEspelhoError } = await supabase
         .from("planilha_itens")
         .update({
@@ -167,91 +153,80 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
         .eq("id", row.id);
       if (updateEspelhoError) throw updateEspelhoError;
 
-      // Atualizar linha original via mapeamento
-      const mapaKey = `mapa_itens_${notaEspelhoId}`;
-      const mapaStr = localStorage.getItem(mapaKey);
-      if (mapaStr) {
-        try {
-          const mapa = JSON.parse(mapaStr);
-          const itemOriginalId = mapa[row.id];
-          if (itemOriginalId) {
-            await supabase
-              .from("planilha_itens")
-              .update({
-                codigo: row.codigo.trim(),
-                descricao: row.descricao || "",
-              })
-              .eq("id", itemOriginalId);
-          }
-        } catch (e) {
-          console.error("Erro ao atualizar item original via mapeamento:", e);
-        }
-      }
+      // Atualizar original
+      await atualizarOriginal(row.item_original_id, {
+        codigo: row.codigo.trim(),
+        descricao: row.descricao || "",
+      });
 
-      // Atualizar estado local
       setRows(prev =>
         prev.map(r =>
           r.id === row.id
-            ? { ...r, isCriar: false, codigo: row.codigo.trim(), descricao: row.descricao }
+            ? { ...r, ...updateData }
             : r
         )
       );
 
-      alert("Item criado com sucesso! A listagem original foi atualizada automaticamente.");
+      alert("Item atualizado! A listagem original foi sincronizada.");
     } catch (err) {
       console.error("Erro ao criar item:", err);
-      alert("Erro ao criar item: " + (err.message || "Erro desconhecido"));
+      alert("Erro ao salvar: " + (err.message || "Erro desconhecido"));
     }
   };
 
-  // ✅ CORREÇÃO PRINCIPAL: atualiza a NOTA ORIGINAL ao responder
-    const handleSave = async () => {
-      if (!notaEspelhoId) return;
-      setStatusEnvio("enviando");
-      try {
-        // Salvar os itens (mesmo que antes)
-        await Promise.all(
-          rows.map(async (row) => {
-            const updateData = { selecionado: row.selecionado };
-            if (row.isCriar) {
-              updateData.codigo = row.codigo?.trim() || null;
-              updateData.descricao = row.descricao || null;
-            }
-            await supabase.from("planilha_itens").update(updateData).eq("id", row.id);
-          })
-        );
+  const handleSave = async () => {
+    if (!notaEspelhoId) return;
+    setStatusEnvio("enviando");
+    try {
+      // Salvar todos os itens no espelho e sincronizar com original
+      await Promise.all(
+        rows.map(async (row) => {
+          const updateData = { selecionado: row.selecionado };
+          if (row.isCriar) {
+            updateData.codigo = row.codigo?.trim() || null;
+            updateData.descricao = row.descricao || null;
+            // Também sincroniza outros campos editáveis no futuro se necessário
+          }
 
-        // Buscar nota espelho para obter a original
-        const { data: notaEspelhoData } = await supabase
-          .from("notas")
-          .select("nota_original_id")
-          .eq("id", notaEspelhoId)
-          .single();
+          // Atualizar espelho
+          await supabase.from("planilha_itens").update(updateData).eq("id", row.id);
 
-        if (!notaEspelhoData?.nota_original_id) {
-          throw new Error("Nota original não encontrada.");
-        }
+          // Atualizar original
+          if (row.item_original_id) {
+            await supabase.from("planilha_itens").update(updateData).eq("id", row.item_original_id);
+          }
+        })
+      );
 
-        const notaOriginalId = notaEspelhoData.nota_original_id;
+      // Atualizar status das notas
+      const { data: notaEspelhoData } = await supabase
+        .from("notas")
+        .select("nota_original_id")
+        .eq("id", notaEspelhoId)
+        .single();
 
-        // ✅ Atualizar AMBAS as notas como respondidas
-        await supabase.from("notas").update({ respondida: true }).eq("id", notaOriginalId);
-        await supabase.from("notas").update({ respondida: true }).eq("id", notaEspelhoId);
-
-        // ✅ Atualizar UI de AMBAS
-        if (onStatusUpdate) {
-          onStatusUpdate(notaOriginalId, { respondida: true, enviada: true });
-          onStatusUpdate(notaEspelhoId, { respondida: true, enviada: true }); // ← agora a espelho também vira verde
-        }
-
-        setStatusEnvio("sucesso");
-        setTimeout(() => setStatusEnvio(null), 2000);
-      } catch (err) {
-        console.error("Erro ao salvar:", err);
-        alert("Erro ao salvar a lista.");
-        setStatusEnvio(null);
+      if (!notaEspelhoData?.nota_original_id) {
+        throw new Error("Nota original não encontrada.");
       }
-    };
+
+      const notaOriginalId = notaEspelhoData.nota_original_id;
+
+      await supabase.from("notas").update({ respondida: true }).eq("id", notaOriginalId);
+      await supabase.from("notas").update({ respondida: true }).eq("id", notaEspelhoId);
+
+      if (onStatusUpdate) {
+        onStatusUpdate(notaOriginalId, { respondida: true, enviada: true });
+        onStatusUpdate(notaEspelhoId, { respondida: true, enviada: true });
+      }
+
+      setStatusEnvio("sucesso");
+      setTimeout(() => setStatusEnvio(null), 2000);
+    } catch (err) {
+      console.error("Erro ao salvar:", err);
+      alert("Erro ao salvar a lista.");
+      setStatusEnvio(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -328,7 +303,7 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
                         <input
                           type="checkbox"
                           checked={row.selecionado}
-                          onChange={() => toggleSelecionado(row.id)}
+                          onChange={(e) => toggleSelecionado(row.id, e.target.checked)}
                         />
                       )}
                     </td>
@@ -386,7 +361,7 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
                             e.stopPropagation();
                             handleAddCriar(row);
                           }}
-                          title="Criar item global"
+                          title="Atualizar item"
                         >
                           <FaPlus />
                         </button>

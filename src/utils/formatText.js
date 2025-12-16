@@ -1,25 +1,35 @@
 // src/utils/formatText.js
+export const formatText = (text) => {
+  if (!text) return text;
 
-// Escapa caracteres HTML para evitar XSS
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
+  // Handle *bold* → <strong>
+  const boldRegex = /\*([^*]+)\*/g;
+  // Handle _italic_ → <em>
+  const italicRegex = /_([^_]+)_/g;
 
-// Converte *negrito* e _itálico_ em HTML, de forma segura
-export function parseInlineFormatting(text) {
-  if (!text) return "";
+  // Split by bold first, then apply italic inside
+  const parts = text.split(boldRegex);
+  const formatted = parts.map((part, i) => {
+    if (i % 2 === 1) {
+      // Bold content: now check for italic inside
+      const italicParts = part.split(italicRegex);
+      return (
+        <strong key={i}>
+          {italicParts.map((subPart, j) => {
+            if (j % 2 === 1) return <em key={j}>{subPart}</em>;
+            return subPart;
+          })}
+        </strong>
+      );
+    } else {
+      // Not bold: check for italic
+      const italicParts = part.split(italicRegex);
+      return italicParts.map((subPart, j) => {
+        if (j % 2 === 1) return <em key={j}>{subPart}</em>;
+        return subPart;
+      });
+    }
+  });
 
-  // Primeiro, escapa todo o HTML para neutralizar qualquer tag maliciosa
-  let safeText = escapeHtml(text);
-
-  // Substitui *...* por <strong>...</strong>
-  // Usa expressão regular não gulosa e evita * aninhados ou incompletos
-  safeText = safeText.replace(/\*([^*\n]+)\*/g, '<strong>$1</strong>');
-
-  // Substitui _..._ por <em>...</em>
-  safeText = safeText.replace(/_([^_\n]+)_/g, '<em>$1</em>');
-
-  return safeText;
-}
+  return formatted;
+};

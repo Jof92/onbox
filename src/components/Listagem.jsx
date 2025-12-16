@@ -27,8 +27,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
   const [linhaBuscaAtiva, setLinhaBuscaAtiva] = useState(null);
 
   const cardRef = useRef(null);
-
-  // 🔁 Estado para forçar re-carregamento após atualizações externas (ex: do espelho)
   const [forcarAtualizacao, setForcarAtualizacao] = useState(0);
 
   // Fechar ao clicar fora
@@ -219,23 +217,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         return;
       }
 
-      const draftKey = `listagem_draft_${notaAtual.id}`;
-      const draftStr = localStorage.getItem(draftKey);
-
-      if (draftStr) {
-        try {
-          const draft = JSON.parse(draftStr);
-          if (draft.rows && draft.timestamp > Date.now() - 7 * 24 * 60 * 60 * 1000) {
-            setRows(draft.rows);
-            setUltimaAlteracao(draft.ultimaAlteracao || "");
-            setLoading(false);
-            return;
-          }
-        } catch (e) {
-          console.warn("Rascunho inválido, ignorando.");
-        }
-      }
-
       await carregarDadosDoBanco();
       setLoading(false);
     };
@@ -243,48 +224,36 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
     carregarRascunhoOuBanco();
   }, [projetoAtual, notaAtual, forcarAtualizacao]);
 
+  // 🔁 POLLING: sincroniza com banco a cada 3s (já funcionará corretamente após correção)
   useEffect(() => {
-    if (notaAtual?.id && rows.length > 0) {
-      const draft = {
-        rows,
-        ultimaAlteracao,
-        timestamp: Date.now(),
-      };
-      localStorage.setItem(`listagem_draft_${notaAtual.id}`, JSON.stringify(draft));
-    }
-  }, [rows, ultimaAlteracao, notaAtual?.id]);
-
-  // 🔁 POLLING EXPANDIDO: agora sincroniza também 'comentario'
-  useEffect(() => {
-    if (!notaAtual?.id || !projetoAtual?.id) return;
+    if (!notaAtual?.id) return;
 
     const verificarAtualizacoes = async () => {
       try {
         const { data, error } = await supabase
           .from("planilha_itens")
-          .select("id, codigo, descricao, comentario")
+          .select("id, codigo, descricao, comentario, observacao, quantidade, unidade, locacao, eap")
           .eq("nota_id", notaAtual.id);
 
         if (error) throw error;
 
-        if (data) {
-          setRows(prev => prev.map(r => {
-            const itemAtualizado = data.find(i => i.id === r.id);
-            if (itemAtualizado && (
-              r.codigo !== itemAtualizado.codigo ||
-              r.descricao !== itemAtualizado.descricao ||
-              r.comentario !== itemAtualizado.comentario
-            )) {
-              return {
-                ...r,
-                codigo: itemAtualizado.codigo,
-                descricao: itemAtualizado.descricao,
-                comentario: itemAtualizado.comentario,
-              };
-            }
-            return r;
-          }));
-        }
+        setRows(prev => prev.map(r => {
+          const itemAtualizado = data.find(i => i.id === r.id);
+          if (itemAtualizado) {
+            return {
+              ...r,
+              codigo: itemAtualizado.codigo,
+              descricao: itemAtualizado.descricao,
+              comentario: itemAtualizado.comentario,
+              observacao: itemAtualizado.observacao,
+              quantidade: itemAtualizado.quantidade,
+              unidade: itemAtualizado.unidade,
+              locacao: itemAtualizado.locacao,
+              eap: itemAtualizado.eap,
+            };
+          }
+          return r;
+        }));
       } catch (err) {
         console.error('Erro ao verificar atualizações:', err);
       }
@@ -292,7 +261,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
 
     const interval = setInterval(verificarAtualizacoes, 3000);
     return () => clearInterval(interval);
-  }, [notaAtual?.id, projetoAtual?.id]);
+  }, [notaAtual?.id]);
 
   const buscarItemPorCodigo = async (index, codigo) => {
     if (!codigo?.trim() || codigo.toLowerCase() === "criar") {
@@ -409,6 +378,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
       const novos = linhasValidas.filter(r => !r.id);
       const setoresParaEnvio = [setorSelecionado];
 
+      // Atualizar existentes
       if (existentes.length) {
         await Promise.all(existentes.map(async (it) => {
           const { error } = await supabase.from("planilha_itens").update({
@@ -427,6 +397,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         }));
       }
 
+      // Inserir novos
       if (novos.length) {
         const inserts = novos.map(it => ({
           projeto_id: projetoAtual.id,
@@ -450,6 +421,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         if (error) throw error;
       }
 
+      // Notificação e pilha "Recebidos"
       const notificacoesParaInserir = setoresParaEnvio.map(setorId => ({
         user_id: userIdLogado,
         remetente_id: userIdLogado,
@@ -525,6 +497,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         notaEspelhoId = novaNota.id;
       }
 
+      // Clonar itens para o espelho
       const { data: itensOriginais, error: itensError } = await supabase
         .from("planilha_itens")
         .select("*")
@@ -553,6 +526,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
           grupo_envio: item.grupo_envio,
           data_envio: item.data_envio,
           enviado_por: item.enviado_por,
+          item_original_id: item.id, // ✅ VÍNCULO DIRETO NO BANCO
           ordem: item.ordem,
         }));
 
@@ -563,30 +537,19 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
 
         if (insertItensError) throw insertItensError;
 
-        if (itensInseridos) {
-          const mapeamento = {};
-          itensInseridos.forEach(itemEspelho => {
-            const itemOriginal = itensOriginais.find(io => io.ordem === itemEspelho.ordem);
-            if (itemOriginal) {
-              mapeamento[itemEspelho.id] = itemOriginal.id;
-            }
-          });
-          localStorage.setItem(`mapa_itens_${notaEspelhoId}`, JSON.stringify(mapeamento));
-        }
+        // ✅ NÃO USAMOS MAIS localStorage — vínculo já está no banco
       }
 
-      // ✅ MARCAR A NOTA ORIGINAL COMO ENVIADA
+      // Marcar nota original como enviada
       await supabase
         .from("notas")
         .update({ enviada: true })
         .eq("id", notaAtual.id);
 
-      // ✅ Atualizar UI localmente (sem recarregar)
       if (onStatusUpdate) {
         onStatusUpdate(notaAtual.id, { enviada: true, respondida: false });
       }
 
-      localStorage.removeItem(`listagem_draft_${notaAtual.id}`);
       setCodigoErro(new Set());
       setSetorSelecionado("");
       await carregarDadosDoBanco();
