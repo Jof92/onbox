@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { FiUser, FiCalendar } from "react-icons/fi";
 import { IoReturnUpBack } from "react-icons/io5";
-import { formatText } from "../utils/formatText"; // ✅ Import formatting logic
+import { formatText } from "../utils/formatText";
 import "./Task.css";
 
 const MencoesTooltip = ({ children, userId, projetoAtual, containerId, supabaseClient }) => {
@@ -169,7 +169,6 @@ const MencoesTooltip = ({ children, userId, projetoAtual, containerId, supabaseC
   );
 };
 
-// ✅ Updated: now applies formatting AND mentions
 const renderTextoFormatadoComMencoes = (
   conteudo,
   perfilesPorId,
@@ -179,11 +178,9 @@ const renderTextoFormatadoComMencoes = (
 ) => {
   if (!conteudo) return conteudo;
 
-  // First, split by mentions to preserve them as React elements
   const regex = /(@[\p{L}\p{N}_-]+)/gu;
   const partes = conteudo.split(regex).filter(Boolean);
 
-  // Process each part: if it's a mention → wrap; otherwise → format text
   const elementos = partes.map((parte, index) => {
     if (parte.startsWith("@")) {
       const nickname = parte.slice(1);
@@ -211,7 +208,6 @@ const renderTextoFormatadoComMencoes = (
         );
       }
     } else {
-      // Apply *bold* and _italic_ formatting
       return formatText(parte);
     }
   });
@@ -225,6 +221,64 @@ const mencionaUsuario = (conteudo, userProfile) => {
   const regex = /@([\p{L}\p{N}_-]+)/gu;
   const mencoes = [...conteudo.matchAll(regex)].map(m => m[1]);
   return mencoes.some(m => termos.includes(m));
+};
+
+// ✅ Nova função: notificar participantes do container (exceto autor e mencionados)
+const notificarParticipantesDoContainer = async ({
+  conteudo,
+  notaId,
+  autorId,
+  autorProfile,
+  projetoAtual,
+  containerIdDaNota,
+  supabaseClient,
+}) => {
+  if (!containerIdDaNota) return;
+
+  // Buscar todos os participantes aceitos no container da nota
+  const { data: convites, error: convitesError } = await supabaseClient
+    .from("convites")
+    .select("user_id")
+    .eq("container_id", containerIdDaNota)
+    .eq("status", "aceito");
+
+  if (convitesError || !convites?.length) return;
+
+  const participantes = convites.map(c => c.user_id).filter(id => id !== autorId);
+  if (participantes.length === 0) return;
+
+  // Identificar mencionados para evitar duplicação
+  const mencionadosSet = new Set();
+  const mencoes = conteudo.match(/@(\S+)/g);
+  if (mencoes?.length > 0) {
+    const nomesMencionados = mencoes.map(m => m.slice(1));
+    const { data: candidatos } = await supabaseClient
+      .from("profiles")
+      .select("id")
+      .or(
+        `nickname.in.(${nomesMencionados.map(n => `"${n}"`).join(",")}),nome.in.(${nomesMencionados.map(n => `"${n}"`).join(",")})`
+      );
+    (candidatos || []).forEach(p => mencionadosSet.add(p.id));
+  }
+
+  // Filtrar apenas os que NÃO foram mencionados
+  const destinatarios = participantes.filter(id => !mencionadosSet.has(id));
+  if (destinatarios.length === 0) return;
+
+  // Mensagem genérica para participantes
+  const mensagem = `${autorProfile?.nickname || autorProfile?.nome || "Alguém"} fez um comentário na tarefa que você está adicionado.`;
+
+  const notificacoes = destinatarios.map(destId => ({
+    user_id: destId,
+    remetente_id: autorId,
+    nota_id: notaId,
+    projeto_id: projetoAtual?.id || null,
+    tipo: "comentario_na_tarefa",
+    mensagem,
+    lido: false,
+  }));
+
+  await supabaseClient.from("notificacoes").insert(notificacoes);
 };
 
 const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, containerId, supabaseClient }) => {
@@ -447,6 +501,7 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
 
       setComentarios(prev => [novoComentarioLocal, ...prev]);
 
+      // ✅ Notificações para mencionados (comportamento original)
       const mencionados = novoComentario.conteudo.match(/@(\S+)/g);
       if (mencionados?.length > 0) {
         const nomesMencionados = mencionados.map(m => m.slice(1));
@@ -471,6 +526,17 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
           });
         }
       }
+
+      // ✅ Nova: Notificar demais participantes (exceto mencionados e autor)
+      await notificarParticipantesDoContainer({
+        conteudo: novoComentario.conteudo,
+        notaId,
+        autorId: userId,
+        autorProfile: userProfile,
+        projetoAtual,
+        containerIdDaNota,
+        supabaseClient,
+      });
 
       setComentarios(prev =>
         prev.map(c => c.id === comentarioPaiId ? { ...c, respostaAtiva: false, respostaTemp: undefined } : c)
@@ -529,6 +595,43 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
       setComentarios(prev => [novoComentarioLocal, ...prev]);
       setComentario("");
       setSugestoesMencoes([]);
+
+      // ✅ Notificações para mencionados (comportamento original)
+      const mencionados = novoComentario.conteudo.match(/@(\S+)/g);
+      if (mencionados?.length > 0) {
+        const nomesMencionados = mencionados.map(m => m.slice(1));
+        const { data: candidatos } = await supabaseClient
+          .from("profiles")
+          .select("id, nickname, nome")
+          .or(
+            `nickname.in.(${nomesMencionados.map(n => `"${n}"`).join(",")}),nome.in.(${nomesMencionados.map(n => `"${n}"`).join(",")})`
+          );
+        const mencionadosValidos = (candidatos || []).filter(p =>
+          nomesMencionados.includes(p.nickname || p.nome)
+        );
+        for (const u of mencionadosValidos) {
+          await supabaseClient.from("notificacoes").insert({
+            user_id: u.id,
+            remetente_id: userId,
+            nota_id: notaId,
+            projeto_id: projetoAtual?.id || null,
+            tipo: "menção",
+            mensagem: `${userProfile?.nickname || userProfile?.nome || "Você"} marcou você em um comentário na tarefa ${projetoAtual?.nome || projetoAtual?.name || "Sem projeto"}`,
+            lido: false,
+          });
+        }
+      }
+
+      // ✅ Nova: Notificar demais participantes (exceto mencionados e autor)
+      await notificarParticipantesDoContainer({
+        conteudo: novoComentario.conteudo,
+        notaId,
+        autorId: userId,
+        autorProfile: userProfile,
+        projetoAtual,
+        containerIdDaNota,
+        supabaseClient,
+      });
     } catch (err) {
       console.error("Erro ao salvar comentário:", err);
       alert("Erro ao salvar comentário.");

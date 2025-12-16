@@ -18,12 +18,20 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId: co
   const [dataEntregaTarefa, setDataEntregaTarefa] = useState("");
   const [imagemAmpliada, setImagemAmpliada] = useState(null);
   const [containerIdValidado, setContainerIdValidado] = useState(null);
+  const [containerName, setContainerName] = useState("");
   const [responsaveisTarefa, setResponsaveisTarefa] = useState([]);
   const [showInputResponsaveis, setShowInputResponsaveis] = useState(false);
   const [inputResponsavelTarefa, setInputResponsavelTarefa] = useState("");
   const [sugestoesMembros, setSugestoesMembros] = useState([]);
   const modalRef = useRef(null);
   const inputRef = useRef(null);
+
+  // Estados dos objetivos
+  const [objetivos, setObjetivos] = useState([]);
+  const [showObjetivos, setShowObjetivos] = useState(false);
+  const [novoObjetivoTexto, setNovoObjetivoTexto] = useState("");
+  const [inputResponsavel, setInputResponsavel] = useState({});
+  const [sugestoesResponsavel, setSugestoesResponsavel] = useState({});
 
   // Fechar modal e input ao clicar fora
   useEffect(() => {
@@ -62,29 +70,42 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId: co
     fetchUser();
   }, []);
 
-  // Validar container_id e carregar responsáveis
+  // Validar container_id, carregar nome do container e responsáveis
   useEffect(() => {
     if (!notaAtual?.id) {
       setContainerIdValidado(null);
+      setContainerName("");
       setResponsaveisTarefa([]);
       return;
     }
 
-    const fetchContainerId = async () => {
-      const { data: nota, error } = await supabase
+    const fetchContainerData = async () => {
+      const { data: nota, error: notaError } = await supabase
         .from("notas")
         .select("container_id")
         .eq("id", notaAtual.id)
         .single();
 
-      if (error || !nota?.container_id) {
-        console.error("Não foi possível obter container_id da nota", error);
+      if (notaError || !nota?.container_id) {
+        console.error("Não foi possível obter container_id da nota", notaError);
         setContainerIdValidado(null);
+        setContainerName("");
         return;
       }
 
-      setContainerIdValidado(nota.container_id);
+      const containerId = nota.container_id;
+      setContainerIdValidado(containerId);
 
+      // Buscar nome do container
+      const { data: container, error: containerError } = await supabase
+        .from("containers")
+        .select("name")
+        .eq("id", containerId)
+        .single();
+
+      setContainerName(container?.name || "Sem container");
+
+      // Carregar responsáveis da tarefa
       const { data: responsaveis } = await supabase
         .from("nota_responsaveis")
         .select("usuario_id")
@@ -102,7 +123,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId: co
       }
     };
 
-    fetchContainerId();
+    fetchContainerData();
   }, [notaAtual?.id]);
 
   // Carregar dados da nota
@@ -144,13 +165,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId: co
     return () => { isMounted = false; };
   }, [notaAtual?.id]);
 
-  // Carregar objetivos
-  const [objetivos, setObjetivos] = useState([]);
-  const [showObjetivos, setShowObjetivos] = useState(false);
-  const [novoObjetivoTexto, setNovoObjetivoTexto] = useState("");
-  const [inputResponsavel, setInputResponsavel] = useState({});
-  const [sugestoesResponsavel, setSugestoesResponsavel] = useState({});
-
+  // ✅ CORREÇÃO: Carregar objetivos com perfis completos dos responsáveis
   useEffect(() => {
     if (!notaAtual?.id || !containerIdValidado) {
       setObjetivos([]);
@@ -179,22 +194,68 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId: co
           .eq("checklist_id", checklist.id)
           .order("created_at", { ascending: true });
 
+        if (!items || items.length === 0) {
+          setObjetivos([]);
+          setShowObjetivos(false);
+          return;
+        }
+
         const itemIds = items.map(i => i.id);
         let respMap = {};
+        
         if (itemIds.length > 0) {
           const { data: responsaveis } = await supabase
             .from("checklist_responsaveis")
             .select("*")
             .in("checklist_item_id", itemIds);
 
-          if (responsaveis) {
+          if (responsaveis && responsaveis.length > 0) {
+            // ✅ Buscar perfis dos usuários internos
+            const userIds = responsaveis
+              .filter(r => r.usuario_id)
+              .map(r => r.usuario_id);
+
+            let profilesMap = {};
+            if (userIds.length > 0) {
+              const { data: profiles } = await supabase
+                .from("profiles")
+                .select("id, nome, nickname")
+                .in("id", userIds);
+
+              if (profiles) {
+                profilesMap = profiles.reduce((acc, p) => {
+                  acc[p.id] = p;
+                  return acc;
+                }, {});
+              }
+            }
+
+            // ✅ Montar o mapa de responsáveis COM os dados do profile
             respMap = responsaveis.reduce((acc, r) => {
               if (!acc[r.checklist_item_id]) acc[r.checklist_item_id] = [];
+              
+              let nomeExibicao;
+              let nome = null;
+              let nickname = null;
+
+              if (r.usuario_id && profilesMap[r.usuario_id]) {
+                const profile = profilesMap[r.usuario_id];
+                nome = profile.nome;
+                nickname = profile.nickname;
+                nomeExibicao = profile.nickname || profile.nome || "Usuário";
+              } else if (r.nome_externo) {
+                nomeExibicao = r.nome_externo;
+              } else {
+                nomeExibicao = "Usuário";
+              }
+
               acc[r.checklist_item_id].push({
                 id: r.id,
                 usuario_id: r.usuario_id,
                 nome_externo: r.nome_externo,
-                nome_exibicao: r.nome_externo || "Usuário"
+                nome_exibicao: nomeExibicao,
+                nome: nome,
+                nickname: nickname
               });
               return acc;
             }, {});
@@ -287,7 +348,7 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId: co
         throw new Error(`Erro ao vincular responsável: ${insertError.message}`);
       }
 
-      const nomeContainer = userProfile?.container || "";
+      const nomeContainer = containerName;
       const nomeTarefa = getNomeNota();
       const nomeProjeto = getNomeProjeto();
       const mensagem = nomeContainer
@@ -454,7 +515,6 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId: co
         </div>
       </div>
 
-      {/* ✅ Input flutuante MOVIDO para fora do .grupo-responsaveis-tarefa */}
       {showInputResponsaveis && (
         <div ref={inputRef} className="input-responsavel-flutuante">
           <input
@@ -523,6 +583,8 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId: co
           sugestoesResponsavel={sugestoesResponsavel}
           setSugestoesResponsavel={setSugestoesResponsavel}
           containerId={containerIdValidado}
+          containerName={containerName}
+          projetoAtual={projetoAtual}
           setImagemAmpliada={setImagemAmpliada}
         />
       )}
