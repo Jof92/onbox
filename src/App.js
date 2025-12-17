@@ -7,7 +7,7 @@ import LoginPanel from "./components/Login";
 import Containers from "./components/Containers";
 import Cards from "./components/Cards";
 import Home from "./components/Home";
-import ResetSenha from "./components/ResetSenha"; // ✅ Corrigido: ./pages/
+import ResetSenha from "./components/ResetSenha";
 import { supabase } from "./supabaseClient";
 import "./App.css";
 
@@ -166,7 +166,7 @@ export default function App() {
           <div className="login-panel-container show">
             <LoginPanel
               onLogin={() => setShowLoginPanel(false)}
-              onClose={() => setShowLoginPanel(false)} // ✅ Passa onClose
+              onClose={() => setShowLoginPanel(false)}
             />
           </div>
         )}

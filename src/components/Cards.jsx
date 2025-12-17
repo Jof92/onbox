@@ -55,12 +55,18 @@ export default function Cards() {
     );
   };
 
+  // ✅ MODIFICADO: Não usa mais replace, cria histórico no navegador
   const updateUrlWithNota = (notaId) => {
+    const urlParams = new URLSearchParams(location.search);
+    
     if (notaId) {
-      navigate(`${location.pathname}?nota=${notaId}`, { replace: true });
+      urlParams.set('nota', notaId);
     } else {
-      navigate(location.pathname, { replace: true });
+      urlParams.delete('nota');
     }
+    
+    // ✅ Use push ao invés de replace para criar histórico
+    navigate(`${location.pathname}?${urlParams.toString()}`, { replace: false });
   };
 
   useEffect(() => {
@@ -187,7 +193,7 @@ export default function Cards() {
         setEntity({ 
           id: entityId, 
           name: entityName, 
-          photo_url: entityPhoto, 
+          photo_url: entityPhoto,  
           type 
         });
       } catch (err) {
@@ -199,14 +205,17 @@ export default function Cards() {
     };
 
     loadInitialData();
-  }, [location.pathname]); // ✅ Remove location.state da dependência
+  }, [location.pathname]);
 
+  // ✅ useEffect que detecta nota na URL e abre automaticamente
   useEffect(() => {
     const urlParams = new URLSearchParams(location.search);
     const notaId = urlParams.get("nota");
+    
     if (notaId && columns.length > 0) {
       let notaEncontrada = null;
       let colunaEncontrada = null;
+      
       for (const col of columns) {
         const nota = col.notas.find((n) => String(n.id) === notaId);
         if (nota) {
@@ -215,12 +224,14 @@ export default function Cards() {
           break;
         }
       }
+      
       if (notaEncontrada) {
         setNotaSelecionada(notaEncontrada);
         const isRecebidos = colunaEncontrada?.title === "Recebidos";
         setIsNotaRecebidos(isRecebidos);
-        if (isRecebidos) loadOrigemData(notaEncontrada.id);
-        else {
+        if (isRecebidos) {
+          loadOrigemData(notaEncontrada.id);
+        } else {
           setProjetoOrigem(null);
           setNotaOrigem(null);
         }
