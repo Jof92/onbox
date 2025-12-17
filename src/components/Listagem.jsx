@@ -29,6 +29,9 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
   const cardRef = useRef(null);
   const [forcarAtualizacao, setForcarAtualizacao] = useState(0);
 
+  // 🔑 Função auxiliar para chave única de rascunho
+  const getRascunhoKey = () => `rascunho_listagem_${projetoAtual?.id}_${notaAtual?.id}`;
+
   // Fechar ao clicar fora
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -197,6 +200,22 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
     }
   };
 
+  // ✅ SALVAR RASCUNHO AUTOMATICAMENTE
+  useEffect(() => {
+    if (!projetoAtual?.id || !notaAtual?.id || loading) return;
+
+    const key = getRascunhoKey();
+    const rascunho = rows.filter(r => 
+      r.codigo?.trim() || r.descricao?.trim() || (r.quantidade && r.quantidade.toString().trim())
+    );
+    if (rascunho.length > 0) {
+      localStorage.setItem(key, JSON.stringify(rascunho));
+    } else {
+      localStorage.removeItem(key);
+    }
+  }, [rows, projetoAtual?.id, notaAtual?.id, loading]);
+
+  // ✅ CARREGAR RASCUNHO OU DO BANCO
   useEffect(() => {
     const carregarRascunhoOuBanco = async () => {
       setLoading(true);
@@ -217,6 +236,25 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         return;
       }
 
+      const key = getRascunhoKey();
+      const rascunhoSalvo = localStorage.getItem(key);
+
+      if (rascunhoSalvo) {
+        try {
+          const parsed = JSON.parse(rascunhoSalvo);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setRows(parsed);
+            registrarAlteracao("Rascunho local");
+            setLoading(false);
+            return;
+          }
+        } catch (e) {
+          console.warn("Rascunho corrompido, ignorando.", e);
+          localStorage.removeItem(key);
+        }
+      }
+
+      // Só carrega do banco se não há rascunho válido
       await carregarDadosDoBanco();
       setLoading(false);
     };
@@ -224,7 +262,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
     carregarRascunhoOuBanco();
   }, [projetoAtual, notaAtual, forcarAtualizacao]);
 
-  // 🔁 POLLING: sincroniza com banco a cada 3s (já funcionará corretamente após correção)
+  // 🔁 POLLING: sincroniza com banco a cada 3s
   useEffect(() => {
     if (!notaAtual?.id) return;
 
@@ -526,7 +564,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
           grupo_envio: item.grupo_envio,
           data_envio: item.data_envio,
           enviado_por: item.enviado_por,
-          item_original_id: item.id, // ✅ VÍNCULO DIRETO NO BANCO
+          item_original_id: item.id,
           ordem: item.ordem,
         }));
 
@@ -536,8 +574,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
           .select("id, ordem");
 
         if (insertItensError) throw insertItensError;
-
-        // ✅ NÃO USAMOS MAIS localStorage — vínculo já está no banco
       }
 
       // Marcar nota original como enviada
@@ -552,6 +588,10 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
 
       setCodigoErro(new Set());
       setSetorSelecionado("");
+
+      // ✅ LIMPAR RASCUNHO APÓS ENVIO BEM-SUCEDIDO
+      localStorage.removeItem(getRascunhoKey());
+
       await carregarDadosDoBanco();
 
       setStatusEnvio("sucesso");
