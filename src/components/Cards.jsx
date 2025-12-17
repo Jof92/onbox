@@ -43,7 +43,6 @@ export default function Cards() {
 
   const colorTrackRefs = useRef({});
 
-  // ✅ Função para atualizar status de uma nota localmente (enviada/respondida)
   const atualizarStatusNota = (notaId, updates) => {
     setColumns((prev) =>
       prev.map((col) => ({
@@ -55,29 +54,23 @@ export default function Cards() {
     );
   };
 
-  // ✅ MODIFICADO: Não usa mais replace, cria histórico no navegador
   const updateUrlWithNota = (notaId) => {
     const urlParams = new URLSearchParams(location.search);
-    
     if (notaId) {
       urlParams.set('nota', notaId);
     } else {
       urlParams.delete('nota');
     }
-    
-    // ✅ Use push ao invés de replace para criar histórico
     navigate(`${location.pathname}?${urlParams.toString()}`, { replace: false });
   };
 
   useEffect(() => {
     const loadInitialData = async () => {
-      // ✅ Tenta recuperar dados da URL primeiro
       const urlParams = new URLSearchParams(location.search);
       const entityIdFromUrl = urlParams.get('entityId');
       const entityTypeFromUrl = urlParams.get('type');
       const containerIdFromUrl = urlParams.get('containerId');
 
-      // Tenta pegar do location.state
       const {
         projectId,
         setorId,
@@ -89,25 +82,19 @@ export default function Cards() {
         containerId: containerIdFromState,
       } = location.state || {};
 
-      // ✅ Prioriza URL params (para reload), depois location.state
       const entityId = entityIdFromUrl || projectId || setorId;
       const type = entityTypeFromUrl || typeFromState || (projectId ? "project" : "setor");
       const containerId = containerIdFromUrl || containerIdFromState;
 
       if (containerId) setDonoContainerId(containerId);
-      
-      if (!entityId) {
-        return navigate("/containers", { replace: true });
-      }
+      if (!entityId) return navigate("/containers", { replace: true });
 
-      // ✅ Atualiza URL com os parâmetros necessários (sem substituir a nota se existir)
       const currentNotaParam = urlParams.get('nota');
       const newUrl = new URLSearchParams();
       newUrl.set('entityId', entityId);
       newUrl.set('type', type);
       if (containerId) newUrl.set('containerId', containerId);
       if (currentNotaParam) newUrl.set('nota', currentNotaParam);
-      
       navigate(`${location.pathname}?${newUrl.toString()}`, { replace: true });
 
       setEntityType(type);
@@ -138,10 +125,10 @@ export default function Cards() {
 
         if (!entityData) return navigate("/containers", { replace: true });
 
-        // ✅ Busca as informações da entidade
         const entityName = projectName || setorName || entityData.name;
         const entityPhoto = projectPhoto || setorPhoto || entityData.photo_url;
 
+        // ⬇️ Carrega pilhas ORDENADAS por 'ordem' (confiamos 100% no banco)
         const { data: pilhas } = await supabase
           .from("pilhas")
           .select(`
@@ -150,16 +137,18 @@ export default function Cards() {
               id, nome, tipo, responsavel, progresso, concluida, data_conclusao,
               enviada, respondida
             )
-          `)
+         `)
           .eq(type === "project" ? "project_id" : "setor_id", entityId)
-          .order("created_at");
+          .order("ordem", { ascending: true }); // ✅ Ordem vinda do banco
 
-        const pilhasData = pilhas || [];
+        // ⚠️ NÃO reordenamos no frontend! A ordem já está correta.
+        const pilhasOrdenadas = pilhas || [];
+
         const progressoInicial = {};
         const concluidasInicial = new Set();
         const dataConclusaoInicial = {};
 
-        pilhasData.forEach((pilha) => {
+        pilhasOrdenadas.forEach((pilha) => {
           pilha.notas.forEach((nota) => {
             if (nota.progresso != null) {
               progressoInicial[nota.id] = nota.progresso;
@@ -177,25 +166,17 @@ export default function Cards() {
         setNotasConcluidas(concluidasInicial);
         setDataConclusaoSalva(dataConclusaoInicial);
 
-        const recebidos = pilhasData.filter((p) => p.title === "Recebidos");
-        const outras = pilhasData.filter((p) => p.title !== "Recebidos");
-        const pilhasOrdenadas = [...recebidos, ...outras];
-
         setColumns(
           pilhasOrdenadas.map((p) => ({
             id: String(p.id),
             title: p.title,
             notas: p.notas || [],
             cor_fundo: p.cor_fundo || null,
+            ordem: p.ordem || 0,
           }))
         );
 
-        setEntity({ 
-          id: entityId, 
-          name: entityName, 
-          photo_url: entityPhoto,  
-          type 
-        });
+        setEntity({ id: entityId, name: entityName, photo_url: entityPhoto, type });
       } catch (err) {
         console.error("Erro ao carregar dados:", err);
         navigate("/containers", { replace: true });
@@ -207,15 +188,12 @@ export default function Cards() {
     loadInitialData();
   }, [location.pathname]);
 
-  // ✅ useEffect que detecta nota na URL e abre automaticamente
   useEffect(() => {
     const urlParams = new URLSearchParams(location.search);
     const notaId = urlParams.get("nota");
-    
     if (notaId && columns.length > 0) {
       let notaEncontrada = null;
       let colunaEncontrada = null;
-      
       for (const col of columns) {
         const nota = col.notas.find((n) => String(n.id) === notaId);
         if (nota) {
@@ -224,19 +202,16 @@ export default function Cards() {
           break;
         }
       }
-      
       if (notaEncontrada) {
         setNotaSelecionada(notaEncontrada);
         const isRecebidos = colunaEncontrada?.title === "Recebidos";
         setIsNotaRecebidos(isRecebidos);
-        if (isRecebidos) {
-          loadOrigemData(notaEncontrada.id);
-        } else {
+        if (isRecebidos) loadOrigemData(notaEncontrada.id);
+        else {
           setProjetoOrigem(null);
           setNotaOrigem(null);
         }
       } else if (notaSelecionada) {
-        // Nota não encontrada mas havia uma selecionada antes
         const newUrl = new URLSearchParams(location.search);
         newUrl.delete('nota');
         navigate(`${location.pathname}?${newUrl.toString()}`, { replace: true });
@@ -285,11 +260,7 @@ export default function Cards() {
 
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (
-        menuOpenNota &&
-        !e.target.closest('.card-menu-dropdown') &&
-        !e.target.closest('.card-menu-btn')
-      ) {
+      if (menuOpenNota && !e.target.closest('.card-menu-dropdown') && !e.target.closest('.card-menu-btn')) {
         setMenuOpenNota(null);
       }
     };
@@ -299,11 +270,7 @@ export default function Cards() {
 
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (
-        menuOpenPilha &&
-        !e.target.closest('.card-menu-dropdown') &&
-        !e.target.closest('.column-menu-btn')
-      ) {
+      if (menuOpenPilha && !e.target.closest('.card-menu-dropdown') && !e.target.closest('.column-menu-btn')) {
         setMenuOpenPilha(null);
       }
     };
@@ -316,11 +283,8 @@ export default function Cards() {
       .from("pilhas")
       .update({ cor_fundo: cor })
       .eq("id", pilhaId);
-
     if (!error) {
-      setColumns((prev) =>
-        prev.map((col) => (col.id === pilhaId ? { ...col, cor_fundo: cor } : col))
-      );
+      setColumns((prev) => prev.map((col) => (col.id === pilhaId ? { ...col, cor_fundo: cor } : col)));
     }
   };
 
@@ -331,19 +295,15 @@ export default function Cards() {
 
   const toggleColorPicker = (pilhaId, show) => {
     setShowColorPicker((prev) => ({ ...prev, [pilhaId]: show }));
-    if (show) {
-      setMenuOpenPilha(null);
-    }
+    if (show) setMenuOpenPilha(null);
   };
 
   useEffect(() => {
     const setupClickHandlers = () => {
       Object.keys(showColorPicker).forEach((colId) => {
         if (!showColorPicker[colId]) return;
-
         const track = colorTrackRefs.current[colId];
         if (!track) return;
-
         const handleClick = (e) => {
           const rect = track.getBoundingClientRect();
           const x = e.clientX - rect.left;
@@ -353,18 +313,21 @@ export default function Cards() {
           const cor = `hsl(${hue}, 40%, 94%)`;
           updatePilhaCor(colId, cor);
         };
-
         track.addEventListener("click", handleClick);
         return () => track.removeEventListener("click", handleClick);
       });
     };
-
     setupClickHandlers();
   }, [showColorPicker]);
 
   const handleAddColumn = async () => {
     if (!entity) return;
-    const newPilhaData = { title: "Nova Pilha" };
+    // Encontrar maior 'ordem' entre pilhas não-Recebidos
+    const outras = columns.filter(c => c.title !== "Recebidos");
+    const maxOrdem = outras.length > 0 ? Math.max(...outras.map(c => c.ordem)) : -1;
+    const newOrdem = maxOrdem + 1;
+
+    const newPilhaData = { title: "Nova Pilha", ordem: newOrdem };
     if (entityType === "project") newPilhaData.project_id = entity.id;
     else newPilhaData.setor_id = entity.id;
 
@@ -375,7 +338,7 @@ export default function Cards() {
       .single();
 
     if (!error) {
-      setColumns((prev) => [...prev, { id: String(newPilha.id), title: newPilha.title, notas: [], cor_fundo: null }]);
+      setColumns((prev) => [...prev, { id: String(newPilha.id), title: newPilha.title, notas: [], cor_fundo: null, ordem: newOrdem }]);
     }
   };
 
@@ -409,15 +372,11 @@ export default function Cards() {
       .from("notas")
       .update({ concluida: newConcluida })
       .eq("id", notaId);
-
     if (!error) {
       setNotasConcluidas((prev) => {
         const novo = new Set(prev);
-        if (newConcluida) {
-          novo.add(String(notaId));
-        } else {
-          novo.delete(String(notaId));
-        }
+        if (newConcluida) novo.add(String(notaId));
+        else novo.delete(String(notaId));
         return novo;
       });
     } else {
@@ -526,7 +485,6 @@ export default function Cards() {
       .from("notas")
       .update({ data_conclusao: data || null })
       .eq("id", notaId);
-
     if (!error) {
       setDataConclusaoSalva((prev) => ({ ...prev, [notaId]: data || "" }));
       setDataConclusaoEdit((prev) => {
@@ -548,41 +506,88 @@ export default function Cards() {
         }
       });
     };
-
     if (Object.keys(dataConclusaoEdit).length > 0) {
       document.addEventListener("mousedown", handleClickOutsideDate);
       return () => document.removeEventListener("mousedown", handleClickOutsideDate);
     }
   }, [dataConclusaoEdit]);
 
+  // ✅ Salva a ordem das pilhas (exceto "Recebidos")
+  const saveColumnsOrder = async (newColumns) => {
+    // Apenas pilhas que NÃO são "Recebidos"
+    const updates = newColumns
+      .filter(col => col.title !== "Recebidos")
+      .map((col, index) => ({
+        id: col.id,
+        ordem: index // nova ordem sequencial a partir de 0
+      }));
+
+    const { error } = await supabase
+      .from("pilhas")
+      .upsert(updates, { onConflict: 'id' });
+
+    if (error) {
+      console.error("Erro ao salvar ordem das pilhas:", error);
+    } else {
+      // Atualiza estado local com nova ordem
+      setColumns(prev =>
+        prev.map(col => {
+          const updated = updates.find(u => u.id === col.id);
+          return updated ? { ...col, ordem: updated.ordem } : col;
+        })
+      );
+    }
+  };
+
   const onDragEnd = useCallback(
-    async ({ source, destination }) => {
+    async (result) => {
+      const { source, destination, type } = result;
+
       if (!destination) return;
       if (source.droppableId === destination.droppableId && source.index === destination.index) return;
 
-      const nextColumns = columns.map((c) => ({ ...c, notas: [...c.notas] }));
-      const sourceCol = nextColumns.find((c) => c.id === source.droppableId);
-      const [movedNote] = sourceCol.notas.splice(source.index, 1);
-      const destCol = nextColumns.find((c) => c.id === destination.droppableId);
-      destCol.notas.splice(destination.index, 0, movedNote);
-      setColumns(nextColumns);
+      if (type === "COLUMN") {
+        const newColumns = Array.from(columns);
+        const [moved] = newColumns.splice(source.index, 1);
+        newColumns.splice(destination.index, 0, moved);
 
-      if (source.droppableId !== destination.droppableId) {
-        try {
-          await supabase.from("notas").update({ pilha_id: destination.droppableId }).eq("id", movedNote.id);
-          if (notaSelecionada?.id === movedNote.id) {
-            setNotaSelecionada((prev) => ({ ...prev, pilha_id: destination.droppableId }));
-            const destIsRecebidos = destination.droppableId === columns.find((c) => c.title === "Recebidos")?.id;
-            setIsNotaRecebidos(destIsRecebidos);
-            if (destIsRecebidos) loadOrigemData(movedNote.id);
-            else {
-              setProjetoOrigem(null);
-              setNotaOrigem(null);
+        // Garantir que "Recebidos" permaneça na posição 0
+        const recebidosIndex = newColumns.findIndex(col => col.title === "Recebidos");
+        if (recebidosIndex !== -1 && recebidosIndex !== 0) {
+          const recebidosCol = newColumns.splice(recebidosIndex, 1)[0];
+          newColumns.unshift(recebidosCol);
+        }
+
+        setColumns(newColumns);
+        saveColumnsOrder(newColumns); // ✅ Salva a nova ordem
+        return;
+      }
+
+      if (type === "CARD") {
+        const nextColumns = columns.map((c) => ({ ...c, notas: [...c.notas] }));
+        const sourceCol = nextColumns.find((c) => c.id === source.droppableId);
+        const [movedNote] = sourceCol.notas.splice(source.index, 1);
+        const destCol = nextColumns.find((c) => c.id === destination.droppableId);
+        destCol.notas.splice(destination.index, 0, movedNote);
+        setColumns(nextColumns);
+
+        if (source.droppableId !== destination.droppableId) {
+          try {
+            await supabase.from("notas").update({ pilha_id: destination.droppableId }).eq("id", movedNote.id);
+            if (notaSelecionada?.id === movedNote.id) {
+              setNotaSelecionada((prev) => ({ ...prev, pilha_id: destination.droppableId }));
+              const destIsRecebidos = columns.find((c) => c.id === destination.droppableId)?.title === "Recebidos";
+              setIsNotaRecebidos(destIsRecebidos);
+              if (destIsRecebidos) loadOrigemData(movedNote.id);
+              else {
+                setProjetoOrigem(null);
+                setNotaOrigem(null);
+              }
             }
+          } catch (err) {
+            console.error("Erro ao mover nota:", err);
+            alert("Erro ao mover nota. Revertendo.");
           }
-        } catch (err) {
-          console.error("Erro ao mover nota:", err);
-          alert("Erro ao mover nota. Revertendo.");
         }
       }
     },
@@ -643,287 +648,334 @@ export default function Cards() {
       </header>
 
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="cards-body">
-          {columns.map((col) => {
-            const isRecebidos = col.title === "Recebidos";
-            const bgColor = col.cor_fundo || (isRecebidos ? "rgba(46, 125, 50, 0.08)" : "transparent");
-            const isColorPickerVisible = showColorPicker[col.id];
+        <Droppable droppableId="all-columns" direction="horizontal" type="COLUMN">
+          {(provided) => (
+            <div
+              className="cards-body"
+              ref={provided.innerRef}
+              {...provided.droppableProps}
+            >
+              {columns.map((col, index) => {
+                const isRecebidos = col.title === "Recebidos";
+                const bgColor = col.cor_fundo || (isRecebidos ? "rgba(46, 125, 50, 0.08)" : "transparent");
+                const isColorPickerVisible = showColorPicker[col.id];
 
-            return (
-              <Droppable key={col.id} droppableId={col.id}>
-                {(provided) => (
-                  <div
-                    className="cards-column"
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    style={{
-                      backgroundColor: bgColor,
-                      border: isRecebidos ? "1px solid rgba(46, 125, 50, 0.2)" : "1px solid rgba(0, 0, 0, 0.08)",
-                      borderRadius: "8px",
-                      padding: "8px",
-                      position: "relative",
-                    }}
+                return (
+                  <Draggable
+                    key={col.id}
+                    draggableId={col.id}
+                    index={index}
+                    type="COLUMN"
+                    isDragDisabled={isRecebidos} // 🔒 "Recebidos" não é arrastável
                   >
-                    {isColorPickerVisible && !isRecebidos && (
-                      <div className="color-picker-toolbar">
-                        <button
-                          className="reset-color-dot"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleResetCor(col.id);
-                          }}
-                          title="Cor original"
-                        />
-                        <div
-                          ref={(el) => (colorTrackRefs.current[col.id] = el)}
-                          className="color-track"
-                        />
-                        <button
-                          className="close-color-picker"
-                          onClick={() => toggleColorPicker(col.id, false)}
-                          title="Fechar"
-                        >
-                          <FaTimes size={12} />
-                        </button>
-                      </div>
-                    )}
-
-                    <div className="column-header">
-                      {editingColumnId === col.id && !isRecebidos ? (
-                        <input
-                          type="text"
-                          value={columnTitleDraft}
-                          autoFocus
-                          onChange={(e) => setColumnTitleDraft(e.target.value)}
-                          onBlur={() => saveColumnTitle(col.id)}
-                          onKeyDown={(e) => e.key === "Enter" && saveColumnTitle(col.id)}
-                        />
-                      ) : (
-                        <h3
-                          style={{ cursor: isRecebidos ? "default" : "pointer" }}
-                          onDoubleClick={() => {
-                            if (!isRecebidos) {
-                              setEditingColumnId(col.id);
-                              setColumnTitleDraft(col.title);
-                            }
-                          }}
-                        >
-                          {col.title}
-                        </h3>
-                      )}
-
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    {(colProvided, colSnapshot) => (
+                      <div
+                        ref={colProvided.innerRef}
+                        {...colProvided.draggableProps}
+                        style={{
+                          ...colProvided.draggableProps.style,
+                          opacity: colSnapshot.isDragging ? 0.85 : 1,
+                        }}
+                      >
                         {!isRecebidos && (
-                          <button className="btn-add" onClick={() => setActiveColumnId(col.id)}>
-                            <FaPlus />
-                          </button>
+                          <div
+                            {...colProvided.dragHandleProps}
+                            style={{
+                              cursor: "grab",
+                              padding: "6px 0",
+                              textAlign: "center",
+                              fontSize: "0.85em",
+                              color: "#666",
+                              userSelect: "none",
+                            }}
+                          >
+                            📌
+                          </div>
                         )}
 
-                        {!isRecebidos && (
-                          <div style={{ position: "relative", display: "inline-block" }}>
+                        {isColorPickerVisible && !isRecebidos && (
+                          <div className="color-picker-toolbar">
                             <button
-                              className="column-menu-btn"
+                              className="reset-color-dot"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setMenuOpenPilha(menuOpenPilha === col.id ? null : col.id);
+                                handleResetCor(col.id);
+                              }}
+                              title="Cor original"
+                            />
+                            <div
+                              ref={(el) => (colorTrackRefs.current[col.id] = el)}
+                              className="color-track"
+                            />
+                            <button
+                              className="close-color-picker"
+                              onClick={() => toggleColorPicker(col.id, false)}
+                              title="Fechar"
+                            >
+                              <FaTimes size={12} />
+                            </button>
+                          </div>
+                        )}
+
+                        <div className="column-header">
+                          {editingColumnId === col.id && !isRecebidos ? (
+                            <input
+                              type="text"
+                              value={columnTitleDraft}
+                              autoFocus
+                              onChange={(e) => setColumnTitleDraft(e.target.value)}
+                              onBlur={() => saveColumnTitle(col.id)}
+                              onKeyDown={(e) => e.key === "Enter" && saveColumnTitle(col.id)}
+                            />
+                          ) : (
+                            <h3
+                              style={{ cursor: isRecebidos ? "default" : "pointer" }}
+                              onDoubleClick={() => {
+                                if (!isRecebidos) {
+                                  setEditingColumnId(col.id);
+                                  setColumnTitleDraft(col.title);
+                                }
                               }}
                             >
-                              <FaEllipsisV />
-                            </button>
-                            {menuOpenPilha === col.id && (
-                              <div className="card-menu-dropdown" style={{ top: "100%", right: 0 }}>
+                              {col.title}
+                            </h3>
+                          )}
+
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            {!isRecebidos && (
+                              <button className="btn-add" onClick={() => setActiveColumnId(col.id)}>
+                                <FaPlus />
+                              </button>
+                            )}
+
+                            {!isRecebidos && (
+                              <div style={{ position: "relative", display: "inline-block" }}>
                                 <button
-                                  onClick={() => {
-                                    setMenuOpenPilha(null);
-                                    toggleColorPicker(col.id, true);
+                                  className="column-menu-btn"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setMenuOpenPilha(menuOpenPilha === col.id ? null : col.id);
                                   }}
                                 >
-                                  🎨 Estilo
+                                  <FaEllipsisV />
                                 </button>
-                                {col.notas.length === 0 ? (
-                                  <button
-                                    onClick={async () => {
-                                      setMenuOpenPilha(null);
-                                      await handleDeletePilha(col.id);
-                                    }}
-                                    style={{ color: "#e53e3e" }}
-                                  >
-                                    <FaTrash /> Excluir pilha
-                                  </button>
-                                ) : (
-                                  <button disabled style={{ color: "#aaa" }}>
-                                    <FaTrash /> Pilha não vazia
-                                  </button>
+                                {menuOpenPilha === col.id && (
+                                  <div className="card-menu-dropdown" style={{ top: "100%", right: 0 }}>
+                                    <button
+                                      onClick={() => {
+                                        setMenuOpenPilha(null);
+                                        toggleColorPicker(col.id, true);
+                                      }}
+                                    >
+                                      🎨 Estilo
+                                    </button>
+                                    {col.notas.length === 0 ? (
+                                      <button
+                                        onClick={async () => {
+                                          setMenuOpenPilha(null);
+                                          await handleDeletePilha(col.id);
+                                        }}
+                                        style={{ color: "#e53e3e" }}
+                                      >
+                                        <FaTrash /> Excluir pilha
+                                      </button>
+                                    ) : (
+                                      <button disabled style={{ color: "#aaa" }}>
+                                        <FaTrash /> Pilha não vazia
+                                      </button>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             )}
                           </div>
-                        )}
-                      </div>
-                    </div>
+                        </div>
 
-                    <div className="cards-list">
-                      {col.notas.map((nota, index) => {
-                        const isConcluida = notasConcluidas.has(String(nota.id));
-                        const isEditingDate = dataConclusaoEdit.hasOwnProperty(String(nota.id));
+                        <Droppable droppableId={col.id} type="CARD">
+                          {(innerProvided) => (
+                            <div
+                              className="cards-list"
+                              ref={innerProvided.innerRef}
+                              {...innerProvided.droppableProps}
+                              style={{
+                                backgroundColor: bgColor,
+                                border: isRecebidos ? "1px solid rgba(46, 125, 50, 0.2)" : "1px solid rgba(0, 0, 0, 0.08)",
+                                borderRadius: "8px",
+                                padding: "8px",
+                                position: "relative",
+                                minWidth: "280px",
+                                maxWidth: "320px",
+                                marginRight: "16px",
+                              }}
+                            >
+                              {col.notas.map((nota, idx) => {
+                                const isConcluida = notasConcluidas.has(String(nota.id));
+                                const isEditingDate = dataConclusaoEdit.hasOwnProperty(String(nota.id));
 
-                        // ✅ Definir cor de fundo com base em 'enviada' e 'respondida'
-                        let cardBackgroundColor = "#ffffff";
-                        let cardBorderLeft = "none";
+                                let cardBackgroundColor = "#ffffff";
+                                let cardBorderLeft = "none";
 
-                        if (nota.respondida) {
-                          cardBackgroundColor = "#e6f4ea"; // verde claro
-                          cardBorderLeft = "4px solid #34a853";
-                        } else if (nota.enviada) {
-                          cardBackgroundColor = "#fce8e6"; // vermelho claro
-                          cardBorderLeft = "4px solid #ea4335";
-                        }
+                                if (nota.respondida) {
+                                  cardBackgroundColor = "#e6f4ea";
+                                  cardBorderLeft = "4px solid #34a853";
+                                } else if (nota.enviada) {
+                                  cardBackgroundColor = "#fce8e6";
+                                  cardBorderLeft = "4px solid #ea4335";
+                                }
 
-                        return (
-                          <Draggable key={String(nota.id)} draggableId={String(nota.id)} index={index}>
-                            {(prov, snapshot) => (
-                              <div
-                                className={`card-item tipo-${(nota.tipo || "lista").toLowerCase()} ${snapshot.isDragging ? "dragging" : ""} ${isConcluida ? "concluida" : ""}`}
-                                ref={prov.innerRef}
-                                {...prov.draggableProps}
-                                {...prov.dragHandleProps}
-                                style={{
-                                  ...prov.draggableProps.style,
-                                  userSelect: "none",
-                                  backgroundColor: cardBackgroundColor,
-                                  borderLeft: cardBorderLeft,
-                                }}
-                                onClick={() => handleOpenNota(nota)}
-                              >
-                                <div
-                                  className="concluir-checkbox-wrapper"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleConclusaoNota(nota.id, isConcluida);
-                                  }}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={isConcluida}
-                                    readOnly
-                                    className="concluir-checkbox"
-                                  />
-                                </div>
-
-                                <div className="card-info">
-                                  <div className="card-title-wrapper">
-                                    <strong>{nota.nome}</strong>
-                                  </div>
-                                  <p>
-                                    {nota.tipo}
-                                    {nota.tipo === "Atas" && notaProgresso[nota.id] !== undefined && (
-                                      <> - {notaProgresso[nota.id]}%</>
-                                    )}
-                                  </p>
-
-                                  {/* ✅ Campo de data de conclusão (só aparece se concluída) */}
-                                  {isConcluida && (
-                                    <div
-                                      className="data-conclusao-container"
-                                      data-nota-id={nota.id}
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      {isEditingDate ? (
-                                        <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "4px" }}>
-                                          <input
-                                            type="date"
-                                            value={dataConclusaoEdit[nota.id] || ""}
-                                            onChange={(e) =>
-                                              setDataConclusaoEdit((prev) => ({
-                                                ...prev,
-                                                [nota.id]: e.target.value,
-                                              }))
-                                            }
-                                            onClick={(e) => e.stopPropagation()}
-                                            style={{ fontSize: "0.85em", padding: "2px 4px" }}
-                                          />
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              saveDataConclusao(nota.id, dataConclusaoEdit[nota.id]);
-                                            }}
-                                            style={{ fontSize: "0.8em" }}
-                                          >
-                                            ✓
-                                          </button>
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setDataConclusaoEdit((prev) => {
-                                                const cp = { ...prev };
-                                                delete cp[nota.id];
-                                                return cp;
-                                              });
-                                            }}
-                                            style={{ fontSize: "0.8em", color: "#e53e3e" }}
-                                          >
-                                            ✖
-                                          </button>
-                                        </div>
-                                      ) : (
+                                return (
+                                  <Draggable
+                                    key={String(nota.id)}
+                                    draggableId={String(nota.id)}
+                                    index={idx}
+                                    type="CARD"
+                                  >
+                                    {(prov, snapshot) => (
+                                      <div
+                                        className={`card-item tipo-${(nota.tipo || "lista").toLowerCase()} ${snapshot.isDragging ? "dragging" : ""} ${isConcluida ? "concluida" : ""}`}
+                                        ref={prov.innerRef}
+                                        {...prov.draggableProps}
+                                        {...prov.dragHandleProps}
+                                        style={{
+                                          ...prov.draggableProps.style,
+                                          userSelect: "none",
+                                          backgroundColor: cardBackgroundColor,
+                                          borderLeft: cardBorderLeft,
+                                        }}
+                                        onClick={() => handleOpenNota(nota)}
+                                      >
                                         <div
+                                          className="concluir-checkbox-wrapper"
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            setDataConclusaoEdit((prev) => ({
-                                              ...prev,
-                                              [nota.id]: dataConclusaoSalva[nota.id] || "",
-                                            }));
-                                          }}
-                                          style={{
-                                            marginTop: "4px",
-                                            fontSize: "0.85em",
-                                            color: dataConclusaoSalva[nota.id] ? "#444" : "#999",
-                                            fontStyle: dataConclusaoSalva[nota.id] ? "normal" : "italic",
+                                            toggleConclusaoNota(nota.id, isConcluida);
                                           }}
                                         >
-                                          {dataConclusaoSalva[nota.id]
-                                            ? new Date(dataConclusaoSalva[nota.id]).toLocaleDateString("pt-BR")
-                                            : "Data da entrega"}
+                                          <input
+                                            type="checkbox"
+                                            checked={isConcluida}
+                                            readOnly
+                                            className="concluir-checkbox"
+                                          />
                                         </div>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
 
-                                {/* ✅ Menu de três pontos só aparece se NÃO concluída */}
-                                {!isConcluida && (
-                                  <div className="card-menu-wrapper" onClick={(e) => e.stopPropagation()}>
-                                    <button
-                                      className="card-menu-btn"
-                                      onClick={() => setMenuOpenNota(menuOpenNota === nota.id ? null : nota.id)}
-                                    >
-                                      <FaEllipsisV />
-                                    </button>
-                                    {menuOpenNota === nota.id && (
-                                      <div className="card-menu-dropdown">
-                                        <button onClick={() => handleEditNota(nota, col.id)}>
-                                          <FaEdit /> Editar
-                                        </button>
-                                        <button onClick={() => handleDeleteNota(nota.id, col.id)}>
-                                          <FaTrash /> Excluir
-                                        </button>
+                                        <div className="card-info">
+                                          <div className="card-title-wrapper">
+                                            <strong>{nota.nome}</strong>
+                                          </div>
+                                          <p>
+                                            {nota.tipo}
+                                            {nota.tipo === "Atas" && notaProgresso[nota.id] !== undefined && (
+                                              <> - {notaProgresso[nota.id]}%</>
+                                            )}
+                                          </p>
+
+                                          {isConcluida && (
+                                            <div
+                                              className="data-conclusao-container"
+                                              data-nota-id={nota.id}
+                                              onClick={(e) => e.stopPropagation()}
+                                            >
+                                              {isEditingDate ? (
+                                                <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "4px" }}>
+                                                  <input
+                                                    type="date"
+                                                    value={dataConclusaoEdit[nota.id] || ""}
+                                                    onChange={(e) =>
+                                                      setDataConclusaoEdit((prev) => ({
+                                                        ...prev,
+                                                        [nota.id]: e.target.value,
+                                                      }))
+                                                    }
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    style={{ fontSize: "0.85em", padding: "2px 4px" }}
+                                                  />
+                                                  <button
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      saveDataConclusao(nota.id, dataConclusaoEdit[nota.id]);
+                                                    }}
+                                                    style={{ fontSize: "0.8em" }}
+                                                  >
+                                                    ✓
+                                                  </button>
+                                                  <button
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      setDataConclusaoEdit((prev) => {
+                                                        const cp = { ...prev };
+                                                        delete cp[nota.id];
+                                                        return cp;
+                                                      });
+                                                    }}
+                                                    style={{ fontSize: "0.8em", color: "#e53e3e" }}
+                                                  >
+                                                    ✖
+                                                  </button>
+                                                </div>
+                                              ) : (
+                                                <div
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setDataConclusaoEdit((prev) => ({
+                                                      ...prev,
+                                                      [nota.id]: dataConclusaoSalva[nota.id] || "",
+                                                    }));
+                                                  }}
+                                                  style={{
+                                                    marginTop: "4px",
+                                                    fontSize: "0.85em",
+                                                    color: dataConclusaoSalva[nota.id] ? "#444" : "#999",
+                                                    fontStyle: dataConclusaoSalva[nota.id] ? "normal" : "italic",
+                                                  }}
+                                                >
+                                                  {dataConclusaoSalva[nota.id]
+                                                    ? new Date(dataConclusaoSalva[nota.id]).toLocaleDateString("pt-BR")
+                                                    : "Data da entrega"}
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        {!isConcluida && (
+                                          <div className="card-menu-wrapper" onClick={(e) => e.stopPropagation()}>
+                                            <button
+                                              className="card-menu-btn"
+                                              onClick={() => setMenuOpenNota(menuOpenNota === nota.id ? null : nota.id)}
+                                            >
+                                              <FaEllipsisV />
+                                            </button>
+                                            {menuOpenNota === nota.id && (
+                                              <div className="card-menu-dropdown">
+                                                <button onClick={() => handleEditNota(nota, col.id)}>
+                                                  <FaEdit /> Editar
+                                                </button>
+                                                <button onClick={() => handleDeleteNota(nota.id, col.id)}>
+                                                  <FaTrash /> Excluir
+                                                </button>
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
                                       </div>
                                     )}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </Draggable>
-                        );
-                      })}
-                      {provided.placeholder}
-                    </div>
-                  </div>
-                )}
-              </Droppable>
-            );
-          })}
-        </div>
+                                  </Draggable>
+                                );
+                              })}
+                              {innerProvided.placeholder}
+                            </div>
+                          )}
+                        </Droppable>
+                      </div>
+                    )}
+                  </Draggable>
+                );
+              })}
+              {provided.placeholder}
+            </div>
+          )}
+        </Droppable>
       </DragDropContext>
 
       {isNotaRecebidos && notaSelecionada ? (
@@ -934,7 +986,6 @@ export default function Cards() {
               notaOrigem={notaOrigem}
               notaEspelhoId={notaSelecionada.id}
               onClose={handleCloseNota}
-              // ✅ Passa a função para atualizar o status localmente
               onStatusUpdate={atualizarStatusNota}
             />
           </div>
@@ -960,7 +1011,6 @@ export default function Cards() {
           notaProgresso={notaProgresso}
           setNotaProgresso={setNotaProgresso}
           donoContainerId={donoContainerId}
-          // ✅ Passa a função para atualizar o status localmente
           onStatusUpdate={atualizarStatusNota}
         />
       )}
