@@ -503,13 +503,6 @@ export default function Collab({ onClose, user, onOpenTask }) {
                         ))}
                       </div>
                     </div>
-                    <button
-                      className="btn-ler"
-                      onClick={() => lerMensagemMencoes(n)}
-                      disabled={n.lido}
-                    >
-                      {n.lido ? "Aberto" : "Abrir"}
-                    </button>
                   </div>
                 );
               })
