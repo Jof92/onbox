@@ -415,3 +415,47 @@
   color: #000;
   background-color: #f0f0f0;
 }
+
+.notificacao-mensagem {
+  font-weight: 500;
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.notificacao-caminho {
+  font-size: 0.82rem;
+  color: #666;
+  margin-bottom: 8px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", monospace;
+  opacity: 0.9;
+  font-weight: 350;
+}
+/* Caminho hierárquico clicável */
+.notificacao-caminho {
+  font-size: 0.85rem;
+  color: #666;
+  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.caminho-parte {
+  cursor: pointer;
+  color: #007bff;
+  transition: all 0.2s ease;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.caminho-parte:hover {
+  background-color: #e3f2fd;
+  color: #0056b3;
+  text-decoration: underline;
+}
+
+.caminho-separador {
+  color: #999;
+  user-select: none;
+}

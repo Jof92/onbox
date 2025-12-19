@@ -39,7 +39,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
     };
   }, [onClose]);
 
-  // 🔔 Buscar notificações
+  // 🔔 Buscar notificações — COM CAMINHO HIERÁRQUICO CORRETO
   const fetchNotificacoes = useCallback(async () => {
     if (!user?.id || !user?.email) {
       setConvitesRecebidos([]);
@@ -50,6 +50,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
 
     setLoadingNotificacoes(true);
     try {
+      // Convites recebidos
       const { data: convites, error: convitesError } = await supabase
         .from("convites")
         .select("*")
@@ -70,6 +71,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
         );
       }
 
+      // Buscar notificações com todos os IDs necessários
       const { data: notificacoesMencoes, error: mencaoError } = await supabase
         .from("notificacoes")
         .select(`
@@ -77,21 +79,69 @@ export default function Collab({ onClose, user, onOpenTask }) {
           user_id,
           remetente_id,
           nota_id,
+          pilha_id,
+          container_id,
           projeto_id,
+          setor_id,
           mensagem,
           lido,
           tipo,
           created_at,
           remetente:profiles!notificacoes_remetente_id_fkey(id, nome, avatar_url),
-          nota:notas(id, nome),
-          projeto:projects(id, name)
+          nota:notas(id, nome)
         `)
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
       let mencoesFormatadas = [];
+
       if (!mencaoError && notificacoesMencoes?.length) {
-        mencoesFormatadas = notificacoesMencoes.map((m) => ({ ...m, tipo: m.tipo || "menção" }));
+        // Coletar IDs únicos
+        const pilhaIds = [...new Set(notificacoesMencoes.map(n => n.pilha_id).filter(Boolean))];
+        const containerIds = [...new Set(notificacoesMencoes.map(n => n.container_id).filter(Boolean))];
+        const unidadeIds = [...new Set(
+          notificacoesMencoes
+            .map(n => n.projeto_id || n.setor_id)
+            .filter(Boolean)
+        )];
+
+        // Buscar nomes: container vem de PROFILES, pilhas usam "title"
+        const [pilhasRes, containersRes, unidadesRes] = await Promise.all([
+          pilhaIds.length
+            ? supabase.from("pilhas").select("id, title").in("id", pilhaIds)
+            : Promise.resolve({ data: [] }),
+          containerIds.length
+            ? supabase.from("profiles").select("id, nickname, nome").in("id", containerIds)
+            : Promise.resolve({ data: [] }),
+          unidadeIds.length
+            ? supabase.from("projects").select("id, name").in("id", unidadeIds)
+            : Promise.resolve({ data: [] })
+        ]);
+
+        const pilhaMap = new Map(pilhasRes.data?.map(p => [p.id, p]) || []);
+        const containerMap = new Map(containersRes.data?.map(c => [c.id, c]) || []);
+        const unidadeMap = new Map(unidadesRes.data?.map(u => [u.id, u]) || []);
+
+        mencoesFormatadas = notificacoesMencoes.map((n) => {
+          const container = containerMap.get(n.container_id);
+          const pilha = pilhaMap.get(n.pilha_id);
+          const unidade = unidadeMap.get(n.projeto_id) || unidadeMap.get(n.setor_id);
+
+          const containerNome = container?.nickname || container?.nome || "Container";
+
+          const caminho = [
+            containerNome,
+            unidade?.name || "Unidade",
+            pilha?.title || "Pilha",
+            n.nota?.nome || "Tarefa"
+          ].join(" / ");
+
+          return {
+            ...n,
+            tipo: n.tipo || "menção",
+            caminho
+          };
+        });
       }
 
       setConvitesRecebidos(convitesFormatados);
@@ -239,12 +289,77 @@ export default function Collab({ onClose, user, onOpenTask }) {
         onOpenTask({
           nota_id: notificacao.nota_id,
           projeto_id: notificacao.projeto_id,
-          projeto_nome: notificacao.projeto?.name || "Projeto",
+          setor_id: notificacao.setor_id,
+          container_id: notificacao.container_id,
+          pilha_id: notificacao.pilha_id,
+          projeto_nome: notificacao.projeto?.name || (notificacao.setor?.name || "Projeto/Setor"),
           nota_nome: notificacao.nota?.nome || "Tarefa",
         });
       }
     } catch (err) {
       console.error("Erro ao marcar menção como lida:", err);
+    }
+  };
+
+  // 🎯 Navegar para parte específica do caminho
+  const navegarParaCaminho = async (notificacao, nivel) => {
+    try {
+      // Marcar como lido se ainda não estiver
+      if (!notificacao.lido) {
+        await supabase.from("notificacoes").update({ lido: true }).eq("id", notificacao.id);
+        fetchNotificacoes();
+      }
+
+      onClose();
+
+      if (!onOpenTask) return;
+
+      // Nível 0: Container (navega apenas para o container)
+      if (nivel === 0) {
+        onOpenTask({
+          container_id: notificacao.container_id,
+          projeto_id: null,
+          setor_id: null,
+          pilha_id: null,
+          nota_id: null,
+          tipo_navegacao: 'container'
+        });
+      }
+      // Nível 1: Unidade (container + projeto/setor)
+      else if (nivel === 1) {
+        onOpenTask({
+          container_id: notificacao.container_id,
+          projeto_id: notificacao.projeto_id,
+          setor_id: notificacao.setor_id,
+          pilha_id: null,
+          nota_id: null,
+          tipo_navegacao: 'unidade'
+        });
+      }
+      // Nível 2: Pilha (container + unidade + pilha)
+      else if (nivel === 2) {
+        onOpenTask({
+          container_id: notificacao.container_id,
+          projeto_id: notificacao.projeto_id,
+          setor_id: notificacao.setor_id,
+          pilha_id: notificacao.pilha_id,
+          nota_id: null,
+          tipo_navegacao: 'pilha'
+        });
+      }
+      // Nível 3: Nota completa
+      else {
+        onOpenTask({
+          container_id: notificacao.container_id,
+          projeto_id: notificacao.projeto_id,
+          setor_id: notificacao.setor_id,
+          pilha_id: notificacao.pilha_id,
+          nota_id: notificacao.nota_id,
+          tipo_navegacao: 'nota'
+        });
+      }
+    } catch (err) {
+      console.error("Erro ao navegar:", err);
     }
   };
 
@@ -267,7 +382,6 @@ export default function Collab({ onClose, user, onOpenTask }) {
   return (
     <div className="collab-modal-overlay">
       <div className="collab-modal">
-        {/* Cabeçalho — botão de fechar ao lado dos tabs */}
         <div className="collab-header">
           <h2>Colaborações</h2>
           <div className="collab-header-actions">
@@ -294,7 +408,6 @@ export default function Collab({ onClose, user, onOpenTask }) {
                 <FaArchive className="icon" />
               </button>
             </div>
-            {/* ✅ Botão de fechar ao lado dos tabs, SEMPRE visível */}
             <button
               className="collab-close-btn"
               onClick={onClose}
@@ -351,7 +464,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
           </div>
         )}
 
-        {/* Aba: Menções */}
+        {/* Aba: Menções — COM CAMINHO HIERÁRQUICO CLICÁVEL */}
         {activeTab === "notificacoes" && (
           <div className="collab-section">
             <h3>Menções</h3>
@@ -362,21 +475,44 @@ export default function Collab({ onClose, user, onOpenTask }) {
             ) : mencoes.length === 0 ? (
               <p className="empty">Nenhuma menção no momento.</p>
             ) : (
-              mencoes.map((n) => (
-                <div
-                  key={n.id}
-                  className={`notificacao-item ${n.lido ? "lida" : "nao-lida"}`}
-                >
-                  <span>{n.mensagem || "Você foi mencionado em uma tarefa."}</span>
-                  <button
-                    className="btn-ler"
-                    onClick={() => lerMensagemMencoes(n)}
-                    disabled={n.lido}
+              mencoes.map((n) => {
+                const partesCaminho = n.caminho ? n.caminho.split(" / ") : [];
+                
+                return (
+                  <div
+                    key={n.id}
+                    className={`notificacao-item ${n.lido ? "lida" : "nao-lida"}`}
                   >
-                    {n.lido ? "Aberto" : "Abrir"}
-                  </button>
-                </div>
-              ))
+                    <div className="notificacao-mensagem">
+                      {n.mensagem || "Você foi mencionado em uma tarefa."}
+                    
+                      <div className="notificacao-caminho">
+                        {partesCaminho.map((parte, index) => (
+                          <React.Fragment key={index}>
+                            <span
+                              className="caminho-parte"
+                              onClick={() => navegarParaCaminho(n, index)}
+                              title={`Ir para ${parte}`}
+                            >
+                              {parte}
+                            </span>
+                            {index < partesCaminho.length - 1 && (
+                              <span className="caminho-separador"> / </span>
+                            )}
+                          </React.Fragment>
+                        ))}
+                      </div>
+                    </div>
+                    <button
+                      className="btn-ler"
+                      onClick={() => lerMensagemMencoes(n)}
+                      disabled={n.lido}
+                    >
+                      {n.lido ? "Aberto" : "Abrir"}
+                    </button>
+                  </div>
+                );
+              })
             )}
           </div>
         )}

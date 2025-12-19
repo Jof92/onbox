@@ -233,18 +233,86 @@ export default function ThinSidebar({ containerAtual, setContainerAtual, user })
       </aside>
 
       {showCollab && (
-        <Collab
-          onClose={() => {
-            setShowCollab(false);
-            fetchColaboradores();
-            fetchNotificacoesNaoLidas();
-          }}
-          user={user}
-          onOpenTask={() => {
-            fetchNotificacoesNaoLidas();
-          }}
-        />
-      )}
+  <Collab
+    onClose={() => {
+      setShowCollab(false);
+      fetchColaboradores();
+      fetchNotificacoesNaoLidas();
+    }}
+    user={user}
+    onOpenTask={(data) => {
+      const { tipo_navegacao, container_id, projeto_id, setor_id, pilha_id, nota_id } = data;
+      
+      // Navegar para o container correto se necessário
+      if (container_id && container_id !== containerAtual) {
+        setContainerAtual(container_id);
+        navigate(`/containers/${container_id}`);
+      }
+      
+      // Navegar baseado no tipo
+      if (tipo_navegacao === 'container') {
+        // Apenas ir para o container (já feito acima)
+        console.log('Navegando para container:', container_id);
+      } else if (tipo_navegacao === 'unidade' && (projeto_id || setor_id)) {
+        // Navegar para projeto/setor com query params
+        const entityId = projeto_id || setor_id;
+        const queryParams = new URLSearchParams({
+          entityId: entityId,
+          type: setor_id ? 'setor' : 'project',
+          containerId: container_id
+        });
+        navigate(`/cards/${entityId}?${queryParams.toString()}`, {
+          state: {
+            projectId: projeto_id,
+            setorId: setor_id,
+            entityType: setor_id ? 'setor' : 'project',
+            containerId: container_id,
+          }
+        });
+      } else if (tipo_navegacao === 'pilha' && pilha_id) {
+        // Navegar para pilha dentro do projeto/setor
+        const entityId = projeto_id || setor_id;
+        const queryParams = new URLSearchParams({
+          entityId: entityId,
+          type: setor_id ? 'setor' : 'project',
+          containerId: container_id
+        });
+        navigate(`/cards/${entityId}?${queryParams.toString()}`, {
+          state: {
+            projectId: projeto_id,
+            setorId: setor_id,
+            pilhaId: pilha_id,
+            entityType: setor_id ? 'setor' : 'project',
+            containerId: container_id,
+          }
+        });
+      } else if (tipo_navegacao === 'nota' && nota_id) {
+        // Navegar para nota específica com query params incluindo nota
+        const entityId = projeto_id || setor_id;
+        const queryParams = new URLSearchParams({
+          entityId: entityId,
+          type: setor_id ? 'setor' : 'project',
+          containerId: container_id,
+          nota: nota_id
+        });
+        navigate(`/cards/${entityId}?${queryParams.toString()}`, {
+          state: {
+            projectId: projeto_id,
+            setorId: setor_id,
+            pilhaId: pilha_id,
+            notaId: nota_id,
+            entityType: setor_id ? 'setor' : 'project',
+            containerId: container_id,
+            openNota: true,
+          }
+        });
+      }
+      
+      fetchNotificacoesNaoLidas();
+      setShowCollab(false);
+    }}
+  />
+)}
 
       {showSettings && (
         <ContainerSettings
