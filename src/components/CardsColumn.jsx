@@ -309,72 +309,70 @@ export default function Column({
                               )}
                             </p>
 
-                            {isConcluida && (
-                              <div
-                                className="data-conclusao-container"
-                                data-nota-id={nota.id}
+                           <div
+                          className="data-conclusao-container"
+                          data-nota-id={nota.id}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {isEditingDate ? (
+                            <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "4px" }}>
+                              <input
+                                type="date"
+                                value={dataConclusaoEdit[nota.id] || ""}
+                                onChange={(e) =>
+                                  setDataConclusaoEdit((prev) => ({
+                                    ...prev,
+                                    [nota.id]: e.target.value,
+                                  }))
+                                }
                                 onClick={(e) => e.stopPropagation()}
+                                style={{ fontSize: "0.85em", padding: "2px 4px" }}
+                              />
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  saveDataConclusao(nota.id, dataConclusaoEdit[nota.id]);
+                                }}
+                                style={{ fontSize: "0.8em" }}
                               >
-                                {isEditingDate ? (
-                                  <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "4px" }}>
-                                    <input
-                                      type="date"
-                                      value={dataConclusaoEdit[nota.id] || ""}
-                                      onChange={(e) =>
-                                        setDataConclusaoEdit((prev) => ({
-                                          ...prev,
-                                          [nota.id]: e.target.value,
-                                        }))
-                                      }
-                                      onClick={(e) => e.stopPropagation()}
-                                      style={{ fontSize: "0.85em", padding: "2px 4px" }}
-                                    />
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        saveDataConclusao(nota.id, dataConclusaoEdit[nota.id]);
-                                      }}
-                                      style={{ fontSize: "0.8em" }}
-                                    >
-                                      ✓
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setDataConclusaoEdit((prev) => {
-                                          const cp = { ...prev };
-                                          delete cp[nota.id];
-                                          return cp;
-                                        });
-                                      }}
-                                      style={{ fontSize: "0.8em", color: "#e53e3e" }}
-                                    >
-                                      ✖
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setDataConclusaoEdit((prev) => ({
-                                        ...prev,
-                                        [nota.id]: dataConclusaoSalva[nota.id] || "",
-                                      }));
-                                    }}
-                                    style={{
-                                      marginTop: "4px",
-                                      fontSize: "0.85em",
-                                      color: dataConclusaoSalva[nota.id] ? "#444" : "#999",
-                                      fontStyle: dataConclusaoSalva[nota.id] ? "normal" : "italic",
-                                    }}
-                                  >
-                                    {dataConclusaoSalva[nota.id]
-                                      ? new Date(dataConclusaoSalva[nota.id]).toLocaleDateString("pt-BR")
-                                      : "Data da entrega"}
-                                  </div>
-                                )}
-                              </div>
-                            )}
+                                ✓
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDataConclusaoEdit((prev) => {
+                                    const cp = { ...prev };
+                                    delete cp[nota.id];
+                                    return cp;
+                                  });
+                                }}
+                                style={{ fontSize: "0.8em", color: "#e53e3e" }}
+                              >
+                                ✖
+                              </button>
+                            </div>
+                          ) : (
+                            <div
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDataConclusaoEdit((prev) => ({
+                                  ...prev,
+                                  [nota.id]: dataConclusaoSalva[nota.id] || "",
+                                }));
+                              }}
+                              style={{
+                                marginTop: "4px",
+                                fontSize: "0.85em",
+                                color: dataConclusaoSalva[nota.id] ? "#444" : "#999",
+                                fontStyle: dataConclusaoSalva[nota.id] ? "normal" : "italic",
+                              }}
+                            >
+                              {dataConclusaoSalva[nota.id]
+                                ? new Date(dataConclusaoSalva[nota.id]).toLocaleDateString("pt-BR")
+                                : "Data da entrega"}
+                            </div>
+                          )}
+                        </div>
                           </div>
 
                           {!isConcluida && (

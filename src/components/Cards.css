@@ -691,6 +691,7 @@
 }
 
 /* Container do checkbox: fixo no canto superior esquerdo */
+/* Container do checkbox: fixo no canto superior esquerdo */
 .concluir-checkbox-wrapper {
   position: absolute;
   top: 4px;
@@ -701,15 +702,21 @@
   align-items: center;
   justify-content: center;
   opacity: 0;
-  pointer-events: none; /* Evita interferir com o drag ou clique na nota */
+  pointer-events: none;
   transition: opacity 0.15s ease;
   z-index: 3;
 }
 
-/* Apenas ao passar o mouse na nota inteira, mostra o checkbox */
-.card-item:hover .concluir-checkbox-wrapper {
+/* Mostra o checkbox ao passar o mouse — MAS APENAS se NÃO estiver concluída */
+.card-item:not(.concluida):hover .concluir-checkbox-wrapper {
   opacity: 1;
-  pointer-events: auto; /* Só habilita clique quando visível */
+  pointer-events: auto;
+}
+
+/* Mostra o checkbox SEMPRE quando a nota estiver concluída */
+.card-item.concluida .concluir-checkbox-wrapper {
+  opacity: 1 !important;
+  pointer-events: auto !important;
 }
 
 .concluir-checkbox {
