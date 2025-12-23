@@ -1,7 +1,22 @@
-// src/components/QuickNoteCard.jsx
+// src/components/NotaRapidaCard.jsx
 import React, { useState, useEffect } from "react";
-import { FaUser, FaCalendarAlt, FaTimes } from "react-icons/fa";
+import { FaImage, FaEdit, FaTrash, FaEllipsisV } from "react-icons/fa";
+import { MdPersonAddAlt1 } from "react-icons/md";
 import { supabase } from "../supabaseClient";
+import "./NotaRapidaCard.css";
+
+// Cores por tipo — IGUAIS às do seu CSS
+const COR_POR_TIPO = {
+  "Atas": "#22c55e",
+  "Lista": "#3b82f6",
+  "Tarefas": "#facc15",
+  "Metas": "#8b5cf6",
+  "Diário de Obra": "#f87171",
+  "Diário de obra": "#f87171",
+  "Medição": "#8b5cf6",
+  "Medicao": "#8b5cf6",
+  "Nota Rápida": "#f63bcc",
+};
 
 export default function QuickNoteCard({
   nota,
@@ -9,14 +24,31 @@ export default function QuickNoteCard({
   onSaveResponsavel,
   onSaveDataEntrega,
   onRemoveResponsavel,
+  handleDeleteNota,
+  handleEditNota,
+  toggleConclusaoNota,
+  isConcluida,
+  isEditingDate,
+  dataConclusaoEdit,
+  dataConclusaoSalva,
+  setDataConclusaoEdit,
+  saveDataConclusao,
+  menuOpenNota,
+  setMenuOpenNota,
+  pilhaId,
+  dragHandleProps,
 }) {
   const [nomeEdit, setNomeEdit] = useState(nota.nome || "");
   const [editingNome, setEditingNome] = useState(false);
-  const [responsavelInput, setResponsavelInput] = useState("");
-  const [showMentions, setShowMentions] = useState(false);
-  const [dataEntrega, setDataEntrega] = useState(nota.data_entrega || "");
+  const [uploading, setUploading] = useState(false);
+  const [imagemUrl, setImagemUrl] = useState(nota.imagem_url || "");
 
-  // Salvar nome ao perder foco
+  // ✅ Sincroniza imagemUrl com a prop sempre que nota.imagem_url mudar (ex: após recarregar)
+  useEffect(() => {
+    setImagemUrl(nota.imagem_url || "");
+  }, [nota.imagem_url]);
+
+  // --- Nome ---
   const handleNomeBlur = () => {
     if (nomeEdit.trim() && nomeEdit !== nota.nome) {
       onSaveNome(nota.id, nomeEdit.trim());
@@ -24,47 +56,194 @@ export default function QuickNoteCard({
     setEditingNome(false);
   };
 
-  // Salvar data ao mudar
-  const handleDataChange = (e) => {
-    const val = e.target.value;
-    setDataEntrega(val);
-    onSaveDataEntrega(nota.id, val || null);
-  };
-
-  // Lógica de menção (@) — simplificada aqui; você pode integrar com seu sistema de menções
-  const handleResponsavelChange = (e) => {
-    const val = e.target.value;
-    setResponsavelInput(val);
-    if (val.startsWith("@")) {
-      setShowMentions(true);
-    } else {
-      setShowMentions(false);
+  // --- Data ---
+  const handleDataClick = () => {
+    if (!isEditingDate) {
+      setDataConclusaoEdit((prev) => ({
+        ...prev,
+        [nota.id]: dataConclusaoSalva[nota.id] || "",
+      }));
     }
   };
 
-  const selectResponsavel = (user) => {
-    onSaveResponsavel(nota.id, user.id, user.nome);
-    setResponsavelInput("");
-    setShowMentions(false);
+  const handleDataChange = (e) => {
+    const val = e.target.value;
+    setDataConclusaoEdit((prev) => ({
+      ...prev,
+      [nota.id]: val,
+    }));
   };
 
+  const saveData = () => {
+    saveDataConclusao(nota.id, dataConclusaoEdit[nota.id] || null);
+  };
+
+  const cancelData = () => {
+    setDataConclusaoEdit((prev) => {
+      const cp = { ...prev };
+      delete cp[nota.id];
+      return cp;
+    });
+  };
+
+  // --- Upload de imagem ---
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith("image/")) return;
+
+    setUploading(true);
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${nota.id}_${Date.now()}.${fileExt}`;
+    const filePath = `quick-notes/${fileName}`;
+
+    // Faz o upload
+    const { error: uploadError } = await supabase.storage
+      .from("notas-imagens")
+      .upload(filePath, file, { upsert: true });
+
+    if (uploadError) {
+      console.error("Erro no upload da imagem:", uploadError);
+      setUploading(false);
+      return;
+    }
+
+    // Obtém a URL pública
+    const { data } = await supabase.storage
+      .from("notas-imagens")
+      .getPublicUrl(filePath);
+
+    if (data?.publicUrl) {
+      // Atualiza a nota no banco
+      const { error: updateError } = await supabase
+        .from("notas")
+        .update({ imagem_url: data.publicUrl })
+        .eq("id", nota.id);
+
+      if (updateError) {
+        console.error("Erro ao salvar imagem_url no banco:", updateError);
+      } else {
+        // ✅ Atualiza localmente para exibição imediata
+        setImagemUrl(data.publicUrl);
+      }
+    }
+
+    setUploading(false);
+  };
+
+  // --- Remover imagem ---
+  const handleRemoveImage = async () => {
+    if (!window.confirm("Remover esta imagem?")) return;
+
+    // Atualiza no banco
+    const { error: updateError } = await supabase
+      .from("notas")
+      .update({ imagem_url: null })
+      .eq("id", nota.id);
+
+    if (updateError) {
+      console.error("Erro ao remover imagem_url:", updateError);
+    } else {
+      setImagemUrl("");
+    }
+  };
+
+  // Cor da borda
+  const borderColor = COR_POR_TIPO[nota.tipo] || "#cbd5e1";
+
   return (
-    <div className="quick-note-card">
-      {nota.imagem_url && (
-        <img
-          src={nota.imagem_url}
-          alt="Anexo"
-          className="quick-note-image"
-          style={{
-            width: "100%",
-            height: "80px",
-            objectFit: "cover",
-            borderRadius: "4px",
-            marginBottom: "8px",
-          }}
+    <div
+      className={`card-item tipo-nota-rapida ${isConcluida ? "concluida" : ""}`}
+      style={{ borderRight: `6px solid ${borderColor}` }}
+      {...dragHandleProps}
+    >
+      {/* Checkbox de conclusão */}
+      <div
+        className="concluir-checkbox-wrapper"
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleConclusaoNota(nota.id, isConcluida);
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={isConcluida}
+          readOnly
+          className="concluir-checkbox"
         />
+      </div>
+
+      {/* Imagem (se houver) */}
+      {imagemUrl && (
+        <div className="quick-note-image-wrapper">
+          <img src={imagemUrl} alt="" className="quick-note-image" />
+        </div>
       )}
 
+      {/* ✅ Nova linha: botões enfileirados abaixo */}
+      <div className="quick-note-actions-row">
+        {/* 1. Adicionar imagem */}
+        <label className="quick-note-btn-icon">
+          {uploading ? (
+            <span style={{ fontSize: "0.8em" }}>...</span>
+          ) : (
+            <FaImage size={14} />
+          )}
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleImageUpload}
+            style={{ display: "none" }}
+          />
+        </label>
+
+        {/* 2. Remover imagem (só aparece se houver imagem) */}
+        {imagemUrl && (
+          <button
+            className="quick-note-btn-icon remove-image-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRemoveImage();
+            }}
+            title="Remover imagem"
+          >
+            <FaTrash size={14} />
+          </button>
+        )}
+
+        {/* 3. Responsável */}
+        <button
+          className="quick-note-btn-icon"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (nota.responsavel_nome) {
+              onRemoveResponsavel(nota.id);
+            }
+          }}
+          title={nota.responsavel_nome || "Adicionar responsável"}
+        >
+          {nota.responsavel_nome ? (
+            <span style={{ fontSize: "0.8em" }}>👤</span>
+          ) : (
+            <MdPersonAddAlt1 size={16} />
+          )}
+        </button>
+
+        {/* 4. Menu de 3 pontos */}
+        {!isConcluida && (
+          <button
+            className="quick-note-btn-icon"
+            onClick={(e) => {
+              e.stopPropagation();
+              setMenuOpenNota(menuOpenNota === nota.id ? null : nota.id);
+            }}
+            title="Mais ações"
+          >
+            <FaEllipsisV size={14} />
+          </button>
+        )}
+      </div>
+
+      {/* Nome editável */}
       {editingNome ? (
         <input
           type="text"
@@ -74,58 +253,107 @@ export default function QuickNoteCard({
           onBlur={handleNomeBlur}
           onKeyDown={(e) => e.key === "Enter" && handleNomeBlur()}
           className="quick-note-nome-input"
+          onClick={(e) => e.stopPropagation()}
         />
       ) : (
         <div
           className="quick-note-nome"
           onClick={() => setEditingNome(true)}
-          style={{ cursor: "text", fontWeight: "bold", marginBottom: "6px" }}
         >
           {nomeEdit || "Clique para editar..."}
         </div>
       )}
 
-      {/* Responsável */}
-      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px" }}>
-        <FaUser size={12} style={{ color: "#666" }} />
-        {nota.responsavel_nome ? (
-          <span>
-            {nota.responsavel_nome}
-            <button
-              onClick={() => onRemoveResponsavel(nota.id)}
-              style={{ marginLeft: "4px", background: "none", border: "none", color: "#999", cursor: "pointer" }}
-            >
-              <FaTimes size={10} />
+      {/* Tipo da nota */}
+      <div className="quick-note-tipo">{nota.tipo}</div>
+
+      {/* Data de entrega */}
+      <div
+        className="data-conclusao-container"
+        data-nota-id={nota.id}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!isEditingDate) handleDataClick();
+        }}
+      >
+        {isEditingDate ? (
+          <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "4px" }}>
+            <input
+              type="date"
+              value={dataConclusaoEdit[nota.id] || ""}
+              onChange={handleDataChange}
+              onClick={(e) => e.stopPropagation()}
+              style={{ fontSize: "0.85em", padding: "2px 4px" }}
+            />
+            <button onClick={(e) => { e.stopPropagation(); saveData(); }} style={{ fontSize: "0.8em" }}>
+              ✓
             </button>
-          </span>
+            <button onClick={(e) => { e.stopPropagation(); cancelData(); }} style={{ fontSize: "0.8em", color: "#e53e3e" }}>
+              ✖
+            </button>
+          </div>
         ) : (
-          <input
-            type="text"
-            value={responsavelInput}
-            placeholder="@mencionar"
-            onChange={handleResponsavelChange}
-            className="quick-note-responsavel-input"
-            style={{ fontSize: "0.85em", padding: "2px", border: "1px solid #ddd", borderRadius: "3px" }}
-          />
+          <div
+            style={{
+              marginTop: "4px",
+              fontSize: "0.85em",
+              color: dataConclusaoSalva[nota.id] ? "#444" : "#999",
+              fontStyle: dataConclusaoSalva[nota.id] ? "normal" : "italic",
+            }}
+          >
+            {dataConclusaoSalva[nota.id]
+              ? new Date(dataConclusaoSalva[nota.id]).toLocaleDateString("pt-BR")
+              : "Data da entrega"}
+          </div>
         )}
       </div>
 
-      {/* Data de entrega */}
-      <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.85em" }}>
-        <FaCalendarAlt size={12} style={{ color: "#666" }} />
-        <input
-          type="date"
-          value={dataEntrega || ""}
-          onChange={handleDataChange}
-          style={{ fontSize: "0.85em", padding: "2px" }}
-        />
-      </div>
-
-      {/* Aqui você pode colocar o dropdown de menções se `showMentions` */}
-      {showMentions && (
-        <div className="mention-dropdown">
-          {/* Exemplo: lista de participantes do container atual */}
-          {/* Você já tem lógica de menção — reutilize aqui */}
+     {/* Dropdown de 3 pontos — APENAS "Excluir" */}
+      {!isConcluida && menuOpenNota === nota.id && (
+        <div
+          className="card-menu-dropdown1"
+          style={{
+            position: "absolute",
+            top: "auto",
+            bottom: "8px",
+            right: "8px",
+            zIndex: 9999,
+            pointerEvents: "auto",
+          }}
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            console.log("🎯 MouseDown no dropdown");
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            console.log("🎯 Clicou no dropdown");
+          }}
+        >
+          <button 
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              console.log("🗑️ MouseDown no botão excluir");
+            }}
+            onClick={async (e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              console.log("🗑️ Clicando em excluir - ID:", nota.id);
+              setMenuOpenNota(null);
+              
+              if (!window.confirm("Excluir esta nota?")) {
+                console.log("❌ Usuário cancelou a exclusão");
+                return;
+              }
+              
+              console.log("✅ Confirmado - chamando handleDeleteNota");
+              // Chama diretamente sem await porque handleDeleteNota já é async
+              handleDeleteNota(nota.id, pilhaId);
+            }}
+          >
+            <FaTrash size={12} /> Excluir
+          </button>
         </div>
       )}
     </div>

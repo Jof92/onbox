@@ -1,8 +1,9 @@
-// src/components/Column.jsx
+// src/components/CardsColumn.jsx
 import React, { useState, useRef, useEffect } from "react";
 import { Draggable, Droppable } from "@hello-pangea/dnd";
-import { FaPlus, FaEllipsisV, FaEdit, FaTrash, FaTimes } from "react-icons/fa";
+import { FaPlus, FaEllipsisV, FaEdit, FaTrash, FaTimes, FaMapPin } from "react-icons/fa";
 import { supabase } from "../supabaseClient";
+import QuickNoteCard from "./NotaRapidaCard";
 
 export default function Column({
   col,
@@ -30,6 +31,10 @@ export default function Column({
   handleOpenNota,
   handleEditNota,
   handleDeleteNota,
+  onSaveNomeRapida,
+  onSaveResponsavelRapida,
+  onSaveDataEntregaRapida,
+  onRemoveResponsavelRapida,
 }) {
   const colorTrackRefs = useRef({});
   const isRecebidos = col.title === "Recebidos";
@@ -128,7 +133,7 @@ export default function Column({
                 userSelect: "none",
               }}
             >
-              📌
+              <FaMapPin />
             </div>
           )}
 
@@ -248,6 +253,55 @@ export default function Column({
                 }}
               >
                 {col.notas.map((nota, idx) => {
+                  if (nota.tipo === "Nota Rápida") {
+                    const isConcluida = notasConcluidas.has(String(nota.id));
+                    const isEditingDate = dataConclusaoEdit.hasOwnProperty(String(nota.id));
+
+                    return (
+                      <Draggable
+                        key={String(nota.id)}
+                        draggableId={String(nota.id)}
+                        index={idx}
+                        type="CARD"
+                      >
+                        {(prov, snapshot) => (
+                          <div
+                            ref={prov.innerRef}
+                            {...prov.draggableProps}
+                            style={{
+                              ...prov.draggableProps.style,
+                              userSelect: "text",
+                            }}
+                          >
+                            {/* ✅ REMOVIDO o div com dragHandleProps e "⋮" */}
+                            {/* ✅ Agora passamos dragHandleProps diretamente para o card */}
+                            <QuickNoteCard
+                              nota={nota}
+                              onSaveNome={onSaveNomeRapida}
+                              onSaveResponsavel={onSaveResponsavelRapida}
+                              onSaveDataEntrega={onSaveDataEntregaRapida}
+                              onRemoveResponsavel={onRemoveResponsavelRapida}
+                              // === Funcionalidades do card normal ===
+                              isConcluida={isConcluida}
+                              isEditingDate={isEditingDate}
+                              dataConclusaoEdit={dataConclusaoEdit}
+                              dataConclusaoSalva={dataConclusaoSalva}
+                              setDataConclusaoEdit={setDataConclusaoEdit}
+                              saveDataConclusao={saveDataConclusao}
+                              menuOpenNota={menuOpenNota}
+                              setMenuOpenNota={setMenuOpenNota}
+                              handleEditNota={handleEditNota}
+                              handleDeleteNota={handleDeleteNota}
+                              toggleConclusaoNota={toggleConclusaoNota}
+                              pilhaId={col.id}
+                              dragHandleProps={prov.dragHandleProps} // ✅ Passado aqui
+                            />
+                          </div>
+                        )}
+                      </Draggable>
+                    );
+                  }
+
                   const isConcluida = notasConcluidas.has(String(nota.id));
                   const isEditingDate = dataConclusaoEdit.hasOwnProperty(String(nota.id));
 
@@ -309,70 +363,70 @@ export default function Column({
                               )}
                             </p>
 
-                           <div
-                          className="data-conclusao-container"
-                          data-nota-id={nota.id}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {isEditingDate ? (
-                            <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "4px" }}>
-                              <input
-                                type="date"
-                                value={dataConclusaoEdit[nota.id] || ""}
-                                onChange={(e) =>
-                                  setDataConclusaoEdit((prev) => ({
-                                    ...prev,
-                                    [nota.id]: e.target.value,
-                                  }))
-                                }
-                                onClick={(e) => e.stopPropagation()}
-                                style={{ fontSize: "0.85em", padding: "2px 4px" }}
-                              />
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  saveDataConclusao(nota.id, dataConclusaoEdit[nota.id]);
-                                }}
-                                style={{ fontSize: "0.8em" }}
-                              >
-                                ✓
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDataConclusaoEdit((prev) => {
-                                    const cp = { ...prev };
-                                    delete cp[nota.id];
-                                    return cp;
-                                  });
-                                }}
-                                style={{ fontSize: "0.8em", color: "#e53e3e" }}
-                              >
-                                ✖
-                              </button>
-                            </div>
-                          ) : (
                             <div
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDataConclusaoEdit((prev) => ({
-                                  ...prev,
-                                  [nota.id]: dataConclusaoSalva[nota.id] || "",
-                                }));
-                              }}
-                              style={{
-                                marginTop: "4px",
-                                fontSize: "0.85em",
-                                color: dataConclusaoSalva[nota.id] ? "#444" : "#999",
-                                fontStyle: dataConclusaoSalva[nota.id] ? "normal" : "italic",
-                              }}
+                              className="data-conclusao-container"
+                              data-nota-id={nota.id}
+                              onClick={(e) => e.stopPropagation()}
                             >
-                              {dataConclusaoSalva[nota.id]
-                                ? new Date(dataConclusaoSalva[nota.id]).toLocaleDateString("pt-BR")
-                                : "Data da entrega"}
+                              {isEditingDate ? (
+                                <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "4px" }}>
+                                  <input
+                                    type="date"
+                                    value={dataConclusaoEdit[nota.id] || ""}
+                                    onChange={(e) =>
+                                      setDataConclusaoEdit((prev) => ({
+                                        ...prev,
+                                        [nota.id]: e.target.value,
+                                      }))
+                                    }
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{ fontSize: "0.85em", padding: "2px 4px" }}
+                                  />
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      saveDataConclusao(nota.id, dataConclusaoEdit[nota.id]);
+                                    }}
+                                    style={{ fontSize: "0.8em" }}
+                                  >
+                                    ✓
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setDataConclusaoEdit((prev) => {
+                                        const cp = { ...prev };
+                                        delete cp[nota.id];
+                                        return cp;
+                                      });
+                                    }}
+                                    style={{ fontSize: "0.8em", color: "#e53e3e" }}
+                                  >
+                                    ✖
+                                  </button>
+                                </div>
+                              ) : (
+                                <div
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDataConclusaoEdit((prev) => ({
+                                      ...prev,
+                                      [nota.id]: dataConclusaoSalva[nota.id] || "",
+                                    }));
+                                  }}
+                                  style={{
+                                    marginTop: "4px",
+                                    fontSize: "0.85em",
+                                    color: dataConclusaoSalva[nota.id] ? "#444" : "#999",
+                                    fontStyle: dataConclusaoSalva[nota.id] ? "normal" : "italic",
+                                  }}
+                                >
+                                  {dataConclusaoSalva[nota.id]
+                                    ? new Date(dataConclusaoSalva[nota.id]).toLocaleDateString("pt-BR")
+                                    : "Data da entrega"}
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
                           </div>
 
                           {!isConcluida && (

@@ -1,6 +1,6 @@
 // src/components/Cards.jsx
 import React, { useState, useEffect, useCallback } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import "./Cards.css";
 import { DragDropContext, Droppable } from "@hello-pangea/dnd";
 import { FaPlus, FaArrowLeft } from "react-icons/fa";
@@ -13,7 +13,6 @@ import Column from "./CardsColumn";
 export default function Cards() {
   const location = useLocation();
   const navigate = useNavigate();
-  const params = useParams();
 
   const [entity, setEntity] = useState(null);
   const [columns, setColumns] = useState([]);
@@ -41,6 +40,7 @@ export default function Cards() {
   const [notasConcluidas, setNotasConcluidas] = useState(new Set());
   const [dataConclusaoEdit, setDataConclusaoEdit] = useState({});
   const [dataConclusaoSalva, setDataConclusaoSalva] = useState({});
+  const [membros, setMembros] = useState([]);
 
   const atualizarStatusNota = (notaId, updates) => {
     setColumns((prev) =>
@@ -63,7 +63,48 @@ export default function Cards() {
     navigate(`${location.pathname}?${urlParams.toString()}`, { replace: false });
   };
 
-useEffect(() => {
+  const handleSaveNomeRapida = async (notaId, novoNome) => {
+    if (!novoNome.trim()) return;
+    const { error } = await supabase
+      .from("notas")
+      .update({ nome: novoNome.trim() })
+      .eq("id", notaId);
+    if (!error) {
+      atualizarStatusNota(notaId, { nome: novoNome.trim() });
+    }
+  };
+
+  const handleSaveResponsavelRapida = async (notaId, userId, userName) => {
+    const { error } = await supabase
+      .from("notas")
+      .update({ responsavel: userId })
+      .eq("id", notaId);
+    if (!error) {
+      atualizarStatusNota(notaId, { responsavel: userId, responsavel_nome: userName });
+    }
+  };
+
+  const handleSaveDataEntregaRapida = async (notaId, data) => {
+    const { error } = await supabase
+      .from("notas")
+      .update({ data_entrega: data || null })
+      .eq("id", notaId);
+    if (!error) {
+      atualizarStatusNota(notaId, { data_entrega: data || null });
+    }
+  };
+
+  const handleRemoveResponsavelRapida = async (notaId) => {
+    const { error } = await supabase
+      .from("notas")
+      .update({ responsavel: null })
+      .eq("id", notaId);
+    if (!error) {
+      atualizarStatusNota(notaId, { responsavel: null, responsavel_nome: null });
+    }
+  };
+
+  useEffect(() => {
     const loadInitialData = async () => {
       const urlParams = new URLSearchParams(location.search);
       const entityIdFromUrl = urlParams.get('entityId');
@@ -88,13 +129,10 @@ useEffect(() => {
 
       if (containerId) setDonoContainerId(containerId);
       
-      // Se não tiver entityId na URL nem no state, redirecionar
       if (!entityId) {
-        console.log("Nenhum entityId encontrado, redirecionando...");
         return navigate("/containers", { replace: true });
       }
 
-      // Atualizar URL apenas se necessário (não substituir, adicionar ao histórico)
       const currentUrl = `${location.pathname}${location.search}`;
       const newUrl = new URLSearchParams();
       newUrl.set('entityId', entityId);
@@ -103,8 +141,6 @@ useEffect(() => {
       if (notaIdFromUrl) newUrl.set('nota', notaIdFromUrl);
       
       const targetUrl = `${location.pathname}?${newUrl.toString()}`;
-      
-      // Só navegar se a URL for diferente
       if (currentUrl !== targetUrl) {
         navigate(targetUrl, { replace: true });
       }
@@ -118,70 +154,94 @@ useEffect(() => {
         setUsuarioId(currentUserId);
 
         if (currentUserId) {
-          const { data: profile } = await supabase
+          const { data: profileData } = await supabase
             .from("profiles")
             .select("nome")
             .eq("id", currentUserId)
             .single();
-          if (profile?.nome) setUsuarioAtual(profile.nome);
+          if (profileData?.nome) setUsuarioAtual(profileData.nome);
         }
 
         let entityData = null;
         if (type === "project") {
-          const { data, error } = await supabase.from("projects").select("*").eq("id", entityId).single();
-          if (error) {
-            console.error("Erro ao carregar projeto:", error);
-            alert("Projeto não encontrado ou você não tem permissão para acessá-lo.");
-            return navigate("/containers", { replace: true });
-          }
-          entityData = data;
+          const { data: projData, error: projError } = await supabase
+            .from("projects")
+            .select("*")
+            .eq("id", entityId)
+            .single();
+          if (projError) throw new Error("Projeto não encontrado");
+          entityData = projData;
         } else {
-          const { data, error } = await supabase.from("setores").select("*").eq("id", entityId).single();
-          if (error) {
-            console.error("Erro ao carregar setor:", error);
-            alert("Setor não encontrado ou você não tem permissão para acessá-lo.");
-            return navigate("/containers", { replace: true });
-          }
-          entityData = data;
-        }
-
-        if (!entityData) {
-          alert("Entidade não encontrada.");
-          return navigate("/containers", { replace: true });
+          const { data: setData, error: setError } = await supabase
+            .from("setores")
+            .select("*")
+            .eq("id", entityId)
+            .single();
+          if (setError) throw new Error("Setor não encontrado");
+          entityData = setData;
         }
 
         const entityName = projectName || setorName || entityData.name;
         const entityPhoto = projectPhoto || setorPhoto || entityData.photo_url;
 
+        // ✅✅✅ CARREGAMENTO CORRETO DOS MEMBROS — SEM ERROS
+        let membrosList = [];
+        if (type === "project") {
+          const { data: projectMembers } = await supabase
+            .from("project_members")
+            .select("user_id")
+            .eq("project_id", entityId);
+          if (projectMembers && projectMembers.length > 0) {
+            const userIds = projectMembers.map(m => m.user_id);
+            const { data: perfis } = await supabase
+              .from("profiles")
+              .select("id, nickname, avatar_url")
+              .in("id", userIds);
+            membrosList = perfis || [];
+          }
+        } else {
+          const { data: setorMembers } = await supabase
+            .from("setor_members")
+            .select("user_id")
+            .eq("setor_id", entityId);
+          if (setorMembers && setorMembers.length > 0) {
+            const userIds = setorMembers.map(m => m.user_id);
+            const { data: perfis } = await supabase
+              .from("profiles")
+              .select("id, nickname, avatar_url")
+              .in("id", userIds);
+            membrosList = perfis || [];
+          }
+        }
+        setMembros(membrosList);
+
+        // Carregar pilhas e notas
         const { data: pilhas } = await supabase
           .from("pilhas")
-          .select(`
-            *,
-            notas(
-              id, nome, tipo, responsavel, progresso, concluida, data_conclusao,
-              enviada, respondida
-            )
-         `)
+          .select("*")
           .eq(type === "project" ? "project_id" : "setor_id", entityId)
           .order("ordem", { ascending: true });
 
-        const pilhasOrdenadas = pilhas || [];
+        const pilhasComNotas = await Promise.all(
+          pilhas.map(async (pilha) => {
+            const { data: notas } = await supabase
+              .from("notas")
+              .select("id, nome, tipo, responsavel, progresso, concluida, data_conclusao, data_entrega, enviada, respondida, imagem_url, ordem")
+              .eq("pilha_id", pilha.id)
+              .order("ordem", { ascending: true });
+            return { ...pilha, notas: notas || [] };
+          })
+        );
 
         const progressoInicial = {};
         const concluidasInicial = new Set();
         const dataConclusaoInicial = {};
 
-        pilhasOrdenadas.forEach((pilha) => {
+        pilhasComNotas.forEach((pilha) => {
           pilha.notas.forEach((nota) => {
-            if (nota.progresso != null) {
-              progressoInicial[nota.id] = nota.progresso;
-            }
-            if (nota.concluida) {
-              concluidasInicial.add(String(nota.id));
-            }
-            if (nota.data_conclusao) {
-              dataConclusaoInicial[nota.id] = nota.data_conclusao.split("T")[0];
-            }
+            if (nota.progresso != null) progressoInicial[nota.id] = nota.progresso;
+            if (nota.concluida) concluidasInicial.add(String(nota.id));
+            if (nota.data_conclusao) dataConclusaoInicial[nota.id] = nota.data_conclusao.split("T")[0];
           });
         });
 
@@ -189,7 +249,7 @@ useEffect(() => {
         setNotasConcluidas(concluidasInicial);
         setDataConclusaoSalva(dataConclusaoInicial);
 
-        const columnsData = pilhasOrdenadas.map((p) => ({
+        const columnsData = pilhasComNotas.map((p) => ({
           id: String(p.id),
           title: p.title,
           notas: p.notas || [],
@@ -200,13 +260,12 @@ useEffect(() => {
         setColumns(columnsData);
         setEntity({ id: entityId, name: entityName, photo_url: entityPhoto, type });
 
-        // Abrir nota automaticamente se estiver na URL
         if (notaIdFromUrl) {
           let notaEncontrada = null;
           let colunaEncontrada = null;
           for (const col of columnsData) {
             const nota = col.notas.find((n) => String(n.id) === notaIdFromUrl);
-            if (nota) {
+            if (nota && nota.tipo !== "Nota Rápida") {
               notaEncontrada = nota;
               colunaEncontrada = col;
               break;
@@ -216,12 +275,7 @@ useEffect(() => {
             setNotaSelecionada(notaEncontrada);
             const isRecebidos = colunaEncontrada?.title === "Recebidos";
             setIsNotaRecebidos(isRecebidos);
-            if (isRecebidos) {
-              loadOrigemData(notaEncontrada.id);
-            } else {
-              setProjetoOrigem(null);
-              setNotaOrigem(null);
-            }
+            if (isRecebidos) loadOrigemData(notaEncontrada.id);
           }
         }
       } catch (err) {
@@ -233,7 +287,7 @@ useEffect(() => {
     };
 
     loadInitialData();
-  }, [location.pathname]);
+  }, [location.pathname, navigate]);
 
   useEffect(() => {
     const urlParams = new URLSearchParams(location.search);
@@ -243,7 +297,7 @@ useEffect(() => {
       let colunaEncontrada = null;
       for (const col of columns) {
         const nota = col.notas.find((n) => String(n.id) === notaId);
-        if (nota) {
+        if (nota && nota.tipo !== "Nota Rápida") {
           notaEncontrada = nota;
           colunaEncontrada = col;
           break;
@@ -254,10 +308,6 @@ useEffect(() => {
         const isRecebidos = colunaEncontrada?.title === "Recebidos";
         setIsNotaRecebidos(isRecebidos);
         if (isRecebidos) loadOrigemData(notaEncontrada.id);
-        else {
-          setProjetoOrigem(null);
-          setNotaOrigem(null);
-        }
       } else if (notaSelecionada) {
         const newUrl = new URLSearchParams(location.search);
         newUrl.delete('nota');
@@ -269,7 +319,7 @@ useEffect(() => {
       setProjetoOrigem(null);
       setNotaOrigem(null);
     }
-  }, [columns, location.search]);
+  }, [columns, location.search, navigate]);
 
   const loadOrigemData = async (notaEspelhoId) => {
     try {
@@ -299,12 +349,13 @@ useEffect(() => {
         setNotaOrigem({ id: notaEspelhoId, nome: notaEspelho?.nome || "Sem nome" });
       }
     } catch (err) {
-      console.error("Erro ao carregar dados de origem:", err);
+      console.error("Erro ao carregar origem:", err);
       setProjetoOrigem(null);
       setNotaOrigem(null);
     }
   };
 
+  // ... outros useEffects de click outside (mantidos iguais) ...
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (menuOpenNota && !e.target.closest('.card-menu-dropdown') && !e.target.closest('.card-menu-btn')) {
@@ -335,13 +386,13 @@ useEffect(() => {
     if (entityType === "project") newPilhaData.project_id = entity.id;
     else newPilhaData.setor_id = entity.id;
 
-    const { data: newPilha, error } = await supabase
+    const { data: newPilha } = await supabase
       .from("pilhas")
       .insert([newPilhaData])
       .select()
       .single();
 
-    if (!error) {
+    if (newPilha) {
       setColumns((prev) => [...prev, { id: String(newPilha.id), title: newPilha.title, notas: [], cor_fundo: null, ordem: newOrdem }]);
     }
   };
@@ -359,8 +410,6 @@ useEffect(() => {
         else novo.delete(String(notaId));
         return novo;
       });
-    } else {
-      console.error("Erro ao atualizar conclusão:", error);
     }
   };
 
@@ -373,13 +422,11 @@ useEffect(() => {
 
     try {
       const { nome, tipo } = formData;
-      const { data: newNota, error } = await supabase
+      const { data: newNota } = await supabase
         .from("notas")
-        .insert([{ nome, tipo, pilha_id: activeColumnId, responsavel: usuarioId, concluida: false }])
+        .insert([{ nome, tipo, pilha_id: activeColumnId, responsavel: usuarioId, concluida: false, ordem: 0 }])
         .select()
         .single();
-
-      if (error) throw error;
 
       setColumns((prev) =>
         prev.map((c) => (c.id === activeColumnId ? { ...c, notas: [newNota, ...c.notas] } : c))
@@ -392,46 +439,45 @@ useEffect(() => {
         setProjetoOrigem(null);
         setNotaOrigem(null);
       }
+
+      setFormData({ nome: "", responsavel: "", tipo: "Lista" });
+      setActiveColumnId(null);
     } catch (err) {
       console.error("Erro ao criar nota:", err);
       alert(`Erro ao criar nota: ${err.message || 'Erro desconhecido'}`);
-    } finally {
-      setFormData({ nome: "", responsavel: "", tipo: "Lista" });
-      setActiveColumnId(null);
     }
   };
 
   const handleDeleteNota = async (notaId, pilhaId) => {
     if (!window.confirm("Excluir esta nota?")) return;
-    const { error } = await supabase.from("notas").delete().eq("id", notaId);
-    if (!error) {
-      setColumns((prev) =>
-        prev.map((c) =>
-          c.id === pilhaId ? { ...c, notas: c.notas.filter((n) => n.id !== notaId) } : c
-        )
-      );
-      setMenuOpenNota(null);
-      setNotaProgresso((p) => {
-        const cp = { ...p };
-        delete cp[notaId];
-        return cp;
-      });
-      setNotasConcluidas((prev) => {
-        const novo = new Set(prev);
-        novo.delete(String(notaId));
-        return novo;
-      });
-      if (notaSelecionada?.id === notaId) {
-        setNotaSelecionada(null);
-        setIsNotaRecebidos(false);
-        setProjetoOrigem(null);
-        setNotaOrigem(null);
-        updateUrlWithNota(null);
-      }
-    } else {
-      console.error("Erro ao excluir nota:", error);
-      alert("Não foi possível excluir a nota. Você só pode excluir notas que criou.");
+
+    setColumns((prev) =>
+      prev.map((c) =>
+        c.id === pilhaId ? { ...c, notas: c.notas.filter((n) => n.id !== notaId) } : c
+      )
+    );
+
+    setMenuOpenNota(null);
+    setNotaProgresso((prev) => {
+      const updated = { ...prev };
+      delete updated[notaId];
+      return updated;
+    });
+    setNotasConcluidas((prev) => {
+      const updated = new Set(prev);
+      updated.delete(String(notaId));
+      return updated;
+    });
+
+    if (notaSelecionada?.id === notaId) {
+      setNotaSelecionada(null);
+      setIsNotaRecebidos(false);
+      setProjetoOrigem(null);
+      setNotaOrigem(null);
+      updateUrlWithNota(null);
     }
+
+    await supabase.from("notas").delete().eq("id", notaId);
   };
 
   const handleEditNota = (nota, pilhaId) => {
@@ -455,7 +501,6 @@ useEffect(() => {
       }
       setNotaEditData({ id: null, nome: "", responsavel: "", pilhaId: null });
     } else {
-      console.error("Erro ao editar nota:", error);
       alert("Erro ao salvar alterações.");
     }
   };
@@ -472,8 +517,6 @@ useEffect(() => {
         delete cp[notaId];
         return cp;
       });
-    } else {
-      console.error("Erro ao salvar data de conclusão:", error);
     }
   };
 
@@ -497,6 +540,7 @@ useEffect(() => {
       .filter(col => col.title !== "Recebidos")
       .map((col, index) => ({
         id: col.id,
+        title: col.title,
         ordem: index
       }));
 
@@ -505,7 +549,7 @@ useEffect(() => {
       .upsert(updates, { onConflict: 'id' });
 
     if (error) {
-      console.error("Erro ao salvar ordem das pilhas:", error);
+      alert("Erro ao salvar posição das pilhas.");
     } else {
       setColumns(prev =>
         prev.map(col => {
@@ -519,7 +563,6 @@ useEffect(() => {
   const onDragEnd = useCallback(
     async (result) => {
       const { source, destination, type } = result;
-
       if (!destination) return;
       if (source.droppableId === destination.droppableId && source.index === destination.index) return;
 
@@ -527,13 +570,11 @@ useEffect(() => {
         const newColumns = Array.from(columns);
         const [moved] = newColumns.splice(source.index, 1);
         newColumns.splice(destination.index, 0, moved);
-
         const recebidosIndex = newColumns.findIndex(col => col.title === "Recebidos");
         if (recebidosIndex !== -1 && recebidosIndex !== 0) {
           const recebidosCol = newColumns.splice(recebidosIndex, 1)[0];
           newColumns.unshift(recebidosCol);
         }
-
         setColumns(newColumns);
         saveColumnsOrder(newColumns);
         return;
@@ -547,23 +588,34 @@ useEffect(() => {
         destCol.notas.splice(destination.index, 0, movedNote);
         setColumns(nextColumns);
 
-        if (source.droppableId !== destination.droppableId) {
-          try {
-            await supabase.from("notas").update({ pilha_id: destination.droppableId }).eq("id", movedNote.id);
-            if (notaSelecionada?.id === movedNote.id) {
-              setNotaSelecionada((prev) => ({ ...prev, pilha_id: destination.droppableId }));
-              const destIsRecebidos = columns.find((c) => c.id === destination.droppableId)?.title === "Recebidos";
-              setIsNotaRecebidos(destIsRecebidos);
-              if (destIsRecebidos) loadOrigemData(movedNote.id);
-              else {
-                setProjetoOrigem(null);
-                setNotaOrigem(null);
-              }
-            }
-          } catch (err) {
-            console.error("Erro ao mover nota:", err);
-            alert("Erro ao mover nota. Revertendo.");
+        try {
+          for (const [idx, nota] of destCol.notas.entries()) {
+            await supabase
+              .from('notas')
+              .update({ pilha_id: destCol.id, ordem: idx })
+              .eq('id', nota.id);
           }
+          if (source.droppableId !== destination.droppableId) {
+            for (const [idx, nota] of sourceCol.notas.entries()) {
+              await supabase
+                .from('notas')
+                .update({ ordem: idx })
+                .eq('id', nota.id);
+            }
+          }
+
+          if (notaSelecionada?.id === movedNote.id && movedNote.tipo !== "Nota Rápida") {
+            setNotaSelecionada((prev) => ({ ...prev, pilha_id: destCol.id }));
+            const destIsRecebidos = destCol.title === "Recebidos";
+            setIsNotaRecebidos(destIsRecebidos);
+            if (destIsRecebidos) loadOrigemData(movedNote.id);
+            else {
+              setProjetoOrigem(null);
+              setNotaOrigem(null);
+            }
+          }
+        } catch (err) {
+          alert("Erro ao salvar posição das notas. Atualize a página.");
         }
       }
     },
@@ -571,6 +623,7 @@ useEffect(() => {
   );
 
   const handleOpenNota = (nota) => {
+    if (nota.tipo === "Nota Rápida") return;
     let isRecebidos = false;
     for (const col of columns) {
       if (col.notas.some((n) => n.id === nota.id)) {
@@ -600,6 +653,7 @@ useEffect(() => {
 
   return (
     <div className="cards-page">
+      {/* ✅ HEADER COM AVATARES DOS MEMBROS */}
       <header className="cards-header">
         <button
           className="btn-voltar"
@@ -618,10 +672,27 @@ useEffect(() => {
         <h1>
           Pilhas - <span className="project-name">{entity?.name || "Entidade Desconhecida"}</span>
         </h1>
-        <button className="btn-add-pilha" onClick={handleAddColumn}>
-          <FaPlus />
-        </button>
+
+        {/* ✅ AVATARES À DIREITA */}
+        {membros.length > 0 && (
+          <div className="cards-header-members">
+            {membros.slice(0, 5).map((membro) => (
+              <img
+                key={membro.id}
+                src={membro.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(membro.nickname || 'M')}&background=81C784&color=fff`}
+                alt={membro.nickname || "Membro"}
+                className="member-avatar"
+                title={membro.nickname}
+              />
+            ))}
+          </div>
+        )}
       </header>
+
+      {/* ✅ BOTÃO FLUTUANTE */}
+      <button className="floating-add-column-btn" onClick={handleAddColumn} title="Adicionar pilha">
+        <FaPlus />
+      </button>
 
       <DragDropContext onDragEnd={onDragEnd}>
         <Droppable droppableId="all-columns" direction="horizontal" type="COLUMN">
@@ -659,6 +730,10 @@ useEffect(() => {
                   handleOpenNota={handleOpenNota}
                   handleEditNota={handleEditNota}
                   handleDeleteNota={handleDeleteNota}
+                  onSaveNomeRapida={handleSaveNomeRapida}
+                  onSaveResponsavelRapida={handleSaveResponsavelRapida}
+                  onSaveDataEntregaRapida={handleSaveDataEntregaRapida}
+                  onRemoveResponsavelRapida={handleRemoveResponsavelRapida}
                 />
               ))}
               {provided.placeholder}

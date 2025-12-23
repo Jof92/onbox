@@ -1,0 +1,228 @@
+/* src/components/NotaRapidaCard.css */
+
+/* Estilo base igual ao .card-item */
+.card-item.tipo-nota-rapida {
+  border-right: 6px solid #f63bcc;
+  cursor: default !important;
+}
+
+.card-item.tipo-nota-rapida:hover {
+  background: #fff;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+}
+
+/* Imagem no topo */
+.quick-note-image-wrapper {
+  margin-bottom: 8px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.quick-note-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Botão de upload de imagem */
+.quick-note-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f1f5f9;
+  color: #475569;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8em;
+  cursor: pointer;
+  border: 1px dashed #cbd5e1;
+  margin-bottom: 8px;
+  transition: all 0.2s;
+}
+
+.quick-note-upload-btn:hover {
+  background: #e2e8f0;
+  border-color: #94a3b8;
+}
+
+/* Nome da nota */
+.quick-note-nome {
+  font-weight: bold;
+  font-size: 16px;
+  margin: 5px 0 4px 0;
+  padding: 0;
+  cursor: text;
+  color: #1e293b;
+  word-break: break-word;
+}
+
+.quick-note-nome-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 16px;
+  margin: 0 0 4px 0;
+  outline: none;
+  background: #fff;
+}
+
+.quick-note-nome-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+/* Tipo da nota */
+.quick-note-tipo {
+  font-size: 13px;
+  color: #4b5563;
+  margin: 0 0 8px 0;
+  font-weight: 500;
+}
+
+/* Data de entrega */
+.quick-note-data {
+    margin-top: 4px;
+    font-size: 0.85em;
+    color: rgb(153, 153, 153);
+    font-style: italic;
+}
+
+/* Botão de responsável no canto direito */
+.quick-note-responsavel-btn {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: #f1f5f9;
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #475569;
+  z-index: 2;
+}
+
+.quick-note-responsavel-btn:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+.quick-note-responsavel-text {
+  font-size: 10px;
+  white-space: nowrap;
+  max-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  text-align: center;
+}
+
+/* Dropdown de menções */
+.mention-dropdown {
+  position: absolute;
+  top: 48px;
+  right: 0;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  z-index: 10;
+  min-width: 120px;
+  padding: 4px 0;
+}
+
+.mention-dropdown > div {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 13px;
+  color: #1f2937;
+}
+
+.mention-dropdown > div:last-child {
+  border-bottom: none;
+}
+
+.mention-dropdown > div:hover {
+  background: #f8fafc;
+}
+
+/* Evita conflito com .cards-list */
+.cards-list {
+  position: relative;
+}
+
+.quick-note-actions-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #eee;
+  border-bottom: 1px solid #eee;
+  justify-content: center;
+}
+
+.quick-note-btn-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #555;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.quick-note-btn-icon:hover {
+  background: #f0f0f0;
+}
+
+.remove-image-btn {
+  color: #e53e3e;
+}
+
+.card-menu-dropdown1{
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 10;
+    min-width: 120px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    display: flex;
+    flex-direction: column;
+}
+
+.card-menu-dropdown1 button {
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 14px;
+  color: #1f2937;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: 0.25s;
+}
+
+.card-menu-dropdown1 button:hover {
+  background: #f3f4f6;
+}
+
+.card-menu-dropdown1 button svg {
+  font-size: 14px;
+}

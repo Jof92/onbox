@@ -14,6 +14,7 @@ const TIPOS_NOTA = [
   { key: "Medição", label: "Medição" },
   { key: "Metas", label: "Metas" },
   { key: "Tarefas", label: "Tarefas" },
+  { key: "Nota Rápida", label: "Nota Rápida" },
 ];
 
 export default function ModalNota({
@@ -36,7 +37,7 @@ export default function ModalNota({
   notaProgresso,
   setNotaProgresso,
   donoContainerId,
-  onStatusUpdate, // ✅ Adicionado
+  onStatusUpdate,
 }) {
   const handleProgressoChange = useCallback((progresso) => {
     if (notaSelecionada?.id) {
@@ -55,18 +56,13 @@ export default function ModalNota({
     }
   };
 
-  // Função para formatar data de forma segura
-  const formatarData = (dateString) => {
-    if (!dateString) return "Nunca";
-    try {
-      return new Date(dateString).toLocaleString("pt-BR");
-    } catch {
-      return "Data inválida";
-    }
-  };
-
   if (!showNovaNota && !showEditarNota && !showVisualizarNota) {
-    return <></>;
+    return null;
+  }
+
+  // Proteção extra: não renderizar modal para Nota Rápida
+  if (showVisualizarNota && notaSelecionada && notaSelecionada.tipo === "Nota Rápida") {
+    return null;
   }
 
   return (
@@ -119,7 +115,6 @@ export default function ModalNota({
 
         {showVisualizarNota && notaSelecionada && (
           <>
-            {/* Renderização condicional por tipo da nota */}
             {(() => {
               if (notaSelecionada.tipo === "Atas") {
                 return (
@@ -150,9 +145,7 @@ export default function ModalNota({
                 return (
                   <Metas
                     notaId={notaSelecionada.id}
-                    projectId={
-                      project?.type === "projeto" ? project.id : null
-                    }
+                    projectId={project?.type === "projeto" ? project.id : null}
                     usuarioId={usuarioId}
                   />
                 );
@@ -164,7 +157,7 @@ export default function ModalNota({
                     containerAtual={{ id: donoContainerId }}
                     usuarioAtual={usuarioAtual}
                     onClose={onCloseVisualizarNota}
-                    onStatusUpdate={onStatusUpdate} // ✅ Passado aqui
+                    onStatusUpdate={onStatusUpdate}
                   />
                 );
               }
