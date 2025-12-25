@@ -1,9 +1,9 @@
 // src/components/CardsColumn.jsx
 import React, { useState, useRef, useEffect } from "react";
 import { Draggable, Droppable } from "@hello-pangea/dnd";
-import { FaPlus, FaEllipsisV, FaEdit, FaTrash, FaTimes, FaMapPin } from "react-icons/fa";
+import { FaPlus, FaEllipsisV, FaEdit, FaTrash, FaTimes, FaMapPin, FaFileExport } from "react-icons/fa";
 import { supabase } from "../supabaseClient";
-import QuickNoteCard from "./NotaRapidaCard";
+import NotaRapidaCard from "./NotaRapidaCard";
 
 export default function Column({
   col,
@@ -31,7 +31,6 @@ export default function Column({
   handleOpenNota,
   handleEditNota,
   handleDeleteNota,
-  onSaveNomeRapida,
   onSaveResponsavelRapida,
   onSaveDataEntregaRapida,
   onRemoveResponsavelRapida,
@@ -41,23 +40,47 @@ export default function Column({
   const bgColor = col.cor_fundo || (isRecebidos ? "rgba(46, 125, 50, 0.08)" : "transparent");
   const isColorPickerVisible = showColorPicker[col.id];
 
+  const handleSaveDescricaoRapida = async (notaId, descricao) => {
+    const { error } = await supabase
+      .from("notas")
+      .update({ descricao })
+      .eq("id", notaId);
+
+    if (error) {
+      return;
+    }
+
+    setColumns(prev =>
+      prev.map(c =>
+        c.id === col.id
+          ? {
+              ...c,
+              notas: c.notas.map(n =>
+                n.id === notaId ? { ...n, descricao } : n
+              ),
+            }
+          : c
+      )
+    );
+  };
+
   const updatePilhaCor = async (pilhaId, cor) => {
     const { error } = await supabase
       .from("pilhas")
       .update({ cor_fundo: cor })
       .eq("id", pilhaId);
     if (!error) {
-      setColumns((prev) => prev.map((c) => (c.id === pilhaId ? { ...c, cor_fundo: cor } : c)));
+      setColumns(prev => prev.map(c => (c.id === pilhaId ? { ...c, cor_fundo: cor } : c)));
     }
   };
 
   const handleResetCor = (pilhaId) => {
     updatePilhaCor(pilhaId, null);
-    setShowColorPicker((prev) => ({ ...prev, [pilhaId]: false }));
+    setShowColorPicker(prev => ({ ...prev, [pilhaId]: false }));
   };
 
   const toggleColorPicker = (pilhaId, show) => {
-    setShowColorPicker((prev) => ({ ...prev, [pilhaId]: show }));
+    setShowColorPicker(prev => ({ ...prev, [pilhaId]: show }));
     if (show) setMenuOpenPilha(null);
   };
 
@@ -65,13 +88,13 @@ export default function Column({
     if (!columnTitleDraft.trim()) return setEditingColumnId(null);
     const { error } = await supabase.from("pilhas").update({ title: columnTitleDraft }).eq("id", id);
     if (!error) {
-      setColumns((prev) => prev.map((c) => (c.id === id ? { ...c, title: columnTitleDraft } : c)));
+      setColumns(prev => prev.map(c => (c.id === id ? { ...c, title: columnTitleDraft } : c)));
     }
     setEditingColumnId(null);
   };
 
   const handleDeletePilha = async (pilhaId) => {
-    const pilha = columns.find((c) => c.id === pilhaId);
+    const pilha = columns.find(c => c.id === pilhaId);
     if (!pilha || pilha.notas.length > 0) {
       alert("Apenas pilhas vazias podem ser excluídas.");
       return;
@@ -80,7 +103,7 @@ export default function Column({
 
     const { error } = await supabase.from("pilhas").delete().eq("id", pilhaId);
     if (!error) {
-      setColumns((prev) => prev.filter((c) => c.id !== pilhaId));
+      setColumns(prev => prev.filter(c => c.id !== pilhaId));
       setMenuOpenPilha(null);
     }
   };
@@ -273,15 +296,12 @@ export default function Column({
                               userSelect: "text",
                             }}
                           >
-                            {/* ✅ REMOVIDO o div com dragHandleProps e "⋮" */}
-                            {/* ✅ Agora passamos dragHandleProps diretamente para o card */}
-                            <QuickNoteCard
+                            <NotaRapidaCard
                               nota={nota}
-                              onSaveNome={onSaveNomeRapida}
                               onSaveResponsavel={onSaveResponsavelRapida}
                               onSaveDataEntrega={onSaveDataEntregaRapida}
+                              onSaveDescricao={handleSaveDescricaoRapida}
                               onRemoveResponsavel={onRemoveResponsavelRapida}
-                              // === Funcionalidades do card normal ===
                               isConcluida={isConcluida}
                               isEditingDate={isEditingDate}
                               dataConclusaoEdit={dataConclusaoEdit}
@@ -294,7 +314,7 @@ export default function Column({
                               handleDeleteNota={handleDeleteNota}
                               toggleConclusaoNota={toggleConclusaoNota}
                               pilhaId={col.id}
-                              dragHandleProps={prov.dragHandleProps} // ✅ Passado aqui
+                              dragHandleProps={prov.dragHandleProps}
                             />
                           </div>
                         )}
@@ -337,20 +357,31 @@ export default function Column({
                           }}
                           onClick={() => handleOpenNota(nota)}
                         >
-                          <div
-                            className="concluir-checkbox-wrapper"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleConclusaoNota(nota.id, isConcluida);
-                            }}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isConcluida}
-                              readOnly
-                              className="concluir-checkbox"
-                            />
-                          </div>
+                          <div className="concluir-checkbox-wrapper">
+                              <input
+                                type="checkbox"
+                                checked={isConcluida}
+                                readOnly
+                                className="concluir-checkbox"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleConclusaoNota(nota.id, isConcluida);
+                                }}
+                              />
+                              {isConcluida && (
+                                <button
+                                  className="arquivar-btn"
+                                  title="Arquivar nota"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    // Implementar lógica de arquivamento aqui
+                                    console.log("Arquivar nota:", nota.id);
+                                  }}
+                                >
+                                  <FaFileExport size={14} />
+                                </button>
+                              )}
+                            </div>
 
                           <div className="card-info">
                             <div className="card-title-wrapper">
@@ -374,7 +405,7 @@ export default function Column({
                                     type="date"
                                     value={dataConclusaoEdit[nota.id] || ""}
                                     onChange={(e) =>
-                                      setDataConclusaoEdit((prev) => ({
+                                      setDataConclusaoEdit(prev => ({
                                         ...prev,
                                         [nota.id]: e.target.value,
                                       }))
@@ -394,7 +425,7 @@ export default function Column({
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setDataConclusaoEdit((prev) => {
+                                      setDataConclusaoEdit(prev => {
                                         const cp = { ...prev };
                                         delete cp[nota.id];
                                         return cp;
@@ -409,7 +440,7 @@ export default function Column({
                                 <div
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setDataConclusaoEdit((prev) => ({
+                                    setDataConclusaoEdit(prev => ({
                                       ...prev,
                                       [nota.id]: dataConclusaoSalva[nota.id] || "",
                                     }));

@@ -3,12 +3,13 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "./Cards.css";
 import { DragDropContext, Droppable } from "@hello-pangea/dnd";
-import { FaPlus, FaArrowLeft } from "react-icons/fa";
+import { FaPlus } from "react-icons/fa";
 import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
 import ModalNota from "./ModalNota";
 import ListagemEspelho from "./ListagemEspelho";
 import Column from "./CardsColumn";
+import CardsHeader from "./CardsHeader"; // ✅ novo import
 
 export default function Cards() {
   const location = useLocation();
@@ -41,6 +42,7 @@ export default function Cards() {
   const [dataConclusaoEdit, setDataConclusaoEdit] = useState({});
   const [dataConclusaoSalva, setDataConclusaoSalva] = useState({});
   const [membros, setMembros] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const atualizarStatusNota = (notaId, updates) => {
     setColumns((prev) =>
@@ -184,7 +186,6 @@ export default function Cards() {
         const entityName = projectName || setorName || entityData.name;
         const entityPhoto = projectPhoto || setorPhoto || entityData.photo_url;
 
-        // ✅✅✅ CARREGAMENTO CORRETO DOS MEMBROS — SEM ERROS
         let membrosList = [];
         if (type === "project") {
           const { data: projectMembers } = await supabase
@@ -215,7 +216,6 @@ export default function Cards() {
         }
         setMembros(membrosList);
 
-        // Carregar pilhas e notas
         const { data: pilhas } = await supabase
           .from("pilhas")
           .select("*")
@@ -226,7 +226,7 @@ export default function Cards() {
           pilhas.map(async (pilha) => {
             const { data: notas } = await supabase
               .from("notas")
-              .select("id, nome, tipo, responsavel, progresso, concluida, data_conclusao, data_entrega, enviada, respondida, imagem_url, ordem")
+              .select("*")
               .eq("pilha_id", pilha.id)
               .order("ordem", { ascending: true });
             return { ...pilha, notas: notas || [] };
@@ -355,7 +355,6 @@ export default function Cards() {
     }
   };
 
-  // ... outros useEffects de click outside (mantidos iguais) ...
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (menuOpenNota && !e.target.closest('.card-menu-dropdown') && !e.target.closest('.card-menu-btn')) {
@@ -651,43 +650,25 @@ export default function Cards() {
 
   if (loading) return <Loading />;
 
+ 
+const filteredColumns = searchTerm
+  ? columns.map((col) => ({
+      ...col,
+      notas: col.notas.filter((nota) =>
+        nota.nome.toLowerCase().includes(searchTerm.toLowerCase())
+      ),
+    }))
+  : columns;
+
   return (
     <div className="cards-page">
-      {/* ✅ HEADER COM AVATARES DOS MEMBROS */}
-      <header className="cards-header">
-        <button
-          className="btn-voltar"
-          onClick={() => {
-            if (donoContainerId) {
-              navigate(`/containers/${donoContainerId}`);
-            } else {
-              navigate("/containers");
-            }
-          }}
-          title="Voltar"
-        >
-          <FaArrowLeft />
-        </button>
-        {entity?.photo_url && <img src={entity.photo_url} alt={entity.name} className="project-photo-header" />}
-        <h1>
-          Pilhas - <span className="project-name">{entity?.name || "Entidade Desconhecida"}</span>
-        </h1>
-
-        {/* ✅ AVATARES À DIREITA */}
-        {membros.length > 0 && (
-          <div className="cards-header-members">
-            {membros.slice(0, 5).map((membro) => (
-              <img
-                key={membro.id}
-                src={membro.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(membro.nickname || 'M')}&background=81C784&color=fff`}
-                alt={membro.nickname || "Membro"}
-                className="member-avatar"
-                title={membro.nickname}
-              />
-            ))}
-          </div>
-        )}
-      </header>
+    
+      <CardsHeader
+        entity={entity}
+        membros={membros}
+        donoContainerId={donoContainerId}
+        onSearch={setSearchTerm}
+      />
 
       {/* ✅ BOTÃO FLUTUANTE */}
       <button className="floating-add-column-btn" onClick={handleAddColumn} title="Adicionar pilha">
@@ -702,7 +683,7 @@ export default function Cards() {
               ref={provided.innerRef}
               {...provided.droppableProps}
             >
-              {columns.map((col, index) => (
+              {filteredColumns.map((col, index) => (
                 <Column
                   key={col.id}
                   col={col}

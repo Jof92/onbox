@@ -19,7 +19,18 @@
   position: relative;
   top: 0;
   z-index: 100;
+  justify-content: space-between;
 }
+
+.begin-header{
+  display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1 1;
+    max-width: 300px;
+}
+
+
 .cards-header .project-photo-header {
   width: 38px;
   height: 38px;
@@ -54,11 +65,11 @@
 .cards-header h1 {
   display: flex;
   align-items: center;
-  flex: 1;
+  flex: none;
   font-size: 22px;
   font-weight: 600;
   color: #1e293b;
-  margin: 0;
+  margin: 0 16px;
 }
 
 .cards-header .project-name {
@@ -66,6 +77,77 @@
   font-size: 20px;
   font-weight: 500;
   color: #fbbf24;
+}
+
+.cards-header-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  max-width: 300px;
+}
+
+/* Estilo do input de busca */
+.search-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.search-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  outline: none;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.search-input:focus {
+  border-color: #3b82f6;
+}
+
+.search-cancel-btn {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+}
+
+.search-cancel-btn:hover {
+  background: #f1f1f1;
+}
+
+.cards-header-actions {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+}
+
+.btn-header-action {
+  background: none;
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #555;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-header-action:hover {
+  background-color: #f5f5f5;
 }
 
 
@@ -736,15 +818,32 @@
   position: absolute;
   top: 4px;
   left: 4px;
-  width: 18px;
-  height: 18px;
-  display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.15s ease;
   z-index: 3;
+  background: whitesmoke;
+  padding: 5px; 
+  border-radius: 4px;
+
+}
+
+.arquivar-btn {
+  background: none;
+  border: none;
+  color: #475569;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+}
+
+.arquivar-btn:hover {
+  background-color: #f1f5f9;
+  color: #1e293b;
 }
 
 /* Mostra o checkbox ao passar o mouse — MAS APENAS se NÃO estiver concluída */

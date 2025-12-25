@@ -226,3 +226,48 @@
 .card-menu-dropdown1 button svg {
   font-size: 14px;
 }
+
+/* === Descrição editável com clique duplo (nova funcionalidade) === */
+
+.quick-note-descricao-rendered {
+  min-height: 1.4em;
+  line-height: 1.4;
+  margin-bottom: 8px;
+  font-size: 0.9em;
+  color: #333;
+  white-space: pre-wrap;
+  word-break: break-word;
+  cursor: pointer;
+  margin-top: 5px;
+}
+
+.quick-note-descricao-rendered:empty::before {
+  content: "Clique duas vezes para adicionar descrição...";
+  color: #999;
+  font-style: italic;
+}
+
+.quick-note-descricao-rendered strong {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.quick-note-descricao-rendered em {
+  font-style: italic;
+  color: #475569;
+}
+
+.quick-note-descricao-textarea {
+  width: 100%;
+  padding: 8px;
+  font-size: 0.9em;
+  line-height: 1.4;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  resize: vertical;
+  background: #fafafa;
+  margin-bottom: 8px;
+  box-sizing: border-box;
+  font-family: inherit;
+  min-height: 60px;
+}
