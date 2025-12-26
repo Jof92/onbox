@@ -846,6 +846,27 @@
   color: #1e293b;
 }
 
+.btn-header-action svg{
+  width: 1.5em;
+  height: 1.5em;
+}
+
+/* Botão de pasta no header */
+.cards-header-actions .btn-header-action {
+  /* Seu estilo padrão já existente */
+}
+
+/* ✅ Estilo quando estiver no modo arquivadas */
+.cards-header-actions .btn-header-action.ativo {
+  color: #e53e3e; /* vermelho */
+  background-color: rgba(229, 62, 62, 0.1);
+}
+
+.cards-header-actions .btn-header-action.ativo:hover {
+  background-color: rgba(229, 62, 62, 0.2);
+}
+
+
 /* Mostra o checkbox ao passar o mouse — MAS APENAS se NÃO estiver concluída */
 .card-item:not(.concluida):hover .concluir-checkbox-wrapper {
   opacity: 1;

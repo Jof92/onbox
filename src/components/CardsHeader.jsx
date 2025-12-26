@@ -8,7 +8,9 @@ export default function CardsHeader({
   entity,
   membros,
   donoContainerId,
-  onSearch, // recebe função de busca do Cards
+  onSearch,
+  onToggleArquivadas,
+  modoArquivadas,
 }) {
   const navigate = useNavigate();
   const [showSearchInput, setShowSearchInput] = useState(false);
@@ -32,38 +34,37 @@ export default function CardsHeader({
 
   return (
     <header className="cards-header">
-        <div className="begin-header">
-      <button
-        className="btn-voltar"
-        onClick={() => {
-          if (donoContainerId) {
-            navigate(`/containers/${donoContainerId}`);
-          } else {
-            navigate("/containers");
-          }
-        }}
-        title="Voltar"
-      >
-        <FaArrowLeft />
-      </button>
+      <div className="begin-header">
+        <button
+          className="btn-voltar"
+          onClick={() => {
+            if (donoContainerId) {
+              navigate(`/containers/${donoContainerId}`);
+            } else {
+              navigate("/containers");
+            }
+          }}
+          title="Voltar"
+        >
+          <FaArrowLeft />
+        </button>
 
-      {entity?.photo_url && (
-        <img
-          src={entity.photo_url}
-          alt={entity.name}
-          className="project-photo-header"
-        />
-      )}
+        {entity?.photo_url && (
+          <img
+            src={entity.photo_url}
+            alt={entity.name}
+            className="project-photo-header"
+          />
+        )}
 
-      <h1>
-        Pilhas -{" "}
-        <span className="project-name">
-          {entity?.name || "Entidade Desconhecida"}
-        </span>
-      </h1>
+        <h1>
+          Pilhas -{" "}
+          <span className="project-name">
+            {entity?.name || "Entidade Desconhecida"}
+          </span>
+        </h1>
       </div>
 
-      {/* Área central: busca + pasta */}
       <div className="cards-header-center">
         {showSearchInput ? (
           <div className="search-input-wrapper">
@@ -92,14 +93,17 @@ export default function CardsHeader({
             >
               <FaSearch />
             </button>
-            <button className="btn-header-action" title="Arquivos">
+            <button
+              className={`btn-header-action ${modoArquivadas ? "ativo" : ""}`}
+              title={modoArquivadas ? "Voltar às pilhas normais" : "Ver pilhas arquivadas"}
+              onClick={onToggleArquivadas}
+            >
               <FaFolderOpen />
             </button>
           </div>
         )}
       </div>
 
-      {/* Avatares à direita */}
       {membros.length > 0 && (
         <div className="cards-header-members">
           {membros.slice(0, 5).map((membro) => (

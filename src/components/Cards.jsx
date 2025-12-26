@@ -9,16 +9,18 @@ import Loading from "./Loading";
 import ModalNota from "./ModalNota";
 import ListagemEspelho from "./ListagemEspelho";
 import Column from "./CardsColumn";
-import CardsHeader from "./CardsHeader"; // ✅ novo import
+import CardsHeader from "./CardsHeader";
 
 export default function Cards() {
   const location = useLocation();
   const navigate = useNavigate();
 
   const [entity, setEntity] = useState(null);
-  const [columns, setColumns] = useState([]);
+  const [columnsNormais, setColumnsNormais] = useState([]);
+  const [columnsArquivadas, setColumnsArquivadas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [entityType, setEntityType] = useState("project");
+  const [modoArquivadas, setModoArquivadas] = useState(false);
 
   const [activeColumnId, setActiveColumnId] = useState(null);
   const [editingColumnId, setEditingColumnId] = useState(null);
@@ -45,65 +47,41 @@ export default function Cards() {
   const [searchTerm, setSearchTerm] = useState("");
 
   const atualizarStatusNota = (notaId, updates) => {
-    setColumns((prev) =>
-      prev.map((col) => ({
+    const setter = modoArquivadas ? setColumnsArquivadas : setColumnsNormais;
+    setter(prev =>
+      prev.map(col => ({
         ...col,
-        notas: col.notas.map((nota) =>
-          nota.id === notaId ? { ...nota, ...updates } : nota
-        ),
+        notas: col.notas.map(nota => nota.id === notaId ? { ...nota, ...updates } : nota),
       }))
     );
   };
 
   const updateUrlWithNota = (notaId) => {
     const urlParams = new URLSearchParams(location.search);
-    if (notaId) {
-      urlParams.set('nota', notaId);
-    } else {
-      urlParams.delete('nota');
-    }
+    if (notaId) urlParams.set('nota', notaId);
+    else urlParams.delete('nota');
     navigate(`${location.pathname}?${urlParams.toString()}`, { replace: false });
   };
 
   const handleSaveNomeRapida = async (notaId, novoNome) => {
     if (!novoNome.trim()) return;
-    const { error } = await supabase
-      .from("notas")
-      .update({ nome: novoNome.trim() })
-      .eq("id", notaId);
-    if (!error) {
-      atualizarStatusNota(notaId, { nome: novoNome.trim() });
-    }
+    const { error } = await supabase.from("notas").update({ nome: novoNome.trim() }).eq("id", notaId);
+    if (!error) atualizarStatusNota(notaId, { nome: novoNome.trim() });
   };
 
   const handleSaveResponsavelRapida = async (notaId, userId, userName) => {
-    const { error } = await supabase
-      .from("notas")
-      .update({ responsavel: userId })
-      .eq("id", notaId);
-    if (!error) {
-      atualizarStatusNota(notaId, { responsavel: userId, responsavel_nome: userName });
-    }
+    const { error } = await supabase.from("notas").update({ responsavel: userId }).eq("id", notaId);
+    if (!error) atualizarStatusNota(notaId, { responsavel: userId, responsavel_nome: userName });
   };
 
   const handleSaveDataEntregaRapida = async (notaId, data) => {
-    const { error } = await supabase
-      .from("notas")
-      .update({ data_entrega: data || null })
-      .eq("id", notaId);
-    if (!error) {
-      atualizarStatusNota(notaId, { data_entrega: data || null });
-    }
+    const { error } = await supabase.from("notas").update({ data_entrega: data || null }).eq("id", notaId);
+    if (!error) atualizarStatusNota(notaId, { data_entrega: data || null });
   };
 
   const handleRemoveResponsavelRapida = async (notaId) => {
-    const { error } = await supabase
-      .from("notas")
-      .update({ responsavel: null })
-      .eq("id", notaId);
-    if (!error) {
-      atualizarStatusNota(notaId, { responsavel: null, responsavel_nome: null });
-    }
+    const { error } = await supabase.from("notas").update({ responsavel: null }).eq("id", notaId);
+    if (!error) atualizarStatusNota(notaId, { responsavel: null, responsavel_nome: null });
   };
 
   useEffect(() => {
@@ -130,10 +108,7 @@ export default function Cards() {
       const containerId = containerIdFromUrl || containerIdFromState;
 
       if (containerId) setDonoContainerId(containerId);
-      
-      if (!entityId) {
-        return navigate("/containers", { replace: true });
-      }
+      if (!entityId) return navigate("/containers", { replace: true });
 
       const currentUrl = `${location.pathname}${location.search}`;
       const newUrl = new URLSearchParams();
@@ -141,11 +116,9 @@ export default function Cards() {
       newUrl.set('type', type);
       if (containerId) newUrl.set('containerId', containerId);
       if (notaIdFromUrl) newUrl.set('nota', notaIdFromUrl);
-      
+
       const targetUrl = `${location.pathname}?${newUrl.toString()}`;
-      if (currentUrl !== targetUrl) {
-        navigate(targetUrl, { replace: true });
-      }
+      if (currentUrl !== targetUrl) navigate(targetUrl, { replace: true });
 
       setEntityType(type);
       setLoading(true);
@@ -187,95 +160,130 @@ export default function Cards() {
         const entityPhoto = projectPhoto || setorPhoto || entityData.photo_url;
 
         let membrosList = [];
-        if (type === "project") {
-          const { data: projectMembers } = await supabase
-            .from("project_members")
-            .select("user_id")
-            .eq("project_id", entityId);
-          if (projectMembers && projectMembers.length > 0) {
-            const userIds = projectMembers.map(m => m.user_id);
-            const { data: perfis } = await supabase
-              .from("profiles")
-              .select("id, nickname, avatar_url")
-              .in("id", userIds);
-            membrosList = perfis || [];
-          }
-        } else {
-          const { data: setorMembers } = await supabase
-            .from("setor_members")
-            .select("user_id")
-            .eq("setor_id", entityId);
-          if (setorMembers && setorMembers.length > 0) {
-            const userIds = setorMembers.map(m => m.user_id);
-            const { data: perfis } = await supabase
-              .from("profiles")
-              .select("id, nickname, avatar_url")
-              .in("id", userIds);
-            membrosList = perfis || [];
-          }
+        const memberTable = type === "project" ? "project_members" : "setor_members";
+        const idField = type === "project" ? "project_id" : "setor_id";
+        const { data: membersData } = await supabase
+          .from(memberTable)
+          .select("user_id")
+          .eq(idField, entityId);
+        if (membersData?.length > 0) {
+          const userIds = membersData.map(m => m.user_id);
+          const { data: perfis } = await supabase
+            .from("profiles")
+            .select("id, nickname, avatar_url")
+            .in("id", userIds);
+          membrosList = perfis || [];
         }
         setMembros(membrosList);
 
-        const { data: pilhas } = await supabase
+        // ✅ Carregar pilhas normais: arquivada IS NULL (pilhas antigas) OU arquivada = false
+        const { data: pilhasNormaisNull } = await supabase
           .from("pilhas")
           .select("*")
-          .eq(type === "project" ? "project_id" : "setor_id", entityId)
+          .eq(idField, entityId)
+          .is("arquivada", null)
           .order("ordem", { ascending: true });
 
-        const pilhasComNotas = await Promise.all(
-          pilhas.map(async (pilha) => {
-            const { data: notas } = await supabase
-              .from("notas")
-              .select("*")
-              .eq("pilha_id", pilha.id)
-              .order("ordem", { ascending: true });
-            return { ...pilha, notas: notas || [] };
-          })
+        const { data: pilhasNormaisFalse } = await supabase
+          .from("pilhas")
+          .select("*")
+          .eq(idField, entityId)
+          .eq("arquivada", false)
+          .order("ordem", { ascending: true });
+
+        // ✅ Carregar pilhas arquivadas: arquivada = true
+        const { data: pilhasArquivadasRaw } = await supabase
+          .from("pilhas")
+          .select("*")
+          .eq(idField, entityId)
+          .eq("arquivada", true)
+          .order("ordem", { ascending: true });
+
+        // ✅ Unir pilhas normais (NULL + false)
+        const pilhasNormais = [
+          ...(Array.isArray(pilhasNormaisNull) ? pilhasNormaisNull : []),
+          ...(Array.isArray(pilhasNormaisFalse) ? pilhasNormaisFalse : [])
+        ];
+        const pilhasArquivadas = Array.isArray(pilhasArquivadasRaw) ? pilhasArquivadasRaw : [];
+
+        const fetchNotas = async (pilhas) => {
+          return Promise.all(
+            pilhas.map(async (pilha) => {
+              const { data: notasRaw } = await supabase
+                .from("notas")
+                .select("*")
+                .eq("pilha_id", pilha.id)
+                .order("ordem", { ascending: true });
+              return { ...pilha, notas: Array.isArray(notasRaw) ? notasRaw : [] };
+            })
+          );
+        };
+
+        const pilhasNormaisComNotas = await fetchNotas(pilhasNormais);
+        const pilhasArquivadasComNotas = await fetchNotas(pilhasArquivadas);
+
+        const initEstado = (pilhas) => {
+          const progresso = {};
+          const concluidas = new Set();
+          const dataConclusao = {};
+          pilhas.forEach(p => {
+            p.notas.forEach(n => {
+              if (n.progresso != null) progresso[n.id] = n.progresso;
+              if (n.concluida) concluidas.add(String(n.id));
+              if (n.data_conclusao) dataConclusao[n.id] = n.data_conclusao.split("T")[0];
+            });
+          });
+          return { progresso, concluidas, dataConclusao };
+        };
+
+        const { progresso: progN, concluidas: concN, dataConclusao: dataN } = initEstado(pilhasNormaisComNotas);
+        const { progresso: progA, concluidas: concA, dataConclusao: dataA } = initEstado(pilhasArquivadasComNotas);
+
+        setNotaProgresso(progN);
+        setNotasConcluidas(concN);
+        setDataConclusaoSalva(dataN);
+
+        setColumnsNormais(
+          pilhasNormaisComNotas.map(p => ({
+            id: String(p.id),
+            title: p.title,
+            notas: p.notas,
+            cor_fundo: p.cor_fundo || null,
+            ordem: p.ordem || 0,
+            arquivada: false
+          }))
         );
 
-        const progressoInicial = {};
-        const concluidasInicial = new Set();
-        const dataConclusaoInicial = {};
+        setColumnsArquivadas(
+          pilhasArquivadasComNotas.map(p => ({
+            id: String(p.id),
+            title: p.title,
+            notas: p.notas,
+            cor_fundo: p.cor_fundo || null,
+            ordem: p.ordem || 0,
+            arquivada: true
+          }))
+        );
 
-        pilhasComNotas.forEach((pilha) => {
-          pilha.notas.forEach((nota) => {
-            if (nota.progresso != null) progressoInicial[nota.id] = nota.progresso;
-            if (nota.concluida) concluidasInicial.add(String(nota.id));
-            if (nota.data_conclusao) dataConclusaoInicial[nota.id] = nota.data_conclusao.split("T")[0];
-          });
-        });
-
-        setNotaProgresso(progressoInicial);
-        setNotasConcluidas(concluidasInicial);
-        setDataConclusaoSalva(dataConclusaoInicial);
-
-        const columnsData = pilhasComNotas.map((p) => ({
-          id: String(p.id),
-          title: p.title,
-          notas: p.notas || [],
-          cor_fundo: p.cor_fundo || null,
-          ordem: p.ordem || 0,
-        }));
-
-        setColumns(columnsData);
         setEntity({ id: entityId, name: entityName, photo_url: entityPhoto, type });
 
         if (notaIdFromUrl) {
-          let notaEncontrada = null;
-          let colunaEncontrada = null;
-          for (const col of columnsData) {
-            const nota = col.notas.find((n) => String(n.id) === notaIdFromUrl);
-            if (nota && nota.tipo !== "Nota Rápida") {
-              notaEncontrada = nota;
-              colunaEncontrada = col;
-              break;
-            }
+          const buscar = (cols) => cols.flatMap(col => col.notas).find(n => String(n.id) === notaIdFromUrl && n.tipo !== "Nota Rápida");
+          const notaNormal = buscar(pilhasNormaisComNotas);
+          const notaArquivada = buscar(pilhasArquivadasComNotas);
+          if (notaArquivada) {
+            setModoArquivadas(true);
+            setNotaSelecionada(notaArquivada);
+          } else if (notaNormal) {
+            setNotaSelecionada(notaNormal);
           }
-          if (notaEncontrada) {
-            setNotaSelecionada(notaEncontrada);
-            const isRecebidos = colunaEncontrada?.title === "Recebidos";
-            setIsNotaRecebidos(isRecebidos);
-            if (isRecebidos) loadOrigemData(notaEncontrada.id);
+          if (notaNormal || notaArquivada) {
+            const cols = notaArquivada ? pilhasArquivadasComNotas : pilhasNormaisComNotas;
+            const col = cols.find(c => c.notas.some(n => n.id === (notaArquivada || notaNormal).id));
+            if (col?.title === "Recebidos") {
+              setIsNotaRecebidos(true);
+              loadOrigemData((notaArquivada || notaNormal).id);
+            }
           }
         }
       } catch (err) {
@@ -289,26 +297,25 @@ export default function Cards() {
     loadInitialData();
   }, [location.pathname, navigate]);
 
+  const columnsAtivas = modoArquivadas ? columnsArquivadas : columnsNormais;
+
   useEffect(() => {
     const urlParams = new URLSearchParams(location.search);
     const notaId = urlParams.get("nota");
-    if (notaId && columns.length > 0) {
-      let notaEncontrada = null;
-      let colunaEncontrada = null;
-      for (const col of columns) {
-        const nota = col.notas.find((n) => String(n.id) === notaId);
-        if (nota && nota.tipo !== "Nota Rápida") {
-          notaEncontrada = nota;
-          colunaEncontrada = col;
+    if (notaId && columnsAtivas.length > 0) {
+      let found = false;
+      for (const col of columnsAtivas) {
+        const nota = col.notas.find(n => String(n.id) === notaId && n.tipo !== "Nota Rápida");
+        if (nota) {
+          setNotaSelecionada(nota);
+          const isRecebidos = col.title === "Recebidos";
+          setIsNotaRecebidos(isRecebidos);
+          if (isRecebidos) loadOrigemData(nota.id);
+          found = true;
           break;
         }
       }
-      if (notaEncontrada) {
-        setNotaSelecionada(notaEncontrada);
-        const isRecebidos = colunaEncontrada?.title === "Recebidos";
-        setIsNotaRecebidos(isRecebidos);
-        if (isRecebidos) loadOrigemData(notaEncontrada.id);
-      } else if (notaSelecionada) {
+      if (!found && notaSelecionada) {
         const newUrl = new URLSearchParams(location.search);
         newUrl.delete('nota');
         navigate(`${location.pathname}?${newUrl.toString()}`, { replace: true });
@@ -319,7 +326,7 @@ export default function Cards() {
       setProjetoOrigem(null);
       setNotaOrigem(null);
     }
-  }, [columns, location.search, navigate]);
+  }, [columnsAtivas, location.search, navigate]);
 
   const loadOrigemData = async (notaEspelhoId) => {
     try {
@@ -328,7 +335,6 @@ export default function Cards() {
         .select("projeto_origem_id, nota_original_id, nome")
         .eq("id", notaEspelhoId)
         .single();
-
       if (notaEspelho?.projeto_origem_id) {
         const { data: projeto } = await supabase
           .from("projects")
@@ -337,7 +343,6 @@ export default function Cards() {
           .single();
         setProjetoOrigem(projeto || null);
       }
-
       if (notaEspelho?.nota_original_id) {
         const { data: nota } = await supabase
           .from("notas")
@@ -377,13 +382,17 @@ export default function Cards() {
 
   const handleAddColumn = async () => {
     if (!entity) return;
-    const outras = columns.filter(c => c.title !== "Recebidos");
+    const cols = modoArquivadas ? columnsArquivadas : columnsNormais;
+    const outras = cols.filter(c => c.title !== "Recebidos");
     const maxOrdem = outras.length > 0 ? Math.max(...outras.map(c => c.ordem)) : -1;
     const newOrdem = maxOrdem + 1;
 
-    const newPilhaData = { title: "Nova Pilha", ordem: newOrdem };
-    if (entityType === "project") newPilhaData.project_id = entity.id;
-    else newPilhaData.setor_id = entity.id;
+    const newPilhaData = {
+      title: "Nova Pilha",
+      ordem: newOrdem,
+      arquivada: modoArquivadas,
+      ...(entityType === "project" ? { project_id: entity.id } : { setor_id: entity.id })
+    };
 
     const { data: newPilha } = await supabase
       .from("pilhas")
@@ -392,18 +401,20 @@ export default function Cards() {
       .single();
 
     if (newPilha) {
-      setColumns((prev) => [...prev, { id: String(newPilha.id), title: newPilha.title, notas: [], cor_fundo: null, ordem: newOrdem }]);
+      const novaCol = { id: String(newPilha.id), title: newPilha.title, notas: [], cor_fundo: null, ordem: newOrdem };
+      if (modoArquivadas) {
+        setColumnsArquivadas(prev => [...prev, novaCol]);
+      } else {
+        setColumnsNormais(prev => [...prev, novaCol]);
+      }
     }
   };
 
   const toggleConclusaoNota = async (notaId, concluida) => {
     const newConcluida = !concluida;
-    const { error } = await supabase
-      .from("notas")
-      .update({ concluida: newConcluida })
-      .eq("id", notaId);
+    const { error } = await supabase.from("notas").update({ concluida: newConcluida }).eq("id", notaId);
     if (!error) {
-      setNotasConcluidas((prev) => {
+      setNotasConcluidas(prev => {
         const novo = new Set(prev);
         if (newConcluida) novo.add(String(notaId));
         else novo.delete(String(notaId));
@@ -414,11 +425,7 @@ export default function Cards() {
 
   const handleSaveTask = async () => {
     if (!formData.nome.trim() || !activeColumnId) return;
-    if (!usuarioId) {
-      alert("Você precisa estar logado para criar uma nota.");
-      return;
-    }
-
+    if (!usuarioId) return alert("Você precisa estar logado para criar uma nota.");
     try {
       const { nome, tipo } = formData;
       const { data: newNota } = await supabase
@@ -426,11 +433,8 @@ export default function Cards() {
         .insert([{ nome, tipo, pilha_id: activeColumnId, responsavel: usuarioId, concluida: false, ordem: 0 }])
         .select()
         .single();
-
-      setColumns((prev) =>
-        prev.map((c) => (c.id === activeColumnId ? { ...c, notas: [newNota, ...c.notas] } : c))
-      );
-
+      const setter = modoArquivadas ? setColumnsArquivadas : setColumnsNormais;
+      setter(prev => prev.map(c => c.id === activeColumnId ? { ...c, notas: [newNota, ...c.notas] } : c));
       if (["Atas", "Tarefas", "Lista", "Metas"].includes(newNota.tipo)) {
         setNotaSelecionada(newNota);
         updateUrlWithNota(newNota.id);
@@ -438,7 +442,6 @@ export default function Cards() {
         setProjetoOrigem(null);
         setNotaOrigem(null);
       }
-
       setFormData({ nome: "", responsavel: "", tipo: "Lista" });
       setActiveColumnId(null);
     } catch (err) {
@@ -449,25 +452,11 @@ export default function Cards() {
 
   const handleDeleteNota = async (notaId, pilhaId) => {
     if (!window.confirm("Excluir esta nota?")) return;
-
-    setColumns((prev) =>
-      prev.map((c) =>
-        c.id === pilhaId ? { ...c, notas: c.notas.filter((n) => n.id !== notaId) } : c
-      )
-    );
-
+    const setter = modoArquivadas ? setColumnsArquivadas : setColumnsNormais;
+    setter(prev => prev.map(c => c.id === pilhaId ? { ...c, notas: c.notas.filter(n => n.id !== notaId) } : c));
     setMenuOpenNota(null);
-    setNotaProgresso((prev) => {
-      const updated = { ...prev };
-      delete updated[notaId];
-      return updated;
-    });
-    setNotasConcluidas((prev) => {
-      const updated = new Set(prev);
-      updated.delete(String(notaId));
-      return updated;
-    });
-
+    setNotaProgresso(prev => { const u = { ...prev }; delete u[notaId]; return u; });
+    setNotasConcluidas(prev => { const u = new Set(prev); u.delete(String(notaId)); return u; });
     if (notaSelecionada?.id === notaId) {
       setNotaSelecionada(null);
       setIsNotaRecebidos(false);
@@ -475,7 +464,6 @@ export default function Cards() {
       setNotaOrigem(null);
       updateUrlWithNota(null);
     }
-
     await supabase.from("notas").delete().eq("id", notaId);
   };
 
@@ -488,16 +476,9 @@ export default function Cards() {
     if (!nome.trim()) return alert("Digite o nome da nota!");
     const { error } = await supabase.from("notas").update({ nome, responsavel }).eq("id", id);
     if (!error) {
-      setColumns((prev) =>
-        prev.map((c) =>
-          c.id === pilhaId
-            ? { ...c, notas: c.notas.map((n) => (n.id === id ? { ...n, nome, responsavel } : n)) }
-            : c
-        )
-      );
-      if (notaSelecionada?.id === id) {
-        setNotaSelecionada((prev) => ({ ...prev, nome, responsavel }));
-      }
+      const setter = modoArquivadas ? setColumnsArquivadas : setColumnsNormais;
+      setter(prev => prev.map(c => c.id === pilhaId ? { ...c, notas: c.notas.map(n => n.id === id ? { ...n, nome, responsavel } : n) } : c));
+      if (notaSelecionada?.id === id) setNotaSelecionada(prev => ({ ...prev, nome, responsavel }));
       setNotaEditData({ id: null, nome: "", responsavel: "", pilhaId: null });
     } else {
       alert("Erro ao salvar alterações.");
@@ -505,27 +486,18 @@ export default function Cards() {
   };
 
   const saveDataConclusao = async (notaId, data) => {
-    const { error } = await supabase
-      .from("notas")
-      .update({ data_conclusao: data || null })
-      .eq("id", notaId);
+    const { error } = await supabase.from("notas").update({ data_conclusao: data || null }).eq("id", notaId);
     if (!error) {
-      setDataConclusaoSalva((prev) => ({ ...prev, [notaId]: data || "" }));
-      setDataConclusaoEdit((prev) => {
-        const cp = { ...prev };
-        delete cp[notaId];
-        return cp;
-      });
+      setDataConclusaoSalva(prev => ({ ...prev, [notaId]: data || "" }));
+      setDataConclusaoEdit(prev => { const cp = { ...prev }; delete cp[notaId]; return cp; });
     }
   };
 
   useEffect(() => {
     const handleClickOutsideDate = (e) => {
-      Object.keys(dataConclusaoEdit).forEach((id) => {
+      Object.keys(dataConclusaoEdit).forEach(id => {
         const el = document.querySelector(`.data-conclusao-container[data-nota-id="${id}"]`);
-        if (el && !el.contains(e.target)) {
-          saveDataConclusao(id, dataConclusaoEdit[id]);
-        }
+        if (el && !el.contains(e.target)) saveDataConclusao(id, dataConclusaoEdit[id]);
       });
     };
     if (Object.keys(dataConclusaoEdit).length > 0) {
@@ -537,95 +509,76 @@ export default function Cards() {
   const saveColumnsOrder = async (newColumns) => {
     const updates = newColumns
       .filter(col => col.title !== "Recebidos")
-      .map((col, index) => ({
-        id: col.id,
-        title: col.title,
-        ordem: index
-      }));
-
-    const { error } = await supabase
-      .from("pilhas")
-      .upsert(updates, { onConflict: 'id' });
-
+      .map((col, index) => ({ id: col.id, ordem: index }));
+    const { error } = await supabase.from("pilhas").upsert(updates, { onConflict: 'id' });
     if (error) {
       alert("Erro ao salvar posição das pilhas.");
     } else {
-      setColumns(prev =>
-        prev.map(col => {
-          const updated = updates.find(u => u.id === col.id);
-          return updated ? { ...col, ordem: updated.ordem } : col;
-        })
-      );
+      const setter = modoArquivadas ? setColumnsArquivadas : setColumnsNormais;
+      setter(prev => prev.map(col => {
+        const updated = updates.find(u => u.id === col.id);
+        return updated ? { ...col, ordem: updated.ordem } : col;
+      }));
     }
   };
 
-  const onDragEnd = useCallback(
-    async (result) => {
-      const { source, destination, type } = result;
-      if (!destination) return;
-      if (source.droppableId === destination.droppableId && source.index === destination.index) return;
+  const onDragEnd = useCallback(async (result) => {
+    const { source, destination, type } = result;
+    if (!destination || (source.droppableId === destination.droppableId && source.index === destination.index)) return;
 
-      if (type === "COLUMN") {
-        const newColumns = Array.from(columns);
-        const [moved] = newColumns.splice(source.index, 1);
-        newColumns.splice(destination.index, 0, moved);
-        const recebidosIndex = newColumns.findIndex(col => col.title === "Recebidos");
-        if (recebidosIndex !== -1 && recebidosIndex !== 0) {
-          const recebidosCol = newColumns.splice(recebidosIndex, 1)[0];
-          newColumns.unshift(recebidosCol);
-        }
-        setColumns(newColumns);
-        saveColumnsOrder(newColumns);
-        return;
+    const cols = modoArquivadas ? columnsArquivadas : columnsNormais;
+    const setCols = modoArquivadas ? setColumnsArquivadas : setColumnsNormais;
+
+    if (type === "COLUMN") {
+      const newColumns = Array.from(cols);
+      const [moved] = newColumns.splice(source.index, 1);
+      newColumns.splice(destination.index, 0, moved);
+      const recebidosIndex = newColumns.findIndex(col => col.title === "Recebidos");
+      if (recebidosIndex > 0) {
+        const recebidosCol = newColumns.splice(recebidosIndex, 1)[0];
+        newColumns.unshift(recebidosCol);
       }
+      setCols(newColumns);
+      saveColumnsOrder(newColumns);
+      return;
+    }
 
-      if (type === "CARD") {
-        const nextColumns = columns.map((c) => ({ ...c, notas: [...c.notas] }));
-        const sourceCol = nextColumns.find((c) => c.id === source.droppableId);
-        const [movedNote] = sourceCol.notas.splice(source.index, 1);
-        const destCol = nextColumns.find((c) => c.id === destination.droppableId);
-        destCol.notas.splice(destination.index, 0, movedNote);
-        setColumns(nextColumns);
+    if (type === "CARD") {
+      const nextColumns = cols.map(c => ({ ...c, notas: [...c.notas] }));
+      const sourceCol = nextColumns.find(c => c.id === source.droppableId);
+      const [movedNote] = sourceCol.notas.splice(source.index, 1);
+      const destCol = nextColumns.find(c => c.id === destination.droppableId);
+      destCol.notas.splice(destination.index, 0, movedNote);
+      setCols(nextColumns);
 
-        try {
-          for (const [idx, nota] of destCol.notas.entries()) {
-            await supabase
-              .from('notas')
-              .update({ pilha_id: destCol.id, ordem: idx })
-              .eq('id', nota.id);
-          }
-          if (source.droppableId !== destination.droppableId) {
-            for (const [idx, nota] of sourceCol.notas.entries()) {
-              await supabase
-                .from('notas')
-                .update({ ordem: idx })
-                .eq('id', nota.id);
-            }
-          }
-
-          if (notaSelecionada?.id === movedNote.id && movedNote.tipo !== "Nota Rápida") {
-            setNotaSelecionada((prev) => ({ ...prev, pilha_id: destCol.id }));
-            const destIsRecebidos = destCol.title === "Recebidos";
-            setIsNotaRecebidos(destIsRecebidos);
-            if (destIsRecebidos) loadOrigemData(movedNote.id);
-            else {
-              setProjetoOrigem(null);
-              setNotaOrigem(null);
-            }
-          }
-        } catch (err) {
-          alert("Erro ao salvar posição das notas. Atualize a página.");
+      try {
+        for (const [idx, nota] of destCol.notas.entries()) {
+          await supabase.from('notas').update({ pilha_id: destCol.id, ordem: idx }).eq('id', nota.id);
         }
+        if (source.droppableId !== destination.droppableId) {
+          for (const [idx, nota] of sourceCol.notas.entries()) {
+            await supabase.from('notas').update({ ordem: idx }).eq('id', nota.id);
+          }
+        }
+
+        if (notaSelecionada?.id === movedNote.id && movedNote.tipo !== "Nota Rápida") {
+          setNotaSelecionada(prev => ({ ...prev, pilha_id: destCol.id }));
+          const destIsRecebidos = destCol.title === "Recebidos";
+          setIsNotaRecebidos(destIsRecebidos);
+          if (destIsRecebidos) loadOrigemData(movedNote.id);
+          else { setProjetoOrigem(null); setNotaOrigem(null); }
+        }
+      } catch (err) {
+        alert("Erro ao salvar posição das notas. Atualize a página.");
       }
-    },
-    [columns, notaSelecionada]
-  );
+    }
+  }, [columnsNormais, columnsArquivadas, modoArquivadas, notaSelecionada]);
 
   const handleOpenNota = (nota) => {
     if (nota.tipo === "Nota Rápida") return;
     let isRecebidos = false;
-    for (const col of columns) {
-      if (col.notas.some((n) => n.id === nota.id)) {
+    for (const col of columnsAtivas) {
+      if (col.notas.some(n => n.id === nota.id)) {
         isRecebidos = col.title === "Recebidos";
         break;
       }
@@ -633,10 +586,7 @@ export default function Cards() {
     setNotaSelecionada(nota);
     setIsNotaRecebidos(isRecebidos);
     if (isRecebidos) loadOrigemData(nota.id);
-    else {
-      setProjetoOrigem(null);
-      setNotaOrigem(null);
-    }
+    else { setProjetoOrigem(null); setNotaOrigem(null); }
     updateUrlWithNota(nota.id);
   };
 
@@ -650,27 +600,26 @@ export default function Cards() {
 
   if (loading) return <Loading />;
 
- 
-const filteredColumns = searchTerm
-  ? columns.map((col) => ({
-      ...col,
-      notas: col.notas.filter((nota) =>
-        nota.nome.toLowerCase().includes(searchTerm.toLowerCase())
-      ),
-    }))
-  : columns;
+  const filteredColumns = searchTerm
+    ? columnsAtivas.map(col => ({
+        ...col,
+        notas: col.notas.filter(nota => nota.nome.toLowerCase().includes(searchTerm.toLowerCase())),
+      }))
+    : columnsAtivas;
+
+  const allColumns = [...columnsNormais, ...columnsArquivadas]; // ✅ CORREÇÃO: todas as colunas
 
   return (
     <div className="cards-page">
-    
       <CardsHeader
         entity={entity}
         membros={membros}
         donoContainerId={donoContainerId}
         onSearch={setSearchTerm}
+        onToggleArquivadas={() => setModoArquivadas(prev => !prev)}
+        modoArquivadas={modoArquivadas}
       />
 
-      {/* ✅ BOTÃO FLUTUANTE */}
       <button className="floating-add-column-btn" onClick={handleAddColumn} title="Adicionar pilha">
         <FaPlus />
       </button>
@@ -678,17 +627,13 @@ const filteredColumns = searchTerm
       <DragDropContext onDragEnd={onDragEnd}>
         <Droppable droppableId="all-columns" direction="horizontal" type="COLUMN">
           {(provided) => (
-            <div
-              className="cards-body"
-              ref={provided.innerRef}
-              {...provided.droppableProps}
-            >
+            <div className="cards-body" ref={provided.innerRef} {...provided.droppableProps}>
               {filteredColumns.map((col, index) => (
                 <Column
                   key={col.id}
                   col={col}
                   index={index}
-                  columns={columns}
+                  columns={allColumns} // ✅ CORREÇÃO AQUI
                   notasConcluidas={notasConcluidas}
                   notaProgresso={notaProgresso}
                   dataConclusaoEdit={dataConclusaoEdit}
@@ -704,7 +649,7 @@ const filteredColumns = searchTerm
                   setEditingColumnId={setEditingColumnId}
                   setColumnTitleDraft={setColumnTitleDraft}
                   setShowColorPicker={setShowColorPicker}
-                  setColumns={setColumns}
+                  setColumns={modoArquivadas ? setColumnsArquivadas : setColumnsNormais}
                   toggleConclusaoNota={toggleConclusaoNota}
                   setDataConclusaoEdit={setDataConclusaoEdit}
                   saveDataConclusao={saveDataConclusao}
@@ -715,6 +660,7 @@ const filteredColumns = searchTerm
                   onSaveResponsavelRapida={handleSaveResponsavelRapida}
                   onSaveDataEntregaRapida={handleSaveDataEntregaRapida}
                   onRemoveResponsavelRapida={handleRemoveResponsavelRapida}
+                  modoArquivadas={modoArquivadas}
                 />
               ))}
               {provided.placeholder}

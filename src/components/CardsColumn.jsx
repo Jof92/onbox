@@ -34,6 +34,7 @@ export default function Column({
   onSaveResponsavelRapida,
   onSaveDataEntregaRapida,
   onRemoveResponsavelRapida,
+  modoArquivadas,
 }) {
   const colorTrackRefs = useRef({});
   const isRecebidos = col.title === "Recebidos";
@@ -45,20 +46,11 @@ export default function Column({
       .from("notas")
       .update({ descricao })
       .eq("id", notaId);
-
-    if (error) {
-      return;
-    }
-
+    if (error) return;
     setColumns(prev =>
       prev.map(c =>
         c.id === col.id
-          ? {
-              ...c,
-              notas: c.notas.map(n =>
-                n.id === notaId ? { ...n, descricao } : n
-              ),
-            }
+          ? { ...c, notas: c.notas.map(n => n.id === notaId ? { ...n, descricao } : n) }
           : c
       )
     );
@@ -70,7 +62,7 @@ export default function Column({
       .update({ cor_fundo: cor })
       .eq("id", pilhaId);
     if (!error) {
-      setColumns(prev => prev.map(c => (c.id === pilhaId ? { ...c, cor_fundo: cor } : c)));
+      setColumns(prev => prev.map(c => c.id === pilhaId ? { ...c, cor_fundo: cor } : c));
     }
   };
 
@@ -88,7 +80,7 @@ export default function Column({
     if (!columnTitleDraft.trim()) return setEditingColumnId(null);
     const { error } = await supabase.from("pilhas").update({ title: columnTitleDraft }).eq("id", id);
     if (!error) {
-      setColumns(prev => prev.map(c => (c.id === id ? { ...c, title: columnTitleDraft } : c)));
+      setColumns(prev => prev.map(c => c.id === id ? { ...c, title: columnTitleDraft } : c));
     }
     setEditingColumnId(null);
   };
@@ -100,7 +92,6 @@ export default function Column({
       return;
     }
     if (!window.confirm(`Excluir a pilha "${pilha.title}"?`)) return;
-
     const { error } = await supabase.from("pilhas").delete().eq("id", pilhaId);
     if (!error) {
       setColumns(prev => prev.filter(c => c.id !== pilhaId));
@@ -108,11 +99,58 @@ export default function Column({
     }
   };
 
+  // ✅ Função para arquivar/desarquivar nota
+  const handleArquivarNota = async (nota, pilhaAtualId) => {
+    const estaEmArquivo = col.arquivada;
+    const pilhasAlvo = columns.filter(c => c.arquivada !== estaEmArquivo);
+
+    if (pilhasAlvo.length === 0) {
+      alert(estaEmArquivo 
+        ? "Sem pilhas normais disponíveis para restaurar." 
+        : "Sem pilhas disponíveis em arquivo.");
+      return;
+    }
+
+    const pilhaAlvoId = pilhasAlvo[0].id;
+
+    try {
+      const updates = {
+        pilha_id: pilhaAlvoId,
+        ordem: 0
+      };
+
+      if (!estaEmArquivo) {
+        updates.pilha_original_id = pilhaAtualId;
+      }
+
+      const { error } = await supabase
+        .from("notas")
+        .update(updates)
+        .eq("id", nota.id);
+
+      if (error) throw error;
+
+      setColumns(prev =>
+        prev.map(c => {
+          if (c.id === pilhaAtualId) {
+            return { ...c, notas: c.notas.filter(n => n.id !== nota.id) };
+          }
+          if (c.id === pilhaAlvoId) {
+            return { ...c, notas: [{ ...nota, ...updates }, ...c.notas] };
+          }
+          return c;
+        })
+      );
+    } catch (err) {
+      console.error("Erro ao mover nota:", err);
+      alert("Erro ao mover a nota. Tente novamente.");
+    }
+  };
+
   useEffect(() => {
     if (!showColorPicker[col.id]) return;
     const track = colorTrackRefs.current[col.id];
     if (!track) return;
-
     const handleClick = (e) => {
       const rect = track.getBoundingClientRect();
       const x = e.clientX - rect.left;
@@ -122,7 +160,6 @@ export default function Column({
       const cor = `hsl(${hue}, 40%, 94%)`;
       updatePilhaCor(col.id, cor);
     };
-
     track.addEventListener("click", handleClick);
     return () => track.removeEventListener("click", handleClick);
   }, [showColorPicker, col.id]);
@@ -204,7 +241,7 @@ export default function Column({
                   }
                 }}
               >
-                {col.title}
+                {modoArquivadas && !isRecebidos ? "Pilha de Arquivos" : col.title}
               </h3>
             )}
 
@@ -279,23 +316,10 @@ export default function Column({
                   if (nota.tipo === "Nota Rápida") {
                     const isConcluida = notasConcluidas.has(String(nota.id));
                     const isEditingDate = dataConclusaoEdit.hasOwnProperty(String(nota.id));
-
                     return (
-                      <Draggable
-                        key={String(nota.id)}
-                        draggableId={String(nota.id)}
-                        index={idx}
-                        type="CARD"
-                      >
+                      <Draggable key={String(nota.id)} draggableId={String(nota.id)} index={idx} type="CARD">
                         {(prov, snapshot) => (
-                          <div
-                            ref={prov.innerRef}
-                            {...prov.draggableProps}
-                            style={{
-                              ...prov.draggableProps.style,
-                              userSelect: "text",
-                            }}
-                          >
+                          <div ref={prov.innerRef} {...prov.draggableProps} style={{ ...prov.draggableProps.style, userSelect: "text" }}>
                             <NotaRapidaCard
                               nota={nota}
                               onSaveResponsavel={onSaveResponsavelRapida}
@@ -327,7 +351,6 @@ export default function Column({
 
                   let cardBackgroundColor = "#ffffff";
                   let cardBorderLeft = "none";
-
                   if (nota.respondida) {
                     cardBackgroundColor = "#e6f4ea";
                     cardBorderLeft = "4px solid #34a853";
@@ -337,12 +360,7 @@ export default function Column({
                   }
 
                   return (
-                    <Draggable
-                      key={String(nota.id)}
-                      draggableId={String(nota.id)}
-                      index={idx}
-                      type="CARD"
-                    >
+                    <Draggable key={String(nota.id)} draggableId={String(nota.id)} index={idx} type="CARD">
                       {(prov, snapshot) => (
                         <div
                           className={`card-item tipo-${(nota.tipo || "lista").toLowerCase()} ${snapshot.isDragging ? "dragging" : ""} ${isConcluida ? "concluida" : ""}`}
@@ -358,30 +376,29 @@ export default function Column({
                           onClick={() => handleOpenNota(nota)}
                         >
                           <div className="concluir-checkbox-wrapper">
-                              <input
-                                type="checkbox"
-                                checked={isConcluida}
-                                readOnly
-                                className="concluir-checkbox"
+                            <input
+                              type="checkbox"
+                              checked={isConcluida}
+                              readOnly
+                              className="concluir-checkbox"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleConclusaoNota(nota.id, isConcluida);
+                              }}
+                            />
+                            {isConcluida && (
+                              <button
+                                className="arquivar-btn"
+                                title={col.arquivada ? "Restaurar nota" : "Arquivar nota"}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  toggleConclusaoNota(nota.id, isConcluida);
+                                  handleArquivarNota(nota, col.id);
                                 }}
-                              />
-                              {isConcluida && (
-                                <button
-                                  className="arquivar-btn"
-                                  title="Arquivar nota"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    // Implementar lógica de arquivamento aqui
-                                    console.log("Arquivar nota:", nota.id);
-                                  }}
-                                >
-                                  <FaFileExport size={14} />
-                                </button>
-                              )}
-                            </div>
+                              >
+                                <FaFileExport size={14} />
+                              </button>
+                            )}
+                          </div>
 
                           <div className="card-info">
                             <div className="card-title-wrapper">
@@ -389,9 +406,7 @@ export default function Column({
                             </div>
                             <p>
                               {nota.tipo}
-                              {nota.tipo === "Atas" && notaProgresso[nota.id] !== undefined && (
-                                <> - {notaProgresso[nota.id]}%</>
-                              )}
+                              {nota.tipo === "Atas" && notaProgresso[nota.id] !== undefined && <> - {notaProgresso[nota.id]}%</>}
                             </p>
 
                             <div
@@ -404,12 +419,7 @@ export default function Column({
                                   <input
                                     type="date"
                                     value={dataConclusaoEdit[nota.id] || ""}
-                                    onChange={(e) =>
-                                      setDataConclusaoEdit(prev => ({
-                                        ...prev,
-                                        [nota.id]: e.target.value,
-                                      }))
-                                    }
+                                    onChange={(e) => setDataConclusaoEdit(prev => ({ ...prev, [nota.id]: e.target.value }))}
                                     onClick={(e) => e.stopPropagation()}
                                     style={{ fontSize: "0.85em", padding: "2px 4px" }}
                                   />
@@ -440,10 +450,7 @@ export default function Column({
                                 <div
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setDataConclusaoEdit(prev => ({
-                                      ...prev,
-                                      [nota.id]: dataConclusaoSalva[nota.id] || "",
-                                    }));
+                                    setDataConclusaoEdit(prev => ({ ...prev, [nota.id]: dataConclusaoSalva[nota.id] || "" }));
                                   }}
                                   style={{
                                     marginTop: "4px",
