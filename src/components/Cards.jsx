@@ -69,31 +69,81 @@ export default function Cards() {
     if (!error) atualizarStatusNota(notaId, { nome: novoNome.trim() });
   };
 
-  const handleSaveResponsavelRapida = async (notaId, userId, nomeExterno) => {
-    const nomeResponsavel = userId ? nomeExterno : nomeExterno;
+const handleSaveResponsavelRapida = async (notaId, userId, nomeExterno) => {
+  if (!userId) {
+    console.warn("Tentativa de salvar responsável sem ID");
+    return;
+  }
 
-    const { error } = await supabase
-      .from("notas")
-      .update({ responsavel: nomeResponsavel })
-      .eq("id", notaId);
+  // Busca a nota atual para obter a lista existente
+  const { data: notaAtual, error: fetchError } = await supabase
+    .from("notas")
+    .select("responsaveis_ids")
+    .eq("id", notaId)
+    .single();
 
-    if (!error) {
-      atualizarStatusNota(notaId, { responsavel: nomeResponsavel });
-    } else {
-      console.error("Erro ao salvar responsável:", error);
-      alert("Erro ao salvar responsável.");
-    }
-  };
+  if (fetchError) {
+    console.error("Erro ao buscar nota:", fetchError);
+    alert("Erro ao atualizar responsável.");
+    return;
+  }
+
+  const idsExistentes = notaAtual.responsaveis_ids || [];
+  const jaTem = idsExistentes.includes(userId);
+
+  let novosIds;
+  if (jaTem) {
+    // Remove o usuário (toggle off)
+    novosIds = idsExistentes.filter(id => id !== userId);
+  } else {
+    // Adiciona o usuário
+    novosIds = [...idsExistentes, userId];
+  }
+
+  const { error } = await supabase
+    .from("notas")
+    .update({ responsaveis_ids: novosIds })
+    .eq("id", notaId);
+
+  if (!error) {
+    atualizarStatusNota(notaId, { responsaveis_ids: novosIds });
+  } else {
+    console.error("Erro ao salvar responsáveis:", error);
+    alert("Erro ao salvar responsável.");
+  }
+};
 
   const handleSaveDataEntregaRapida = async (notaId, data) => {
     const { error } = await supabase.from("notas").update({ data_entrega: data || null }).eq("id", notaId);
     if (!error) atualizarStatusNota(notaId, { data_entrega: data || null });
   };
 
-  const handleRemoveResponsavelRapida = async (notaId) => {
-    const { error } = await supabase.from("notas").update({ responsavel: null }).eq("id", notaId);
-    if (!error) atualizarStatusNota(notaId, { responsavel: null, responsavel_nome: null });
-  };
+const handleRemoveResponsavelRapida = async (notaId, userIdToRemove = null) => {
+  // Se userIdToRemove for fornecido, remove só ele; senão, limpa todos
+  const { data: notaAtual, error: fetchError } = await supabase
+    .from("notas")
+    .select("responsaveis_ids")
+    .eq("id", notaId)
+    .single();
+
+  if (fetchError) return;
+
+  let novosIds;
+  if (userIdToRemove) {
+    novosIds = (notaAtual.responsaveis_ids || []).filter(id => id !== userIdToRemove);
+  } else {
+    novosIds = [];
+  }
+
+  const { error } = await supabase
+    .from("notas")
+    .update({ responsaveis_ids: novosIds })
+    .eq("id", notaId);
+
+  if (!error) {
+    atualizarStatusNota(notaId, { responsaveis_ids: novosIds });
+  }
+};
 
   useEffect(() => {
     const loadInitialData = async () => {
@@ -696,6 +746,7 @@ const saveColumnsOrder = async (newColumns) => {
                   onSaveDataEntregaRapida={handleSaveDataEntregaRapida}
                   onRemoveResponsavelRapida={handleRemoveResponsavelRapida}
                   modoArquivadas={modoArquivadas}
+                  donoContainerId={donoContainerId}
                 />
               ))}
               {provided.placeholder}

@@ -35,6 +35,7 @@ export default function Column({
   onSaveDataEntregaRapida,
   onRemoveResponsavelRapida,
   modoArquivadas,
+  donoContainerId,
 }) {
   const colorTrackRefs = useRef({});
   const isRecebidos = col.title === "Recebidos";
@@ -105,8 +106,8 @@ export default function Column({
     const pilhasAlvo = columns.filter(c => c.arquivada !== estaEmArquivo);
 
     if (pilhasAlvo.length === 0) {
-      alert(estaEmArquivo 
-        ? "Sem pilhas normais disponíveis para restaurar." 
+      alert(estaEmArquivo
+        ? "Sem pilhas normais disponíveis para restaurar."
         : "Sem pilhas disponíveis em arquivo.");
       return;
     }
@@ -339,7 +340,8 @@ export default function Column({
                               toggleConclusaoNota={toggleConclusaoNota}
                               pilhaId={col.id}
                               dragHandleProps={prov.dragHandleProps}
-                              containerId={col.container_id} 
+                              containerId={donoContainerId}
+                              
                             />
                           </div>
                         )}

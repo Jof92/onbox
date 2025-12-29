@@ -326,3 +326,19 @@
   color: #999;
   margin-top: 4px;
 }
+
+/* Avatar do responsável em notas rápidas */
+.quick-note-responsavel-avatar {
+  display: flex;
+  justify-content: center;
+  margin: 6px 0;
+}
+
+.avatar-circulo-pequeno {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e2e8f0;
+  background-color: #f1f5f9;
+}
