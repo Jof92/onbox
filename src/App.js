@@ -1,4 +1,4 @@
-// src/App.jsx
+// src/App.jsx - CORREÇÃO DE ROTAS
 import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from "react-router-dom";
 import Header from "./components/Header";
@@ -16,7 +16,7 @@ const ContainersWrapper = () => {
   const validContainerId = containerId && /^[0-9a-fA-F-]{36}$/.test(containerId)
     ? containerId
     : null;
-  return <Containers currentContainerId={validContainerId} />;
+  return <Containers containerIdDaUrl={validContainerId} />;
 };
 
 export default function App() {
@@ -26,11 +26,14 @@ export default function App() {
   const [showLoginPanel, setShowLoginPanel] = useState(false);
   const [hasOverdueToday, setHasOverdueToday] = useState(false);
   const [glowDismissed, setGlowDismissed] = useState(false);
+  const [loadingSession, setLoadingSession] = useState(true); // ✅ NOVO: loading da session
 
   useEffect(() => {
     const fetchSession = async () => {
+      setLoadingSession(true); // ✅ Inicia loading
       const { data } = await supabase.auth.getSession();
       setSession(data?.session || null);
+      setLoadingSession(false); // ✅ Finaliza loading
     };
     fetchSession();
 
@@ -148,6 +151,22 @@ export default function App() {
 
   const showGlow = session && !glowDismissed;
 
+  // ✅ Aguarda carregar a session antes de renderizar
+  if (loadingSession) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        fontSize: '18px',
+        color: '#666'
+      }}>
+        Carregando...
+      </div>
+    );
+  }
+
   return (
     <Router>
       <div className="App">
@@ -173,6 +192,7 @@ export default function App() {
 
         <main className="app-main">
           <Routes>
+            {/* ✅ Rota Home - Apenas se NÃO estiver logado */}
             <Route
               path="/"
               element={
@@ -183,21 +203,39 @@ export default function App() {
                 )
               }
             />
+
+            {/* ✅ Rota Containers - Protegida e EXCLUSIVA */}
             <Route
-              path="/containers/:containerId?"
+              path="/containers"
               element={
                 session ? <ContainersWrapper /> : <Navigate to="/" replace />
               }
             />
             <Route
-              path="/cards/:projectName"
+              path="/containers/:containerId"
               element={
-                session ? <Cards projects={projects} /> : <Navigate to="/" replace />
+                session ? <ContainersWrapper /> : <Navigate to="/" replace />
               }
             />
+
+            {/* ✅ Rota Cards - Protegida e INDEPENDENTE */}
+            <Route
+              path="/cards/:projectName"
+              element={
+                session ? <Cards /> : <Navigate to="/" replace />
+              }
+            />
+
+            {/* ✅ Rota Reset Senha - Pública */}
             <Route
               path="/ResetSenha"
               element={<ResetSenha />}
+            />
+
+            {/* ✅ Fallback - Redireciona para home/containers */}
+            <Route
+              path="*"
+              element={<Navigate to={session ? "/containers" : "/"} replace />}
             />
           </Routes>
         </main>

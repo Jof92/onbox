@@ -1,5 +1,5 @@
 // src/components/NotaRapidaCard.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { FaImage, FaTrash, FaEllipsisV } from "react-icons/fa";
 import { MdPersonAddAlt1 } from "react-icons/md";
 import { supabase } from "../supabaseClient";
@@ -42,12 +42,21 @@ export default function NotaRapidaCard({
   setMenuOpenNota,
   pilhaId,
   dragHandleProps,
+  containerId,
 }) {
   const [descricaoEdit, setDescricaoEdit] = useState(nota.descricao || "");
   const [isEditingDescricao, setIsEditingDescricao] = useState(false);
   const [wasDoubleClick, setWasDoubleClick] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [imagemUrl, setImagemUrl] = useState(nota.imagem_url || "");
+
+  // Estados para menção de responsável
+  const [showResponsavelInput, setShowResponsavelInput] = useState(false);
+  const [inputResponsavel, setInputResponsavel] = useState("");
+  const [sugestoesResponsavel, setSugestoesResponsavel] = useState([]);
+  const [loadingSugestoes, setLoadingSugestoes] = useState(false);
+  const inputRef = useRef(null);
+  const sugestoesRef = useRef(null);
 
   useEffect(() => {
     setDescricaoEdit(nota.descricao || "");
@@ -56,6 +65,26 @@ export default function NotaRapidaCard({
   useEffect(() => {
     setImagemUrl(nota.imagem_url || "");
   }, [nota.imagem_url]);
+
+  // Fecha o input de responsável ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (
+        inputRef.current &&
+        !inputRef.current.contains(e.target) &&
+        sugestoesRef.current &&
+        !sugestoesRef.current.contains(e.target)
+      ) {
+        setShowResponsavelInput(false);
+        setInputResponsavel("");
+        setSugestoesResponsavel([]);
+      }
+    };
+    if (showResponsavelInput) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showResponsavelInput]);
 
   const handleDescricaoClick = () => {
     if (wasDoubleClick) {
@@ -154,6 +183,111 @@ export default function NotaRapidaCard({
     }
   };
 
+  // Lógica de menção com @
+  const handleResponsavelInputChange = async (e) => {
+    const valor = e.target.value;
+    setInputResponsavel(valor);
+
+    if (!containerId || isConcluida) {
+      setSugestoesResponsavel([]);
+      return;
+    }
+
+    if (valor.startsWith("@") && valor.length > 1) {
+      const termo = valor.slice(1).toLowerCase().trim();
+      if (!termo) {
+        setSugestoesResponsavel([]);
+        return;
+      }
+
+      setLoadingSugestoes(true);
+      try {
+        const { data: convites, error: convitesError } = await supabase
+          .from("convites")
+          .select("user_id")
+          .eq("container_id", containerId)
+          .eq("status", "aceito");
+
+        if (convitesError) {
+          console.error("Erro ao buscar convites:", convitesError);
+          setSugestoesResponsavel([]);
+          return;
+        }
+
+        const userIds = convites.map(c => c.user_id).filter(Boolean);
+        if (userIds.length === 0) {
+          setSugestoesResponsavel([]);
+          return;
+        }
+
+        const { data: profiles, error: profilesError } = await supabase
+          .from("profiles")
+          .select("id, nickname, nome")
+          .in("id", userIds);
+
+        if (profilesError) {
+          console.error("Erro ao buscar perfis:", profilesError);
+          setSugestoesResponsavel([]);
+          return;
+        }
+
+        const sugestoes = profiles.filter(p =>
+          (p.nickname?.toLowerCase().includes(termo)) ||
+          (p.nome?.toLowerCase().includes(termo))
+        );
+
+        const seen = new Set();
+        const unicos = sugestoes.filter(p => {
+          if (seen.has(p.id)) return false;
+          seen.add(p.id);
+          return true;
+        });
+
+        setSugestoesResponsavel(unicos.slice(0, 10));
+      } finally {
+        setLoadingSugestoes(false);
+      }
+    } else {
+      setSugestoesResponsavel([]);
+    }
+  };
+
+  const handleKeyDownResponsavel = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const valor = inputResponsavel.trim();
+      if (valor && !valor.startsWith("@")) {
+        // Nome externo: salva o texto digitado
+        onSaveResponsavel(nota.id, null, valor);
+        setShowResponsavelInput(false);
+        setInputResponsavel("");
+      } else if (sugestoesResponsavel.length === 1) {
+        // Auto-seleciona se só houver uma sugestão
+        const user = sugestoesResponsavel[0];
+        const nomeExibicao = user.nickname || user.nome;
+        onSaveResponsavel(nota.id, null, nomeExibicao);
+        setShowResponsavelInput(false);
+        setInputResponsavel("");
+      }
+    }
+  };
+
+  const handleSelectResponsavel = (user) => {
+    const nomeExibicao = user.nickname || user.nome;
+    onSaveResponsavel(nota.id, null, nomeExibicao);
+    setShowResponsavelInput(false);
+    setInputResponsavel("");
+  };
+
+  const handleAddResponsavelClick = (e) => {
+    e.stopPropagation();
+    if (nota.responsavel) {
+      onRemoveResponsavel(nota.id);
+    } else {
+      setShowResponsavelInput(true);
+    }
+  };
+
   const borderColor = COR_POR_TIPO[nota.tipo] || "#cbd5e1";
 
   const handleExcluirNota = () => {
@@ -216,15 +350,10 @@ export default function NotaRapidaCard({
 
         <button
           className="quick-note-btn-icon"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (nota.responsavel_nome) {
-              onRemoveResponsavel(nota.id);
-            }
-          }}
-          title={nota.responsavel_nome || "Adicionar responsável"}
+          onClick={handleAddResponsavelClick}
+          title={nota.responsavel || "Adicionar responsável"}
         >
-          {nota.responsavel_nome ? (
+          {nota.responsavel ? (
             <span style={{ fontSize: "0.8em" }}>👤</span>
           ) : (
             <MdPersonAddAlt1 size={16} />
@@ -306,6 +435,38 @@ export default function NotaRapidaCard({
           </div>
         )}
       </div>
+
+      {/* Input flutuante para adicionar responsável */}
+      {showResponsavelInput && !isConcluida && (
+        <div className="responsavel-mention-wrapper">
+          <input
+            ref={inputRef}
+            type="text"
+            value={inputResponsavel}
+            onChange={handleResponsavelInputChange}
+            onKeyDown={handleKeyDownResponsavel}
+            placeholder="Digite nome ou @ para mencionar"
+            autoFocus
+            className="quick-note-responsavel-input"
+          />
+          {sugestoesResponsavel.length > 0 && (
+            <div ref={sugestoesRef} className="sugestoes-list">
+              {sugestoesResponsavel.map((user) => (
+                <div
+                  key={user.id}
+                  onClick={() => handleSelectResponsavel(user)}
+                  className="sugestao-item"
+                >
+                  @{user.nickname || user.nome}
+                </div>
+              ))}
+            </div>
+          )}
+          {loadingSugestoes && (
+            <div className="sugestoes-loading">Buscando...</div>
+          )}
+        </div>
+      )}
 
       {!isConcluida && menuOpenNota === nota.id && (
         <div

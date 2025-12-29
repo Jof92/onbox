@@ -28,6 +28,7 @@
     justify-content: center;
     flex: 1 1;
     max-width: 300px;
+    margin-left:30px;
 }
 
 
@@ -978,4 +979,115 @@
 .data-conclusao-container > div {
   color: #94a3b8;
   font-style: italic;
+}
+
+/* ============================================
+   ESTILOS ESPECÍFICOS PARA COLUNA DE ARQUIVO
+   ============================================ */
+
+/* Header da coluna de arquivo - apenas o h3 fica cinza */
+.column-header.arquivo-header h3 {
+  background-color: #878a8f;
+  color: white; 
+  border-radius: 6px;
+  margin: 0;
+  font-weight: 600;
+}
+
+/* Input de edição do título no modo arquivo */
+.column-header.arquivo-header input {
+  background-color: #f5f5f5;
+  color: #333;
+  border: 1px solid #878a8f;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 1em;
+  width: 100%;
+  outline: none;
+}
+
+.column-header.arquivo-header input:focus {
+  border-color: #0922b8;
+  box-shadow: 0 0 0 2px rgba(9, 34, 184, 0.1);
+}
+
+/* Botão + da coluna de arquivo - azul #0922b8 */
+.column-header.arquivo-header .btn-add {
+  background-color: #0922b8;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.column-header.arquivo-header .btn-add:hover {
+  background-color: #071a95;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(9, 34, 184, 0.3);
+}
+
+.column-header.arquivo-header .btn-add:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(9, 34, 184, 0.2);
+}
+
+/* Menu dropdown da coluna de arquivo - mantém estilo original */
+.column-header.arquivo-header .column-menu-btn {
+  background-color: transparent;
+  color: inherit;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.column-header.arquivo-header .column-menu-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* ============================================
+   CARDS-PAGE COM FUNDO BRANCO E IMAGEM
+   ============================================ */
+
+/* Cards-page da área de arquivo - fundo BRANCO com imagem centralizada */
+.cards-page.arquivo-cards-page {
+  background-color: white !important;
+  background-image: url('../assets/file.png');
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-size: 300px auto;
+  background-attachment: fixed;
+  position: relative;
+}
+
+/* Quando há conteúdo, a imagem fica mais sutil */
+.cards-page.arquivo-cards-page .cards-body {
+  position: relative;
+  z-index: 10;
+}
+
+/* Ajuste da imagem quando há scroll */
+.cards-page.arquivo-cards-page::before {
+  content: '';
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.15;
+  z-index: 1;
+  pointer-events: none;
 }

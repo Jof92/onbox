@@ -38,6 +38,7 @@ export default function Column({
 }) {
   const colorTrackRefs = useRef({});
   const isRecebidos = col.title === "Recebidos";
+  const isArquivo = modoArquivadas && !isRecebidos;
   const bgColor = col.cor_fundo || (isRecebidos ? "rgba(46, 125, 50, 0.08)" : "transparent");
   const isColorPickerVisible = showColorPicker[col.id];
 
@@ -99,7 +100,6 @@ export default function Column({
     }
   };
 
-  // ✅ Função para arquivar/desarquivar nota
   const handleArquivarNota = async (nota, pilhaAtualId) => {
     const estaEmArquivo = col.arquivada;
     const pilhasAlvo = columns.filter(c => c.arquivada !== estaEmArquivo);
@@ -221,7 +221,7 @@ export default function Column({
             </div>
           )}
 
-          <div className="column-header">
+          <div className={`column-header ${isArquivo ? 'arquivo-header' : ''}`}>
             {editingColumnId === col.id && !isRecebidos ? (
               <input
                 type="text"
@@ -298,7 +298,7 @@ export default function Column({
           <Droppable droppableId={col.id} type="CARD">
             {(innerProvided) => (
               <div
-                className="cards-list"
+                className={`cards-list ${isArquivo ? 'arquivo-cards-list' : ''}`}
                 ref={innerProvided.innerRef}
                 {...innerProvided.droppableProps}
                 style={{
@@ -339,6 +339,7 @@ export default function Column({
                               toggleConclusaoNota={toggleConclusaoNota}
                               pilhaId={col.id}
                               dragHandleProps={prov.dragHandleProps}
+                              containerId={col.container_id} 
                             />
                           </div>
                         )}

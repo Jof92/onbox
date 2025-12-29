@@ -271,3 +271,58 @@
   font-family: inherit;
   min-height: 60px;
 }
+
+/* src/components/NotaRapidaCard.css */
+.responsavel-mention-wrapper {
+  position: relative;
+  margin-top: 8px;
+}
+
+.quick-note-responsavel-input {
+  width: 100%;
+  padding: 4px 8px;
+  font-size: 0.85em;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.sugestoes-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  z-index: 1000;
+  max-height: 150px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  margin-top: 2px;
+}
+
+.sugestao-item {
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 0.85em;
+  color: #333;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.15s;
+}
+
+.sugestao-item:hover {
+  background-color: #f0f9ff;
+  color: #1d4ed8;
+}
+
+.sugestao-item:last-child {
+  border-bottom: none;
+}
+
+.sugestoes-loading {
+  font-size: 0.8em;
+  color: #999;
+  margin-top: 4px;
+}

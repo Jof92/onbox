@@ -1,8 +1,9 @@
-// src/components/ComentariosSection.jsx
+// src/components/TaskComentarios.jsx
 import React, { useState, useEffect, useRef } from "react";
 import { FiUser, FiCalendar } from "react-icons/fi";
 import { IoReturnUpBack } from "react-icons/io5";
 import { formatText } from "../utils/formatText";
+import TaskReactions from "./TaskReactions";
 import "./Task.css";
 
 const MencoesTooltip = ({ children, userId, projetoAtual, containerId, supabaseClient }) => {
@@ -177,17 +178,14 @@ const renderTextoFormatadoComMencoes = (
   supabaseClient
 ) => {
   if (!conteudo) return conteudo;
-
   const regex = /(@[\p{L}\p{N}_-]+)/gu;
   const partes = conteudo.split(regex).filter(Boolean);
-
   const elementos = partes.map((parte, index) => {
     if (parte.startsWith("@")) {
       const nickname = parte.slice(1);
       const usuario = Object.values(perfilesPorId).find(
         (p) => p && p.id && (p.nickname === nickname || p.nome === nickname)
       );
-
       if (usuario && usuario.id) {
         return (
           <MencoesTooltip
@@ -211,7 +209,6 @@ const renderTextoFormatadoComMencoes = (
       return formatText(parte);
     }
   });
-
   return <>{elementos}</>;
 };
 
@@ -223,7 +220,6 @@ const mencionaUsuario = (conteudo, userProfile) => {
   return mencoes.some(m => termos.includes(m));
 };
 
-// ✅ Nova função: notificar participantes do container (exceto autor e mencionados)
 const notificarParticipantesDoContainer = async ({
   conteudo,
   notaId,
@@ -234,8 +230,6 @@ const notificarParticipantesDoContainer = async ({
   supabaseClient,
 }) => {
   if (!containerIdDaNota) return;
-
-  // Buscar todos os participantes aceitos no container da nota
   const { data: convites, error: convitesError } = await supabaseClient
     .from("convites")
     .select("user_id")
@@ -247,7 +241,6 @@ const notificarParticipantesDoContainer = async ({
   const participantes = convites.map(c => c.user_id).filter(id => id !== autorId);
   if (participantes.length === 0) return;
 
-  // Identificar mencionados para evitar duplicação
   const mencionadosSet = new Set();
   const mencoes = conteudo.match(/@(\S+)/g);
   if (mencoes?.length > 0) {
@@ -261,13 +254,10 @@ const notificarParticipantesDoContainer = async ({
     (candidatos || []).forEach(p => mencionadosSet.add(p.id));
   }
 
-  // Filtrar apenas os que NÃO foram mencionados
   const destinatarios = participantes.filter(id => !mencionadosSet.has(id));
   if (destinatarios.length === 0) return;
 
-  // Mensagem genérica para participantes
   const mensagem = `${autorProfile?.nickname || autorProfile?.nome || "Alguém"} fez um comentário na tarefa que você está adicionado.`;
-
   const notificacoes = destinatarios.map(destId => ({
     user_id: destId,
     remetente_id: autorId,
@@ -277,11 +267,59 @@ const notificarParticipantesDoContainer = async ({
     mensagem,
     lido: false,
   }));
-
   await supabaseClient.from("notificacoes").insert(notificacoes);
 };
 
-const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, containerId, supabaseClient }) => {
+const carregarReacoesPorComentario = async (comentarioId, supabaseClient) => {
+  const { data, error } = await supabaseClient
+    .from("reacoes")
+    .select("user_id, emoji")
+    .eq("comentario_id", comentarioId);
+  if (error) {
+    console.error("Erro ao carregar reações:", error);
+    return [];
+  }
+  return data;
+};
+
+const toggleReacao = async ({ comentarioId, userId, emoji, supabaseClient }) => {
+  const { data: reacoesExistentes, error: checkError } = await supabaseClient
+    .from("reacoes")
+    .select("id")
+    .eq("comentario_id", comentarioId)
+    .eq("user_id", userId)
+    .eq("emoji", emoji);
+
+  if (checkError) {
+    console.error("Erro ao verificar reação existente:", checkError);
+    return "erro";
+  }
+
+  if (reacoesExistentes?.length > 0) {
+    const { error } = await supabaseClient
+      .from("reacoes")
+      .delete()
+      .eq("comentario_id", comentarioId)
+      .eq("user_id", userId)
+      .eq("emoji", emoji);
+    if (error) {
+      console.error("Erro ao remover reação:", error);
+      return "erro";
+    }
+    return "removida";
+  } else {
+    const { error } = await supabaseClient
+      .from("reacoes")
+      .insert({ comentario_id: comentarioId, user_id: userId, emoji });
+    if (error) {
+      console.error("Erro ao adicionar reação:", error);
+      return "erro";
+    }
+    return "adicionada";
+  }
+};
+
+const TaskComentarios = ({ notaId, userId, userProfile, projetoAtual, containerId, supabaseClient }) => {
   const [comentario, setComentario] = useState("");
   const [comentarios, setComentarios] = useState([]);
   const [sugestoesMencoes, setSugestoesMencoes] = useState([]);
@@ -292,7 +330,6 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
   const [respondendoA, setRespondendoA] = useState(null);
   const textareaRef = useRef(null);
   const respostaTextareaRef = useRef(null);
-
   const [containerIdDaNota, setContainerIdDaNota] = useState(containerId);
 
   useEffect(() => {
@@ -353,16 +390,49 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
           const profileMap = {};
           profiles?.forEach((p) => (profileMap[p.id] = p));
 
-          const comentariosComUsuario = comentariosData.map((c) => ({
-            ...c,
-            profiles: profileMap[c.user_id] || { nome: "Usuário", nickname: null, avatar_url: null },
-            formattedDate: formatarDataComentario(c.created_at),
-            isEditing: false,
-            editValue: undefined,
-            mencionaUsuarioLogado: mencionaUsuario(c.conteudo, userProfile),
-            estaAgendadoPeloUsuario: c.agendado_por === userId,
-            ehResposta: !!c.respondendo_a,
-          }));
+          const comentariosComUsuario = await Promise.all(
+            comentariosData.map(async (c) => {
+              // Carregar reações com detalhes dos usuários
+              const reacoesRaw = await carregarReacoesPorComentario(c.id, supabaseClient);
+              const reacoes = {};
+              reacoesRaw.forEach((r) => {
+                reacoes[r.emoji] = (reacoes[r.emoji] || 0) + 1;
+              });
+
+              // Buscar perfis dos usuários que reagiram
+              const userIdsReacoes = [...new Set(reacoesRaw.map(r => r.user_id))];
+              const { data: profilesReacoes } = await supabaseClient
+                .from("profiles")
+                .select("id, nome, nickname, avatar_url")
+                .in("id", userIdsReacoes);
+
+              const profileMapReacoes = {};
+              profilesReacoes?.forEach(p => {
+                profileMapReacoes[p.id] = p;
+              });
+
+              const reacoesDetalhadas = reacoesRaw.map(r => ({
+                user_id: r.user_id,
+                emoji: r.emoji,
+                user_name: (profileMapReacoes[r.user_id]?.nickname || profileMapReacoes[r.user_id]?.nome || "Usuário"),
+                avatar_url: profileMapReacoes[r.user_id]?.avatar_url || null,
+              }));
+
+              return {
+                ...c,
+                profiles: profileMap[c.user_id] || { nome: "Usuário", nickname: null, avatar_url: null },
+                formattedDate: formatarDataComentario(c.created_at),
+                isEditing: false,
+                editValue: undefined,
+                mencionaUsuarioLogado: mencionaUsuario(c.conteudo, userProfile),
+                estaAgendadoPeloUsuario: c.agendado_por === userId,
+                ehResposta: !!c.respondendo_a,
+                reacoes,
+                reacoesDetalhadas, // ← nova prop essencial
+              };
+            })
+          );
+
           if (isMounted) setComentarios(comentariosComUsuario);
         } else if (isMounted) {
           setComentarios([]);
@@ -373,6 +443,7 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
         if (isMounted) setLoading(false);
       }
     };
+
     fetchComentarios();
     return () => { isMounted = false; };
   }, [notaId, userId, userProfile, supabaseClient]);
@@ -383,7 +454,6 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
     const cursor = e.target.selectionStart;
     const textoAteCursor = valor.slice(0, cursor);
     const match = textoAteCursor.match(/@([\p{L}\p{N}_-]*)$/u);
-
     if (match?.[1] && containerIdDaNota) {
       const termo = match[1];
       if (termo.length >= 1) {
@@ -442,7 +512,6 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
     } else {
       setComentario(novoTexto);
     }
-
     setSugestoesMencoes([]);
     setTimeout(() => {
       const novaPos = novoTextoAntes.length + 1;
@@ -465,7 +534,6 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
   const enviarResposta = async (comentarioPaiId) => {
     const comentarioPai = comentarios.find(c => c.id === comentarioPaiId);
     if (!comentarioPai || !comentarioPai.respostaTemp?.trim()) return;
-
     setComentando(true);
     try {
       const { data: novoComentario, error: insertError } = await supabaseClient
@@ -497,11 +565,12 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
         mencionaUsuarioLogado: mencionaUsuario(novoComentario.conteudo, userProfile),
         estaAgendadoPeloUsuario: false,
         ehResposta: true,
+        reacoes: {},
+        reacoesDetalhadas: [],
       };
 
       setComentarios(prev => [novoComentarioLocal, ...prev]);
 
-      // ✅ Notificações para mencionados (comportamento original)
       const mencionados = novoComentario.conteudo.match(/@(\S+)/g);
       if (mencionados?.length > 0) {
         const nomesMencionados = mencionados.map(m => m.slice(1));
@@ -527,7 +596,6 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
         }
       }
 
-      // ✅ Nova: Notificar demais participantes (exceto mencionados e autor)
       await notificarParticipantesDoContainer({
         conteudo: novoComentario.conteudo,
         notaId,
@@ -590,13 +658,14 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
         mencionaUsuarioLogado: mencionaUsuario(novoComentario.conteudo, userProfile),
         estaAgendadoPeloUsuario: false,
         ehResposta: false,
+        reacoes: {},
+        reacoesDetalhadas: [],
       };
 
       setComentarios(prev => [novoComentarioLocal, ...prev]);
       setComentario("");
       setSugestoesMencoes([]);
 
-      // ✅ Notificações para mencionados (comportamento original)
       const mencionados = novoComentario.conteudo.match(/@(\S+)/g);
       if (mencionados?.length > 0) {
         const nomesMencionados = mencionados.map(m => m.slice(1));
@@ -622,7 +691,6 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
         }
       }
 
-      // ✅ Nova: Notificar demais participantes (exceto mencionados e autor)
       await notificarParticipantesDoContainer({
         conteudo: novoComentario.conteudo,
         notaId,
@@ -647,7 +715,6 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
       .update({ agendado_por: userId })
       .eq("id", comentarioId)
       .select("agendado_por");
-
     if (error) {
       alert("Erro ao adicionar à agenda: " + (error.message || "tente novamente"));
     } else if (data?.[0]?.agendado_por === userId) {
@@ -664,7 +731,6 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
     const alvo = comentarios.find((c) => c.id === comentarioId);
     const novoConteudo = (alvo?.editValue !== undefined ? alvo.editValue : alvo?.conteudo) || "";
     if (!novoConteudo.trim()) return;
-
     setLoading(true);
     try {
       await supabaseClient
@@ -672,7 +738,6 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
         .update({ conteudo: novoConteudo.trim() })
         .eq("id", comentarioId)
         .eq("user_id", userId);
-
       setComentarios(prev =>
         prev.map(c =>
           c.id === comentarioId
@@ -682,6 +747,8 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
                 isEditing: false,
                 editValue: undefined,
                 mencionaUsuarioLogado: mencionaUsuario(novoConteudo.trim(), userProfile),
+                reacoes: c.reacoes,
+                reacoesDetalhadas: c.reacoesDetalhadas,
               }
             : c
         )
@@ -726,11 +793,34 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
     }
   };
 
+  const handleReacaoClick = async (comentarioId, emoji) => {
+    const resultado = await toggleReacao({ comentarioId, userId, emoji, supabaseClient });
+    if (resultado === "erro") {
+      alert("Erro ao processar reação.");
+      return;
+    }
+    setComentarios(prev =>
+      prev.map(c => {
+        if (c.id !== comentarioId) return c;
+        const novasReacoes = { ...c.reacoes };
+        if (resultado === "adicionada") {
+          novasReacoes[emoji] = (novasReacoes[emoji] || 0) + 1;
+        } else if (resultado === "removida") {
+          if (novasReacoes[emoji] <= 1) {
+            delete novasReacoes[emoji];
+          } else {
+            novasReacoes[emoji] -= 1;
+          }
+        }
+        return { ...c, reacoes: novasReacoes };
+      })
+    );
+  };
+
   const agruparComentarios = () => {
     const todos = [...comentarios];
     const principais = todos.filter(c => !c.ehResposta);
     const respostas = todos.filter(c => c.ehResposta);
-
     const mapaRespostas = {};
     respostas.forEach(r => {
       if (!mapaRespostas[r.respondendo_a]) {
@@ -738,16 +828,13 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
       }
       mapaRespostas[r.respondendo_a].push(r);
     });
-
     Object.keys(mapaRespostas).forEach(paiId => {
       mapaRespostas[paiId].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
     });
-
     const resultado = [];
     principais.forEach(pai => {
       resultado.push({ ...pai, respostasFilhas: mapaRespostas[pai.id] || [] });
     });
-
     return resultado;
   };
 
@@ -755,7 +842,6 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
   comentarios.forEach(c => {
     if (c.profiles?.id) perfilesPorId[c.profiles.id] = c.profiles;
   });
-
   const comentariosAgrupados = agruparComentarios();
 
   return (
@@ -815,7 +901,6 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
           </div>
         )}
       </div>
-
       <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "8px" }}>
         <button
           type="button"
@@ -827,7 +912,6 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
         </button>
         {(comentando || loadingExcluir) && <span className="loader"></span>}
       </div>
-
       <div className="comentarios-lista">
         {comentariosAgrupados.map((pai) => {
           const profile = pai.profiles || { nome: "Usuário", nickname: null, avatar_url: null };
@@ -877,6 +961,14 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
                       </button>
                       <span>{pai.formattedDate}</span>
                       <div style={{ display: "flex", gap: "6px" }}>
+                        <TaskReactions
+                          comentarioId={pai.id}
+                          userId={userId}
+                          reacoes={pai.reacoes}
+                          reacoesDetalhadas={pai.reacoesDetalhadas}
+                          onToggleReacao={handleReacaoClick}
+                          disabled={loading || comentando}
+                        />
                         {podeEnviarParaAgenda && (
                           <button
                             type="button"
@@ -904,7 +996,6 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
                       </div>
                     </div>
                   </div>
-
                   {pai.isEditing ? (
                     <div>
                       <textarea
@@ -931,7 +1022,6 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
                       {renderTextoFormatadoComMencoes(pai.conteudo, perfilesPorId, projetoAtual, containerIdDaNota, supabaseClient)}
                     </div>
                   )}
-
                   {menuAberto === pai.id && editavel && !pai.isEditing && (
                     <div className="comentario-menu">
                       <button type="button" onClick={() => handleStartEdit(pai.id)}>
@@ -942,7 +1032,6 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
                       </button>
                     </div>
                   )}
-
                   {pai.respostaAtiva && (
                     <div style={{ marginTop: "12px", marginLeft: "40px", width: "calc(100% - 40px)" }}>
                       <textarea
@@ -987,7 +1076,6 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
                   )}
                 </div>
               </div>
-
               {pai.respostasFilhas.map((resposta) => {
                 const respProfile = resposta.profiles || { nome: "Usuário", nickname: null, avatar_url: null };
                 const respNome = respProfile.nickname || respProfile.nome;
@@ -1012,7 +1100,17 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
                         <div className="comentario-autor">
                           <strong>{respNome}</strong>
                         </div>
-                        <span style={{ fontSize: "0.9em", color: "#888" }}>{resposta.formattedDate}</span>
+                        <div className="comentario-meta" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span style={{ fontSize: "0.9em", color: "#888" }}>{resposta.formattedDate}</span>
+                          <TaskReactions
+                            comentarioId={resposta.id}
+                            userId={userId}
+                            reacoes={resposta.reacoes}
+                            reacoesDetalhadas={resposta.reacoesDetalhadas}
+                            onToggleReacao={handleReacaoClick}
+                            disabled={loading || comentando}
+                          />
+                        </div>
                       </div>
                       <div className="comentario-texto">
                         {renderTextoFormatadoComMencoes(resposta.conteudo, perfilesPorId, projetoAtual, containerIdDaNota, supabaseClient)}
@@ -1029,4 +1127,4 @@ const ComentariosSection = ({ notaId, userId, userProfile, projetoAtual, contain
   );
 };
 
-export default ComentariosSection;
+export default TaskComentarios;

@@ -459,9 +459,15 @@ export default function ProjectManager({ containerAtual, user, onSidebarUpdate }
     }
   };
 
-  // === Navegação ===
+// === Navegação - CORRIGIDO ===
   const openCardsPage = (proj) => {
-    navigate(`/cards/${encodeURIComponent(proj.name || "Projeto")}`, {
+    const params = new URLSearchParams({
+      entityId: proj.id,
+      type: 'project',
+      containerId: containerAtual
+    });
+    
+    navigate(`/cards/${encodeURIComponent(proj.name || "Projeto")}?${params.toString()}`, {
       state: {
         projectId: proj.id,
         projectName: proj.name,
@@ -473,7 +479,13 @@ export default function ProjectManager({ containerAtual, user, onSidebarUpdate }
   };
 
   const openSetorCardsPage = (setor) => {
-    navigate(`/cards/${encodeURIComponent(setor.name || "Setor")}`, {
+    const params = new URLSearchParams({
+      entityId: setor.id,
+      type: 'setor',
+      containerId: containerAtual
+    });
+    
+    navigate(`/cards/${encodeURIComponent(setor.name || "Setor")}?${params.toString()}`, {
       state: {
         setorId: setor.id,
         setorName: setor.name,

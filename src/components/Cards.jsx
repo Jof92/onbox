@@ -1,4 +1,4 @@
-// src/components/Cards.jsx
+// src/components/Cards.jsx - CORREÇÃO FINAL
 import React, { useState, useEffect, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "./Cards.css";
@@ -69,9 +69,20 @@ export default function Cards() {
     if (!error) atualizarStatusNota(notaId, { nome: novoNome.trim() });
   };
 
-  const handleSaveResponsavelRapida = async (notaId, userId, userName) => {
-    const { error } = await supabase.from("notas").update({ responsavel: userId }).eq("id", notaId);
-    if (!error) atualizarStatusNota(notaId, { responsavel: userId, responsavel_nome: userName });
+  const handleSaveResponsavelRapida = async (notaId, userId, nomeExterno) => {
+    const nomeResponsavel = userId ? nomeExterno : nomeExterno;
+
+    const { error } = await supabase
+      .from("notas")
+      .update({ responsavel: nomeResponsavel })
+      .eq("id", notaId);
+
+    if (!error) {
+      atualizarStatusNota(notaId, { responsavel: nomeResponsavel });
+    } else {
+      console.error("Erro ao salvar responsável:", error);
+      alert("Erro ao salvar responsável.");
+    }
   };
 
   const handleSaveDataEntregaRapida = async (notaId, data) => {
@@ -107,18 +118,24 @@ export default function Cards() {
       const type = entityTypeFromUrl || typeFromState || (projectId ? "project" : "setor");
       const containerId = containerIdFromUrl || containerIdFromState;
 
+      if (!entityId) {
+        navigate("/containers", { replace: true });
+        setLoading(false);
+        return;
+      }
+
       if (containerId) setDonoContainerId(containerId);
-      if (!entityId) return navigate("/containers", { replace: true });
 
-      const currentUrl = `${location.pathname}${location.search}`;
-      const newUrl = new URLSearchParams();
-      newUrl.set('entityId', entityId);
-      newUrl.set('type', type);
-      if (containerId) newUrl.set('containerId', containerId);
-      if (notaIdFromUrl) newUrl.set('nota', notaIdFromUrl);
+      const needsUrlUpdate = !entityIdFromUrl || !entityTypeFromUrl;
 
-      const targetUrl = `${location.pathname}?${newUrl.toString()}`;
-      if (currentUrl !== targetUrl) navigate(targetUrl, { replace: true });
+      if (needsUrlUpdate) {
+        const newUrl = new URLSearchParams();
+        newUrl.set('entityId', entityId);
+        newUrl.set('type', type);
+        if (containerId) newUrl.set('containerId', containerId);
+        if (notaIdFromUrl) newUrl.set('nota', notaIdFromUrl);
+        navigate(`${location.pathname}?${newUrl.toString()}`, { replace: true });
+      }
 
       setEntityType(type);
       setLoading(true);
@@ -144,7 +161,9 @@ export default function Cards() {
             .select("*")
             .eq("id", entityId)
             .single();
-          if (projError) throw new Error("Projeto não encontrado");
+          if (projError) {
+            throw new Error("Projeto não encontrado");
+          }
           entityData = projData;
         } else {
           const { data: setData, error: setError } = await supabase
@@ -152,7 +171,9 @@ export default function Cards() {
             .select("*")
             .eq("id", entityId)
             .single();
-          if (setError) throw new Error("Setor não encontrado");
+          if (setError) {
+            throw new Error("Setor não encontrado");
+          }
           entityData = setData;
         }
 
@@ -176,7 +197,6 @@ export default function Cards() {
         }
         setMembros(membrosList);
 
-        // ✅ Carregar pilhas normais: arquivada IS NULL (pilhas antigas) OU arquivada = false
         const { data: pilhasNormaisNull } = await supabase
           .from("pilhas")
           .select("*")
@@ -191,7 +211,6 @@ export default function Cards() {
           .eq("arquivada", false)
           .order("ordem", { ascending: true });
 
-        // ✅ Carregar pilhas arquivadas: arquivada = true
         const { data: pilhasArquivadasRaw } = await supabase
           .from("pilhas")
           .select("*")
@@ -199,7 +218,6 @@ export default function Cards() {
           .eq("arquivada", true)
           .order("ordem", { ascending: true });
 
-        // ✅ Unir pilhas normais (NULL + false)
         const pilhasNormais = [
           ...(Array.isArray(pilhasNormaisNull) ? pilhasNormaisNull : []),
           ...(Array.isArray(pilhasNormaisFalse) ? pilhasNormaisFalse : [])
@@ -237,7 +255,6 @@ export default function Cards() {
         };
 
         const { progresso: progN, concluidas: concN, dataConclusao: dataN } = initEstado(pilhasNormaisComNotas);
-        const { progresso: progA, concluidas: concA, dataConclusao: dataA } = initEstado(pilhasArquivadasComNotas);
 
         setNotaProgresso(progN);
         setNotasConcluidas(concN);
@@ -271,23 +288,26 @@ export default function Cards() {
           const buscar = (cols) => cols.flatMap(col => col.notas).find(n => String(n.id) === notaIdFromUrl && n.tipo !== "Nota Rápida");
           const notaNormal = buscar(pilhasNormaisComNotas);
           const notaArquivada = buscar(pilhasArquivadasComNotas);
+
           if (notaArquivada) {
             setModoArquivadas(true);
             setNotaSelecionada(notaArquivada);
-          } else if (notaNormal) {
-            setNotaSelecionada(notaNormal);
-          }
-          if (notaNormal || notaArquivada) {
-            const cols = notaArquivada ? pilhasArquivadasComNotas : pilhasNormaisComNotas;
-            const col = cols.find(c => c.notas.some(n => n.id === (notaArquivada || notaNormal).id));
+            const col = pilhasArquivadasComNotas.find(c => c.notas.some(n => n.id === notaArquivada.id));
             if (col?.title === "Recebidos") {
               setIsNotaRecebidos(true);
-              loadOrigemData((notaArquivada || notaNormal).id);
+              loadOrigemData(notaArquivada.id);
+            }
+          } else if (notaNormal) {
+            setNotaSelecionada(notaNormal);
+            const col = pilhasNormaisComNotas.find(c => c.notas.some(n => n.id === notaNormal.id));
+            if (col?.title === "Recebidos") {
+              setIsNotaRecebidos(true);
+              loadOrigemData(notaNormal.id);
             }
           }
         }
       } catch (err) {
-        console.error("Erro ao carregar dados:", err);
+        alert("Erro ao carregar dados. Redirecionando...");
         navigate("/containers", { replace: true });
       } finally {
         setLoading(false);
@@ -295,7 +315,7 @@ export default function Cards() {
     };
 
     loadInitialData();
-  }, [location.pathname, navigate]);
+  }, []);
 
   const columnsAtivas = modoArquivadas ? columnsArquivadas : columnsNormais;
 
@@ -326,7 +346,7 @@ export default function Cards() {
       setProjetoOrigem(null);
       setNotaOrigem(null);
     }
-  }, [columnsAtivas, location.search, navigate]);
+  }, [columnsAtivas, location.search]);
 
   const loadOrigemData = async (notaEspelhoId) => {
     try {
@@ -354,7 +374,6 @@ export default function Cards() {
         setNotaOrigem({ id: notaEspelhoId, nome: notaEspelho?.nome || "Sem nome" });
       }
     } catch (err) {
-      console.error("Erro ao carregar origem:", err);
       setProjetoOrigem(null);
       setNotaOrigem(null);
     }
@@ -445,7 +464,6 @@ export default function Cards() {
       setFormData({ nome: "", responsavel: "", tipo: "Lista" });
       setActiveColumnId(null);
     } catch (err) {
-      console.error("Erro ao criar nota:", err);
       alert(`Erro ao criar nota: ${err.message || 'Erro desconhecido'}`);
     }
   };
@@ -506,21 +524,37 @@ export default function Cards() {
     }
   }, [dataConclusaoEdit]);
 
-  const saveColumnsOrder = async (newColumns) => {
-    const updates = newColumns
-      .filter(col => col.title !== "Recebidos")
-      .map((col, index) => ({ id: col.id, ordem: index }));
-    const { error } = await supabase.from("pilhas").upsert(updates, { onConflict: 'id' });
-    if (error) {
-      alert("Erro ao salvar posição das pilhas.");
-    } else {
-      const setter = modoArquivadas ? setColumnsArquivadas : setColumnsNormais;
-      setter(prev => prev.map(col => {
-        const updated = updates.find(u => u.id === col.id);
-        return updated ? { ...col, ordem: updated.ordem } : col;
-      }));
+const saveColumnsOrder = async (newColumns) => {
+  // Filtra "Recebidos" e mapeia apenas id (UUID) e ordem (número)
+  const updates = newColumns
+    .filter(col => col.title !== "Recebidos")
+    .map((col, index) => ({
+      id: col.id,        // string UUID válida
+      ordem: index       // número inteiro
+    }));
+
+  // ✅ Atualiza apenas a coluna 'ordem' para cada pilha existente
+  try {
+    // Atualiza cada pilha individualmente (mais seguro com RLS)
+    for (const { id, ordem } of updates) {
+      const { error } = await supabase
+        .from("pilhas")
+        .update({ ordem })
+        .eq("id", id);
+      if (error) throw error;
     }
-  };
+
+    // Atualiza o estado local
+    const setter = modoArquivadas ? setColumnsArquivadas : setColumnsNormais;
+    setter(prev => prev.map(col => {
+      const updated = updates.find(u => u.id === col.id);
+      return updated ? { ...col, ordem: updated.ordem } : col;
+    }));
+  } catch (error) {
+    console.error("Erro ao salvar posição das pilhas:", error);
+    alert("Erro ao salvar posição das pilhas.");
+  }
+};
 
   const onDragEnd = useCallback(async (result) => {
     const { source, destination, type } = result;
@@ -607,10 +641,11 @@ export default function Cards() {
       }))
     : columnsAtivas;
 
-  const allColumns = [...columnsNormais, ...columnsArquivadas]; // ✅ CORREÇÃO: todas as colunas
+  const allColumns = [...columnsNormais, ...columnsArquivadas];
+  const isCardsPageArquivo = modoArquivadas;
 
   return (
-    <div className="cards-page">
+    <div className={`cards-page ${isCardsPageArquivo ? 'arquivo-cards-page' : ''}`}>
       <CardsHeader
         entity={entity}
         membros={membros}
@@ -633,7 +668,7 @@ export default function Cards() {
                   key={col.id}
                   col={col}
                   index={index}
-                  columns={allColumns} // ✅ CORREÇÃO AQUI
+                  columns={allColumns}
                   notasConcluidas={notasConcluidas}
                   notaProgresso={notaProgresso}
                   dataConclusaoEdit={dataConclusaoEdit}
