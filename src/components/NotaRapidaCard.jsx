@@ -44,6 +44,9 @@ export default function NotaRapidaCard({
   pilhaId,
   dragHandleProps,
   containerId,
+  usuarioId,
+  entityType,   // ← projeto ou setor
+  entityId,     // ← ID do projeto ou setor
 }) {
   const [descricaoEdit, setDescricaoEdit] = useState(nota.descricao || "");
   const [isEditingDescricao, setIsEditingDescricao] = useState(false);
@@ -203,15 +206,16 @@ export default function NotaRapidaCard({
 
   const handleTextareaClick = (e) => e.stopPropagation();
 
-  // === Ações de data ===
-  const handleDataClick = () => {
-    if (!isEditingDate) {
-      setDataConclusaoEdit((prev) => ({
-        ...prev,
-        [nota.id]: dataConclusaoSalva[nota.id] || "",
-      }));
-    }
-  };
+
+// === Ações de data ===
+const handleDataClick = () => {
+  if (!isEditingDate) {
+    setDataConclusaoEdit((prev) => ({
+      ...prev,
+      [nota.id]: nota.data_entrega || "", // ✅ USA nota.data_entrega ao invés de dataConclusaoSalva
+    }));
+  }
+};
 
   const handleDataChange = (e) => {
     const val = e.target.value;
@@ -222,8 +226,8 @@ export default function NotaRapidaCard({
   };
 
   const saveData = () => {
-    saveDataConclusao(nota.id, dataConclusaoEdit[nota.id] || null);
-  };
+     onSaveDataEntrega(nota.id, dataConclusaoEdit[nota.id] || null);
+};
 
   const cancelData = () => {
     setDataConclusaoEdit((prev) => {
@@ -282,10 +286,50 @@ export default function NotaRapidaCard({
     }
   };
 
+  // === Função para criar notificação (CORRIGIDA) ===
+  const criarNotificacaoResponsavel = async (destinatarioId, remetenteId, nomeRemetente) => {
+    // Evita notificar a si mesmo
+    if (destinatarioId === remetenteId) return;
+
+    // ✅ Usa o NOME da nota (campo 'nome'), não a descrição
+    const nomeNota = (nota.nome || "sem título").substring(0, 50);
+    const mensagem = `${nomeRemetente} te marcou como responsável na nota rápida "${nomeNota}${(nota.nome || "").length > 50 ? "..." : ""}".`;
+
+    // Decide se vai preencher projeto_id ou setor_id
+    const camposEntidade = {};
+    if (entityType === "project") {
+      camposEntidade.projeto_id = entityId;
+    } else if (entityType === "setor") {
+      camposEntidade.setor_id = entityId;
+    }
+
+    const { error } = await supabase
+      .from("notificacoes")
+      .insert([
+        {
+          user_id: destinatarioId,
+          remetente_id: remetenteId,
+          mensagem,
+          container_id: containerId,
+          pilha_id: pilhaId,
+          nota_id: nota.id,
+          lido: false,
+          tipo: "mencao_responsavel_nota_rapida",
+          created_at: new Date().toISOString(),
+          ...camposEntidade,
+        },
+      ]);
+
+    if (error) {
+      console.error("❌ Erro ao criar notificação:", error);
+    } else {
+      console.log("✅ Notificação criada com sucesso!");
+    }
+  };
+
   // === Responsável: abrir input flutuante (sempre abre) ===
   const handleAddResponsavelClick = (e) => {
     e.stopPropagation();
-    console.log("containerId atual:", containerId);
     const rect = e.currentTarget.getBoundingClientRect();
     setInputPosition({
       x: rect.left + window.scrollX,
@@ -296,8 +340,36 @@ export default function NotaRapidaCard({
   };
 
   // === Selecionar um responsável da lista ===
-  const handleSelectResponsavel = (user) => {
-    onSaveResponsavel(nota.id, user.id, user.nickname || user.nome);
+  const handleSelectResponsavel = async (user) => {
+    // Primeiro, salva o responsável
+    const idsExistentes = nota.responsaveis_ids || [];
+    const jaTem = idsExistentes.includes(user.id);
+    
+    if (jaTem) {
+      // Se já tem, só remove (sem notificação)
+      onSaveResponsavel(nota.id, user.id, user.nickname || user.nome);
+    } else {
+      // Se não tem, adiciona e cria notificação
+      onSaveResponsavel(nota.id, user.id, user.nickname || user.nome);
+      
+      // Cria notificação se tivermos os dados necessários
+      if (usuarioId && entityId && entityType) {
+        // Busca o nome do remetente
+        let nomeRemetente = "Alguém";
+        const { data: perfilRemetente } = await supabase
+          .from("profiles")
+          .select("nickname, nome")
+          .eq("id", usuarioId)
+          .single();
+          
+        if (perfilRemetente) {
+          nomeRemetente = perfilRemetente.nickname || perfilRemetente.nome || "Alguém";
+        }
+        
+        await criarNotificacaoResponsavel(user.id, usuarioId, nomeRemetente);
+      }
+    }
+    
     setShowResponsavelInput(false);
     setInputResponsavel("");
   };
@@ -474,12 +546,12 @@ export default function NotaRapidaCard({
               style={{
                 marginTop: "4px",
                 fontSize: "0.85em",
-                color: dataConclusaoSalva[nota.id] ? "#444" : "#999",
-                fontStyle: dataConclusaoSalva[nota.id] ? "normal" : "italic",
+                color: nota.data_entrega ? "#444" : "#999",
+                fontStyle: nota.data_entrega ? "normal" : "italic",
               }}
             >
-              {dataConclusaoSalva[nota.id]
-                ? new Date(dataConclusaoSalva[nota.id]).toLocaleDateString("pt-BR")
+              {nota.data_entrega
+                ? new Date(nota.data_entrega).toLocaleDateString("pt-BR")
                 : "Data da entrega"}
             </div>
           )}

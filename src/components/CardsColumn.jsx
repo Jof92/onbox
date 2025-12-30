@@ -36,6 +36,9 @@ export default function Column({
   onRemoveResponsavelRapida,
   modoArquivadas,
   donoContainerId,
+  usuarioId,
+  entityType, // ← ADICIONADO
+  entity,     // ← ADICIONADO
 }) {
   const colorTrackRefs = useRef({});
   const isRecebidos = col.title === "Recebidos";
@@ -341,7 +344,9 @@ export default function Column({
                               pilhaId={col.id}
                               dragHandleProps={prov.dragHandleProps}
                               containerId={donoContainerId}
-                              
+                              usuarioId={usuarioId}
+                              entityType={entityType} // ← REPASSADO
+                              entityId={entity?.id}   // ← REPASSADO
                             />
                           </div>
                         )}

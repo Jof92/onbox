@@ -747,6 +747,9 @@ const saveColumnsOrder = async (newColumns) => {
                   onRemoveResponsavelRapida={handleRemoveResponsavelRapida}
                   modoArquivadas={modoArquivadas}
                   donoContainerId={donoContainerId}
+                  usuarioId={usuarioId}
+                  entityType={entityType}   // ← ADICIONADO
+                  entity={entity}           // ← ADICIONADO
                 />
               ))}
               {provided.placeholder}

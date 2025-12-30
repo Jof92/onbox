@@ -2,12 +2,13 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { supabase } from "../supabaseClient";
 import "./Agenda.css";
-import { FaTimes } from "react-icons/fa"; // ✅ Importado
+import { FaTimes } from "react-icons/fa";
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 
 const Agenda = ({ user, currentContainerId, onClose }) => {
   const [objetivosCompletos, setObjetivosCompletos] = useState(null);
   const [comentariosAgendados, setComentariosAgendados] = useState(null);
+  const [notasRapidasCompletas, setNotasRapidasCompletas] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -19,7 +20,6 @@ const Agenda = ({ user, currentContainerId, onClose }) => {
   const [hoveredNotaId, setHoveredNotaId] = useState(null);
   const [showSidebarAgenda, setShowSidebarAgenda] = useState(false);
 
-  // ✅ Fechar com ESC ou clique fora
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === "Escape") {
@@ -218,6 +218,113 @@ const Agenda = ({ user, currentContainerId, onClose }) => {
         }
       }
 
+        // ========== Notas Rápidas ==========
+        // Busca todas as notas rápidas com data_entrega
+        const { data: todasNotasRapidas, error: errNotasRapidas } = await supabase
+          .from("notas")
+          .select("id, nome, descricao, data_entrega, pilha_id, responsavel_id, responsaveis_ids, created_at, concluida")
+          .eq("tipo", "Nota Rápida")
+          .not("data_entrega", "is", null)
+          .order("data_entrega", { ascending: true });
+
+        console.log("🔍 Todas notas rápidas:", todasNotasRapidas);
+        console.log("🔍 User ID:", user.id);
+
+        // Filtra apenas as que o usuário é responsável ou está na lista de responsáveis
+        const notasRapidas = todasNotasRapidas?.filter(nota => {
+          const eResponsavel = nota.responsavel_id === user.id;
+          const estaNoArray = nota.responsaveis_ids && Array.isArray(nota.responsaveis_ids) && nota.responsaveis_ids.includes(user.id);
+          
+          console.log(`Nota ${nota.id}:`, {
+            responsavel_id: nota.responsavel_id,
+            responsaveis_ids: nota.responsaveis_ids,
+            eResponsavel,
+            estaNoArray,
+            passa: eResponsavel || estaNoArray
+          });
+          
+          return eResponsavel || estaNoArray;
+        }) || [];
+
+        console.log("✅ Notas filtradas:", notasRapidas);
+      
+      if (notasRapidas && Array.isArray(notasRapidas) && notasRapidas.length > 0) {
+        const pilhaIdsNotas = [...new Set(notasRapidas.map(n => n.pilha_id).filter(id => id))];
+        
+        let pilhasMap = {};
+        const projetoIdsDasPilhas = new Set();
+        
+        if (pilhaIdsNotas.length > 0) {
+          const { data: pilhas, error: errPilhas } = await supabase
+            .from("pilhas")
+            .select("id, title, project_id")
+            .in("id", pilhaIdsNotas);
+            
+          if (!errPilhas && Array.isArray(pilhas)) {
+            pilhas.forEach(p => {
+              pilhasMap[p.id] = {
+                title: p.title || "Pilha sem nome",
+                project_id: p.project_id
+              };
+              if (p.project_id) projetoIdsDasPilhas.add(p.project_id);
+            });
+          }
+        }
+        
+        let projetosMap = {};
+        const userIdsDonos = new Set();
+        
+        if (projetoIdsDasPilhas.size > 0) {
+          const { data: projetos, error: errProjetos } = await supabase
+            .from("projects")
+            .select("id, name, user_id")
+            .in("id", Array.from(projetoIdsDasPilhas));
+            
+          if (!errProjetos && Array.isArray(projetos)) {
+            projetos.forEach(proj => {
+              projetosMap[proj.id] = {
+                nome: proj.name || "Projeto sem nome",
+                user_id: proj.user_id
+              };
+              if (proj.user_id) userIdsDonos.add(proj.user_id);
+            });
+          }
+        }
+        
+        let donosMap = {};
+        if (userIdsDonos.size > 0) {
+          const { data: profiles, error: errProfiles } = await supabase
+            .from("profiles")
+            .select("id, nome, container")
+            .in("id", Array.from(userIdsDonos));
+            
+          if (!errProfiles && Array.isArray(profiles)) {
+            donosMap = Object.fromEntries(
+              profiles.map(p => [p.id, {
+                nomeDono: p.nome || "Usuário",
+                nomeContainer: p.container || p.nome || "Container sem nome"
+              }])
+            );
+          }
+        }
+        
+        notasRapidasCompletas = notasRapidas.map(nota => {
+          const pilha = nota.pilha_id ? pilhasMap[nota.pilha_id] : null;
+          const projeto = pilha?.project_id ? projetosMap[pilha.project_id] : null;
+          const dono = projeto?.user_id ? donosMap[projeto.user_id] : null;
+          
+          return {
+            ...nota,
+            nomeNota: nota.nome || "Nota rápida sem título",
+            nomePilha: pilha ? pilha.title : "Sem pilha",
+            nomeProjeto: projeto ? projeto.nome : "Sem projeto",
+            nomeDono: dono ? dono.nomeDono : "Sem dono",
+            nomeContainer: dono ? dono.nomeContainer : "Sem container",
+            _chaveNota: nota.id,
+          };
+        });
+      }
+
       // ========== Comentários ==========
       const { data: comentarios, error: errComentarios } = await supabase
         .from("comentarios")
@@ -230,6 +337,7 @@ const Agenda = ({ user, currentContainerId, onClose }) => {
       }
 
       let comentariosCompletos = [];
+      
       if (comentarios && Array.isArray(comentarios) && comentarios.length > 0) {
         const userIdsAutores = [...new Set(comentarios.map(c => c.user_id).filter(id => id))];
         const notaIds = [...new Set(comentarios.map(c => c.nota_id).filter(id => id != null))];
@@ -317,6 +425,7 @@ const Agenda = ({ user, currentContainerId, onClose }) => {
 
       setObjetivosCompletos(objetivosCompletos);
       setComentariosAgendados(comentariosCompletos);
+      setNotasRapidasCompletas(notasRapidasCompletas);
       setError(null);
     } catch (err) {
       console.error("Erro ao carregar agenda:", err);
@@ -327,6 +436,7 @@ const Agenda = ({ user, currentContainerId, onClose }) => {
       });
       setObjetivosCompletos([]);
       setComentariosAgendados([]);
+      setNotasRapidasCompletas([]);
     } finally {
       setLoading(false);
     }
@@ -336,7 +446,6 @@ const Agenda = ({ user, currentContainerId, onClose }) => {
     fetchData();
   }, [fetchData]);
 
-  // =============== Funções auxiliares ===============
   const getMonthNameShort = (monthIndex) => {
     const months = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
     return months[monthIndex - 1] || "???";
@@ -379,17 +488,38 @@ const Agenda = ({ user, currentContainerId, onClose }) => {
   };
 
   const toggleConcluido = async (item) => {
-    if (item.tipo !== 'objetivo' || item.concluido) return;
+    if (item.concluido || item.concluida) return;
 
     const novoValor = true;
-    const { error } = await supabase
-      .from("ata_objetivos")
-      .update({ concluido: novoValor })
-      .eq("id", item.id);
-    if (error) return console.error("Erro ao atualizar conclusão:", error);
-    setObjetivosCompletos(prev =>
-      prev.map(obj => obj.id === item.id ? { ...obj, concluido: novoValor } : obj)
-    );
+    let error = null;
+
+    if (item.tipo === 'objetivo') {
+      ({ error } = await supabase
+        .from("ata_objetivos")
+        .update({ concluido: novoValor })
+        .eq("id", item.id));
+        
+      if (!error) {
+        setObjetivosCompletos(prev =>
+          prev.map(obj => obj.id === item.id ? { ...obj, concluido: novoValor } : obj)
+        );
+      }
+    } else if (item.tipo === 'nota_rapida') {
+      ({ error } = await supabase
+        .from("notas")
+        .update({ concluida: novoValor })
+        .eq("id", item.id));
+        
+      if (!error) {
+        setNotasRapidasCompletas(prev =>
+          prev.map(nota => nota.id === item.id ? { ...nota, concluida: novoValor } : nota)
+        );
+      }
+    }
+    
+    if (error) {
+      console.error("Erro ao atualizar conclusão:", error);
+    }
   };
 
   const handleDateClick = (item) => {
@@ -409,23 +539,39 @@ const Agenda = ({ user, currentContainerId, onClose }) => {
         .from("ata_objetivos")
         .update({ data_entrega: dateToSave })
         .eq("id", editingItemId));
-    } else {
+        
+      if (!error) {
+        setObjetivosCompletos(prev =>
+          prev.map(obj => obj.id === editingItemId ? { ...obj, data_entrega: dateToSave } : obj)
+        );
+      }
+    } else if (editingItemType === 'comentario') {
       ({ error } = await supabase
         .from("comentarios")
         .update({ data_entrega: dateToSave })
         .eq("id", editingItemId));
+        
+      if (!error) {
+        setComentariosAgendados(prev =>
+          prev.map(com => com.id === editingItemId ? { ...com, data_entrega: dateToSave } : com)
+        );
+      }
+    } else if (editingItemType === 'nota_rapida') {
+      ({ error } = await supabase
+        .from("notas")
+        .update({ data_entrega: dateToSave })
+        .eq("id", editingItemId));
+        
+      if (!error) {
+        setNotasRapidasCompletas(prev =>
+          prev.map(nota => nota.id === editingItemId ? { ...nota, data_entrega: dateToSave } : nota)
+        );
+      }
     }
 
-    if (error) return console.error("Erro ao salvar data:", error);
-
-    if (editingItemType === 'objetivo') {
-      setObjetivosCompletos(prev =>
-        prev.map(obj => obj.id === editingItemId ? { ...obj, data_entrega: dateToSave } : obj)
-      );
-    } else {
-      setComentariosAgendados(prev =>
-        prev.map(com => com.id === editingItemId ? { ...com, data_entrega: dateToSave } : com)
-      );
+    if (error) {
+      console.error("Erro ao salvar data:", error);
+      return;
     }
 
     setEditingItemId(null);
@@ -440,7 +586,13 @@ const Agenda = ({ user, currentContainerId, onClose }) => {
   };
 
   const handleExcluirDaAgenda = async (item) => {
-    if (window.confirm(`Deseja remover "${item.tipo === 'objetivo' ? item.texto : item.conteudo}" da agenda?`)) {
+    const descricao = item.tipo === 'objetivo' 
+      ? item.texto 
+      : item.tipo === 'comentario'
+      ? item.conteudo
+      : item.descricao || item.nome || "esta nota";
+      
+    if (window.confirm(`Deseja remover "${descricao}" da agenda?`)) {
       let error = null;
 
       if (item.tipo === 'objetivo') {
@@ -448,22 +600,33 @@ const Agenda = ({ user, currentContainerId, onClose }) => {
           .from("ata_objetivos")
           .update({ texto: `[EXCLUIDO] ${item.texto}` })
           .eq("id", item.id));
-      } else {
+          
+        if (!error) {
+          setObjetivosCompletos(prev => prev.filter(obj => obj.id !== item.id));
+        }
+      } else if (item.tipo === 'comentario') {
         ({ error } = await supabase
           .from("comentarios")
           .update({ agendado_por: null })
           .eq("id", item.id));
+          
+        if (!error) {
+          setComentariosAgendados(prev => prev.filter(com => com.id !== item.id));
+        }
+      } else if (item.tipo === 'nota_rapida') {
+        ({ error } = await supabase
+          .from("notas")
+          .update({ data_entrega: null })
+          .eq("id", item.id));
+          
+        if (!error) {
+          setNotasRapidasCompletas(prev => prev.filter(nota => nota.id !== item.id));
+        }
       }
 
       if (error) {
         console.error("Erro ao excluir da agenda:", error);
         alert("Erro ao remover item da agenda.");
-      } else {
-        if (item.tipo === 'objetivo') {
-          setObjetivosCompletos(prev => prev.filter(obj => obj.id !== item.id));
-        } else {
-          setComentariosAgendados(prev => prev.filter(com => com.id !== item.id));
-        }
       }
     }
   };
@@ -509,6 +672,14 @@ const Agenda = ({ user, currentContainerId, onClose }) => {
       itensComData.push({ ...com, tipo: 'comentario', data_ref: com.data_entrega });
     } else {
       itensSemData.push({ ...com, tipo: 'comentario' });
+    }
+  });
+
+  notasRapidasCompletas?.forEach(nota => {
+    if (nota.data_entrega) {
+      itensComData.push({ ...nota, tipo: 'nota_rapida', data_ref: nota.data_entrega });
+    } else {
+      itensSemData.push({ ...nota, tipo: 'nota_rapida' });
     }
   });
 
@@ -665,7 +836,8 @@ const Agenda = ({ user, currentContainerId, onClose }) => {
                         </div>
                         {grupo.map(item => {
                           const dias = calcularDiasRestantes(item.data_entrega);
-                          const isConcluido = item.tipo === 'objetivo' && item.concluido;
+                          const isConcluido = (item.tipo === 'objetivo' && item.concluido) || 
+                                             (item.tipo === 'nota_rapida' && item.concluida);
                           return (
                             <div key={`${item.tipo}-${item.id}`} className={`task ${isConcluido ? 'completed' : ''}`}>
                               <div
@@ -676,7 +848,11 @@ const Agenda = ({ user, currentContainerId, onClose }) => {
                               </div>
                               <div className="body">
                                 <div className="title">
-                                  {item.tipo === 'objetivo' ? item.texto : `"${item.conteudo}"`}
+                                  {item.tipo === 'objetivo' 
+                                    ? item.texto 
+                                    : item.tipo === 'comentario'
+                                    ? `"${item.conteudo}"`
+                                    : item.descricao || item.nome || "Nota rápida"}
                                 </div>
                                 {item.tipo === 'comentario' && (
                                   <div className="meta small">Autor: {item.nomeAutor}</div>
@@ -723,7 +899,8 @@ const Agenda = ({ user, currentContainerId, onClose }) => {
                   {!hideSemData && (
                     <>
                       {itensSemData.map(item => {
-                        const isConcluido = item.tipo === 'objetivo' && item.concluido;
+                        const isConcluido = (item.tipo === 'objetivo' && item.concluido) || 
+                                           (item.tipo === 'nota_rapida' && item.concluida);
                         const isEditing = editingItemId === item.id && editingItemType === item.tipo;
 
                         return (
@@ -795,7 +972,11 @@ const Agenda = ({ user, currentContainerId, onClose }) => {
                               </div>
                               <div className="body">
                                 <div className="title">
-                                  {item.tipo === 'objetivo' ? item.texto : `"${item.conteudo}"`}
+                                  {item.tipo === 'objetivo' 
+                                    ? item.texto 
+                                    : item.tipo === 'comentario'
+                                    ? `"${item.conteudo}"`
+                                    : item.descricao || item.nome || "Nota rápida"}
                                 </div>
                                 {item.tipo === 'comentario' && (
                                   <div className="meta small">Autor: {item.nomeAutor}</div>
