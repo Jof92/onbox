@@ -1,4 +1,4 @@
-// src/components/Cards.jsx - CORREÇÃO FINAL
+// src/components/Cards.jsx
 import React, { useState, useEffect, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "./Cards.css";
@@ -45,6 +45,7 @@ export default function Cards() {
   const [dataConclusaoSalva, setDataConclusaoSalva] = useState({});
   const [membros, setMembros] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [showAddColumnMenu, setShowAddColumnMenu] = useState(false);
 
   const atualizarStatusNota = (notaId, updates) => {
     const setter = modoArquivadas ? setColumnsArquivadas : setColumnsNormais;
@@ -69,81 +70,126 @@ export default function Cards() {
     if (!error) atualizarStatusNota(notaId, { nome: novoNome.trim() });
   };
 
-const handleSaveResponsavelRapida = async (notaId, userId, nomeExterno) => {
-  if (!userId) {
-    console.warn("Tentativa de salvar responsável sem ID");
-    return;
-  }
+  const handleSaveResponsavelRapida = async (notaId, userId, nomeExterno) => {
+    if (!userId) {
+      console.warn("Tentativa de salvar responsável sem ID");
+      return;
+    }
 
-  // Busca a nota atual para obter a lista existente
-  const { data: notaAtual, error: fetchError } = await supabase
-    .from("notas")
-    .select("responsaveis_ids")
-    .eq("id", notaId)
-    .single();
+    const { data: notaAtual, error: fetchError } = await supabase
+      .from("notas")
+      .select("responsaveis_ids")
+      .eq("id", notaId)
+      .single();
 
-  if (fetchError) {
-    console.error("Erro ao buscar nota:", fetchError);
-    alert("Erro ao atualizar responsável.");
-    return;
-  }
+    if (fetchError) {
+      console.error("Erro ao buscar nota:", fetchError);
+      alert("Erro ao atualizar responsável.");
+      return;
+    }
 
-  const idsExistentes = notaAtual.responsaveis_ids || [];
-  const jaTem = idsExistentes.includes(userId);
+    const idsExistentes = notaAtual.responsaveis_ids || [];
+    const jaTem = idsExistentes.includes(userId);
+    const novosIds = jaTem
+      ? idsExistentes.filter(id => id !== userId)
+      : [...idsExistentes, userId];
 
-  let novosIds;
-  if (jaTem) {
-    // Remove o usuário (toggle off)
-    novosIds = idsExistentes.filter(id => id !== userId);
-  } else {
-    // Adiciona o usuário
-    novosIds = [...idsExistentes, userId];
-  }
+    const { error } = await supabase
+      .from("notas")
+      .update({ responsaveis_ids: novosIds })
+      .eq("id", notaId);
 
-  const { error } = await supabase
-    .from("notas")
-    .update({ responsaveis_ids: novosIds })
-    .eq("id", notaId);
-
-  if (!error) {
-    atualizarStatusNota(notaId, { responsaveis_ids: novosIds });
-  } else {
-    console.error("Erro ao salvar responsáveis:", error);
-    alert("Erro ao salvar responsável.");
-  }
-};
+    if (!error) {
+      atualizarStatusNota(notaId, { responsaveis_ids: novosIds });
+    } else {
+      console.error("Erro ao salvar responsáveis:", error);
+      alert("Erro ao salvar responsável.");
+    }
+  };
 
   const handleSaveDataEntregaRapida = async (notaId, data) => {
     const { error } = await supabase.from("notas").update({ data_entrega: data || null }).eq("id", notaId);
     if (!error) atualizarStatusNota(notaId, { data_entrega: data || null });
   };
 
-const handleRemoveResponsavelRapida = async (notaId, userIdToRemove = null) => {
-  // Se userIdToRemove for fornecido, remove só ele; senão, limpa todos
-  const { data: notaAtual, error: fetchError } = await supabase
-    .from("notas")
-    .select("responsaveis_ids")
-    .eq("id", notaId)
-    .single();
+  const handleRemoveResponsavelRapida = async (notaId, userIdToRemove = null) => {
+    const { data: notaAtual, error: fetchError } = await supabase
+      .from("notas")
+      .select("responsaveis_ids")
+      .eq("id", notaId)
+      .single();
 
-  if (fetchError) return;
+    if (fetchError) return;
 
-  let novosIds;
-  if (userIdToRemove) {
-    novosIds = (notaAtual.responsaveis_ids || []).filter(id => id !== userIdToRemove);
-  } else {
-    novosIds = [];
-  }
+    let novosIds;
+    if (userIdToRemove) {
+      novosIds = (notaAtual.responsaveis_ids || []).filter(id => id !== userIdToRemove);
+    } else {
+      novosIds = [];
+    }
 
-  const { error } = await supabase
-    .from("notas")
-    .update({ responsaveis_ids: novosIds })
-    .eq("id", notaId);
+    const { error } = await supabase
+      .from("notas")
+      .update({ responsaveis_ids: novosIds })
+      .eq("id", notaId);
 
-  if (!error) {
-    atualizarStatusNota(notaId, { responsaveis_ids: novosIds });
-  }
-};
+    if (!error) {
+      atualizarStatusNota(notaId, { responsaveis_ids: novosIds });
+    }
+  };
+
+  // ✅ Verifica se já existe pilha "Diário de Obra"
+  const jaExisteDiario = [...columnsNormais, ...columnsArquivadas].some(
+    col => col.tipo_pilha === "diario_obras"
+  );
+
+  // ✅ Função para criar coluna com tipo
+  const handleCreateColumn = async (tipo) => {
+    if (!entity) return;
+    setShowAddColumnMenu(false);
+
+    // ✅ Impede criar segunda pilha (embora já esteja escondida)
+    if (tipo === "diario_obras" && jaExisteDiario) {
+      alert("Já existe uma pilha 'Diário de Obra' neste projeto/setor.");
+      return;
+    }
+
+    const cols = modoArquivadas ? columnsArquivadas : columnsNormais;
+    const outras = cols.filter(c => c.title !== "Recebidos");
+    const maxOrdem = outras.length > 0 ? Math.max(...outras.map(c => c.ordem)) : -1;
+    const newOrdem = maxOrdem + 1;
+
+    const newPilhaData = {
+      title: tipo === "diario_obras" ? "Diário de Obra" : "Nova Pilha",
+      ordem: newOrdem,
+      arquivada: modoArquivadas,
+      tipo_pilha: tipo === "diario_obras" ? "diario_obras" : null,
+      ...(entityType === "project" ? { project_id: entity.id } : { setor_id: entity.id })
+    };
+
+    const { data: newPilha } = await supabase
+      .from("pilhas")
+      .insert([newPilhaData])
+      .select()
+      .single();
+
+    if (newPilha) {
+      const novaCol = {
+        id: String(newPilha.id),
+        title: newPilha.title,
+        notas: [],
+        cor_fundo: null,
+        ordem: newOrdem,
+        arquivada: modoArquivadas,
+        tipo_pilha: newPilha.tipo_pilha || null
+      };
+      if (modoArquivadas) {
+        setColumnsArquivadas(prev => [...prev, novaCol]);
+      } else {
+        setColumnsNormais(prev => [...prev, novaCol]);
+      }
+    }
+  };
 
   useEffect(() => {
     const loadInitialData = async () => {
@@ -177,7 +223,6 @@ const handleRemoveResponsavelRapida = async (notaId, userIdToRemove = null) => {
       if (containerId) setDonoContainerId(containerId);
 
       const needsUrlUpdate = !entityIdFromUrl || !entityTypeFromUrl;
-
       if (needsUrlUpdate) {
         const newUrl = new URLSearchParams();
         newUrl.set('entityId', entityId);
@@ -211,9 +256,7 @@ const handleRemoveResponsavelRapida = async (notaId, userIdToRemove = null) => {
             .select("*")
             .eq("id", entityId)
             .single();
-          if (projError) {
-            throw new Error("Projeto não encontrado");
-          }
+          if (projError) throw new Error("Projeto não encontrado");
           entityData = projData;
         } else {
           const { data: setData, error: setError } = await supabase
@@ -221,9 +264,7 @@ const handleRemoveResponsavelRapida = async (notaId, userIdToRemove = null) => {
             .select("*")
             .eq("id", entityId)
             .single();
-          if (setError) {
-            throw new Error("Setor não encontrado");
-          }
+          if (setError) throw new Error("Setor não encontrado");
           entityData = setData;
         }
 
@@ -317,7 +358,8 @@ const handleRemoveResponsavelRapida = async (notaId, userIdToRemove = null) => {
             notas: p.notas,
             cor_fundo: p.cor_fundo || null,
             ordem: p.ordem || 0,
-            arquivada: false
+            arquivada: false,
+            tipo_pilha: p.tipo_pilha || null
           }))
         );
 
@@ -328,7 +370,8 @@ const handleRemoveResponsavelRapida = async (notaId, userIdToRemove = null) => {
             notas: p.notas,
             cor_fundo: p.cor_fundo || null,
             ordem: p.ordem || 0,
-            arquivada: true
+            arquivada: true,
+            tipo_pilha: p.tipo_pilha || null
           }))
         );
 
@@ -369,34 +412,71 @@ const handleRemoveResponsavelRapida = async (notaId, userIdToRemove = null) => {
 
   const columnsAtivas = modoArquivadas ? columnsArquivadas : columnsNormais;
 
-  useEffect(() => {
-    const urlParams = new URLSearchParams(location.search);
-    const notaId = urlParams.get("nota");
-    if (notaId && columnsAtivas.length > 0) {
-      let found = false;
-      for (const col of columnsAtivas) {
-        const nota = col.notas.find(n => String(n.id) === notaId && n.tipo !== "Nota Rápida");
-        if (nota) {
-          setNotaSelecionada(nota);
-          const isRecebidos = col.title === "Recebidos";
-          setIsNotaRecebidos(isRecebidos);
-          if (isRecebidos) loadOrigemData(nota.id);
-          found = true;
-          break;
-        }
-      }
-      if (!found && notaSelecionada) {
-        const newUrl = new URLSearchParams(location.search);
-        newUrl.delete('nota');
-        navigate(`${location.pathname}?${newUrl.toString()}`, { replace: true });
-      }
-    } else if (notaSelecionada && !notaId) {
-      setNotaSelecionada(null);
-      setIsNotaRecebidos(false);
-      setProjetoOrigem(null);
-      setNotaOrigem(null);
+  // Substitua o useEffect que monitora a URL no Cards.jsx (linha ~469) por este:
+
+useEffect(() => {
+  const urlParams = new URLSearchParams(location.search);
+  const notaId = urlParams.get("nota");
+  
+  console.log("🔄 useEffect URL - notaId:", notaId, "| columnsAtivas:", columnsAtivas.length);
+  
+  // Se não há notaId na URL mas há notaSelecionada, limpa
+  if (!notaId && notaSelecionada) {
+    console.log("❌ Sem notaId na URL, limpando notaSelecionada");
+    setNotaSelecionada(null);
+    setIsNotaRecebidos(false);
+    setProjetoOrigem(null);
+    setNotaOrigem(null);
+    return;
+  }
+  
+  // Se há notaId na URL e colunas carregadas
+  if (notaId && columnsAtivas.length > 0) {
+    // Se já temos a nota selecionada com o mesmo ID, não faz nada
+    if (notaSelecionada && String(notaSelecionada.id) === notaId) {
+      console.log("✅ Nota já selecionada, mantendo:", notaId);
+      return;
     }
-  }, [columnsAtivas, location.search]);
+    
+    // Tenta encontrar a nota nas colunas
+    let found = false;
+    for (const col of columnsAtivas) {
+      const nota = col.notas.find(n => String(n.id) === notaId && n.tipo !== "Nota Rápida");
+      if (nota) {
+        console.log("✅ Nota encontrada nas colunas, atualizando estado");
+        setNotaSelecionada(nota);
+        const isRecebidos = col.title === "Recebidos";
+        setIsNotaRecebidos(isRecebidos);
+        if (isRecebidos) loadOrigemData(nota.id);
+        found = true;
+        break;
+      }
+    }
+    
+    // Se não encontrou mas há notaId na URL, busca no banco
+    if (!found && !notaSelecionada) {
+      console.log("⚠️ Nota não encontrada nas colunas, buscando no banco...");
+      const buscarNota = async () => {
+        const { data: nota, error } = await supabase
+          .from("notas")
+          .select("*")
+          .eq("id", notaId)
+          .single();
+          
+        if (!error && nota && nota.tipo !== "Nota Rápida") {
+          console.log("✅ Nota encontrada no banco, setando");
+          setNotaSelecionada(nota);
+          setIsNotaRecebidos(false);
+        } else {
+          console.log("❌ Nota não encontrada ou é Nota Rápida");
+        }
+      };
+      buscarNota();
+    }
+  }
+  
+  // IMPORTANTE: Removemos notaSelecionada das dependências para evitar loop
+}, [columnsAtivas, location.search]);
 
   const loadOrigemData = async (notaEspelhoId) => {
     try {
@@ -448,36 +528,6 @@ const handleRemoveResponsavelRapida = async (notaId, userIdToRemove = null) => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [menuOpenPilha]);
-
-  const handleAddColumn = async () => {
-    if (!entity) return;
-    const cols = modoArquivadas ? columnsArquivadas : columnsNormais;
-    const outras = cols.filter(c => c.title !== "Recebidos");
-    const maxOrdem = outras.length > 0 ? Math.max(...outras.map(c => c.ordem)) : -1;
-    const newOrdem = maxOrdem + 1;
-
-    const newPilhaData = {
-      title: "Nova Pilha",
-      ordem: newOrdem,
-      arquivada: modoArquivadas,
-      ...(entityType === "project" ? { project_id: entity.id } : { setor_id: entity.id })
-    };
-
-    const { data: newPilha } = await supabase
-      .from("pilhas")
-      .insert([newPilhaData])
-      .select()
-      .single();
-
-    if (newPilha) {
-      const novaCol = { id: String(newPilha.id), title: newPilha.title, notas: [], cor_fundo: null, ordem: newOrdem };
-      if (modoArquivadas) {
-        setColumnsArquivadas(prev => [...prev, novaCol]);
-      } else {
-        setColumnsNormais(prev => [...prev, novaCol]);
-      }
-    }
-  };
 
   const toggleConclusaoNota = async (notaId, concluida) => {
     const newConcluida = !concluida;
@@ -574,37 +624,30 @@ const handleRemoveResponsavelRapida = async (notaId, userIdToRemove = null) => {
     }
   }, [dataConclusaoEdit]);
 
-const saveColumnsOrder = async (newColumns) => {
-  // Filtra "Recebidos" e mapeia apenas id (UUID) e ordem (número)
-  const updates = newColumns
-    .filter(col => col.title !== "Recebidos")
-    .map((col, index) => ({
-      id: col.id,        // string UUID válida
-      ordem: index       // número inteiro
-    }));
+  const saveColumnsOrder = async (newColumns) => {
+    const updates = newColumns
+      .filter(col => col.title !== "Recebidos")
+      .map((col, index) => ({ id: col.id, ordem: index }));
 
-  // ✅ Atualiza apenas a coluna 'ordem' para cada pilha existente
-  try {
-    // Atualiza cada pilha individualmente (mais seguro com RLS)
-    for (const { id, ordem } of updates) {
-      const { error } = await supabase
-        .from("pilhas")
-        .update({ ordem })
-        .eq("id", id);
-      if (error) throw error;
+    try {
+      for (const { id, ordem } of updates) {
+        const { error } = await supabase
+          .from("pilhas")
+          .update({ ordem })
+          .eq("id", id);
+        if (error) throw error;
+      }
+
+      const setter = modoArquivadas ? setColumnsArquivadas : setColumnsNormais;
+      setter(prev => prev.map(col => {
+        const updated = updates.find(u => u.id === col.id);
+        return updated ? { ...col, ordem: updated.ordem } : col;
+      }));
+    } catch (error) {
+      console.error("Erro ao salvar posição das pilhas:", error);
+      alert("Erro ao salvar posição das pilhas.");
     }
-
-    // Atualiza o estado local
-    const setter = modoArquivadas ? setColumnsArquivadas : setColumnsNormais;
-    setter(prev => prev.map(col => {
-      const updated = updates.find(u => u.id === col.id);
-      return updated ? { ...col, ordem: updated.ordem } : col;
-    }));
-  } catch (error) {
-    console.error("Erro ao salvar posição das pilhas:", error);
-    alert("Erro ao salvar posição das pilhas.");
-  }
-};
+  };
 
   const onDragEnd = useCallback(async (result) => {
     const { source, destination, type } = result;
@@ -658,21 +701,43 @@ const saveColumnsOrder = async (newColumns) => {
     }
   }, [columnsNormais, columnsArquivadas, modoArquivadas, notaSelecionada]);
 
-  const handleOpenNota = (nota) => {
-    if (nota.tipo === "Nota Rápida") return;
-    let isRecebidos = false;
-    for (const col of columnsAtivas) {
-      if (col.notas.some(n => n.id === nota.id)) {
-        isRecebidos = col.title === "Recebidos";
-        break;
-      }
+// Substitua a função handleOpenNota no Cards.jsx por esta versão melhorada:
+
+const handleOpenNota = (nota) => {
+  console.log("📖 handleOpenNota chamado com:", nota);
+  
+  if (nota.tipo === "Nota Rápida") {
+    console.log("⚠️ Nota Rápida - modal não será aberto");
+    return;
+  }
+
+  console.log("✅ Tipo aceito:", nota.tipo);
+
+  let isRecebidos = false;
+  for (const col of columnsAtivas) {
+    if (col.notas.some(n => n.id === nota.id)) {
+      isRecebidos = col.title === "Recebidos";
+      break;
     }
-    setNotaSelecionada(nota);
-    setIsNotaRecebidos(isRecebidos);
-    if (isRecebidos) loadOrigemData(nota.id);
-    else { setProjetoOrigem(null); setNotaOrigem(null); }
-    updateUrlWithNota(nota.id);
-  };
+  }
+
+  console.log("📋 isRecebidos:", isRecebidos);
+  console.log("🎯 Setando notaSelecionada...");
+
+  setNotaSelecionada(nota);
+  setIsNotaRecebidos(isRecebidos);
+  
+  if (isRecebidos) {
+    loadOrigemData(nota.id);
+  } else {
+    setProjetoOrigem(null);
+    setNotaOrigem(null);
+  }
+  
+  updateUrlWithNota(nota.id);
+  
+  console.log("✅ Modal deve abrir agora com nota ID:", nota.id);
+};
 
   const handleCloseNota = () => {
     setNotaSelecionada(null);
@@ -705,9 +770,29 @@ const saveColumnsOrder = async (newColumns) => {
         modoArquivadas={modoArquivadas}
       />
 
-      <button className="floating-add-column-btn" onClick={handleAddColumn} title="Adicionar pilha">
-        <FaPlus />
-      </button>
+      {/* ✅ BOTÃO COM MENU CONDICIONAL */}
+      <div className="floating-add-column-container">
+        <button
+          className="floating-add-column-btn"
+          onClick={() => setShowAddColumnMenu(prev => !prev)}
+          title="Adicionar pilha"
+        >
+          <FaPlus />
+        </button>
+
+        {showAddColumnMenu && (
+          <div className="add-column-menu">
+            <button onClick={() => handleCreateColumn("normal")}>
+              Pilha normal
+            </button>
+            {!jaExisteDiario && (
+              <button onClick={() => handleCreateColumn("diario_obras")}>
+                Diário de Obra
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       <DragDropContext onDragEnd={onDragEnd}>
         <Droppable droppableId="all-columns" direction="horizontal" type="COLUMN">
@@ -741,15 +826,16 @@ const saveColumnsOrder = async (newColumns) => {
                   handleOpenNota={handleOpenNota}
                   handleEditNota={handleEditNota}
                   handleDeleteNota={handleDeleteNota}
-                  onSaveNomeRapida={handleSaveNomeRapida}
                   onSaveResponsavelRapida={handleSaveResponsavelRapida}
                   onSaveDataEntregaRapida={handleSaveDataEntregaRapida}
                   onRemoveResponsavelRapida={handleRemoveResponsavelRapida}
                   modoArquivadas={modoArquivadas}
                   donoContainerId={donoContainerId}
                   usuarioId={usuarioId}
-                  entityType={entityType}   // ← ADICIONADO
-                  entity={entity}           // ← ADICIONADO
+                  entityType={entityType}
+                  entity={entity}
+                  columnsNormais={columnsNormais}
+                  columnsArquivadas={columnsArquivadas}
                 />
               ))}
               {provided.placeholder}

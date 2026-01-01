@@ -4,11 +4,14 @@ import { Draggable, Droppable } from "@hello-pangea/dnd";
 import { FaPlus, FaEllipsisV, FaEdit, FaTrash, FaTimes, FaMapPin, FaFileExport } from "react-icons/fa";
 import { supabase } from "../supabaseClient";
 import NotaRapidaCard from "./NotaRapidaCard";
+import CalendarioDiarioObra from "./RdoCalendario";
 
 export default function Column({
   col,
   index,
   columns,
+  columnsNormais,
+  columnsArquivadas,
   notasConcluidas,
   notaProgresso,
   dataConclusaoEdit,
@@ -37,20 +40,26 @@ export default function Column({
   modoArquivadas,
   donoContainerId,
   usuarioId,
-  entityType, // ← ADICIONADO
-  entity,     // ← ADICIONADO
+  entityType,
+  entity,
 }) {
   const colorTrackRefs = useRef({});
+
+  const getDiaSemana = (dataString) => {
+    if (!dataString) return "";
+    const dias = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
+    const data = new Date(dataString + "T00:00:00");
+    return dias[data.getUTCDay()];
+  };
+
   const isRecebidos = col.title === "Recebidos";
   const isArquivo = modoArquivadas && !isRecebidos;
   const bgColor = col.cor_fundo || (isRecebidos ? "rgba(46, 125, 50, 0.08)" : "transparent");
   const isColorPickerVisible = showColorPicker[col.id];
+  const isDiarioObra = col.tipo_pilha === "diario_obras";
 
   const handleSaveDescricaoRapida = async (notaId, descricao) => {
-    const { error } = await supabase
-      .from("notas")
-      .update({ descricao })
-      .eq("id", notaId);
+    const { error } = await supabase.from("notas").update({ descricao }).eq("id", notaId);
     if (error) return;
     setColumns(prev =>
       prev.map(c =>
@@ -62,10 +71,7 @@ export default function Column({
   };
 
   const updatePilhaCor = async (pilhaId, cor) => {
-    const { error } = await supabase
-      .from("pilhas")
-      .update({ cor_fundo: cor })
-      .eq("id", pilhaId);
+    const { error } = await supabase.from("pilhas").update({ cor_fundo: cor }).eq("id", pilhaId);
     if (!error) {
       setColumns(prev => prev.map(c => c.id === pilhaId ? { ...c, cor_fundo: cor } : c));
     }
@@ -127,11 +133,7 @@ export default function Column({
         updates.pilha_original_id = pilhaAtualId;
       }
 
-      const { error } = await supabase
-        .from("notas")
-        .update(updates)
-        .eq("id", nota.id);
-
+      const { error } = await supabase.from("notas").update(updates).eq("id", nota.id);
       if (error) throw error;
 
       setColumns(prev =>
@@ -151,6 +153,7 @@ export default function Column({
     }
   };
 
+  // ✅ Effect para color picker
   useEffect(() => {
     if (!showColorPicker[col.id]) return;
     const track = colorTrackRefs.current[col.id];
@@ -167,6 +170,83 @@ export default function Column({
     track.addEventListener("click", handleClick);
     return () => track.removeEventListener("click", handleClick);
   }, [showColorPicker, col.id]);
+
+  // ✅ Effect para atualização em tempo real dos RDOs
+  useEffect(() => {
+    if (!isDiarioObra) return;
+
+    const subscription = supabase
+      .channel(`rdo-${col.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notas',
+          filter: `pilha_id=eq.${col.id}`
+        },
+        async (payload) => {
+          if (payload.new.tipo === "Diário de Obra") {
+            const { data: notasRaw } = await supabase
+              .from("notas")
+              .select("*")
+              .eq("pilha_id", col.id)
+              .eq("tipo", "Diário de Obra")
+              .order("data_entrega", { ascending: false });
+
+            if (notasRaw && notasRaw.length > 0) {
+              setColumns(prev =>
+                prev.map(c =>
+                  c.id === col.id ? { ...c, notas: notasRaw } : c
+                )
+              );
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(subscription);
+    };
+  }, [col.id, isDiarioObra, setColumns]);
+
+  const openNotaById = async (notaId) => {
+    console.log("🔍 Tentando abrir nota ID:", notaId);
+    
+    // Primeiro tenta buscar nas colunas carregadas
+    const allColumns = [...columnsNormais, ...columnsArquivadas];
+    for (const c of allColumns) {
+      const nota = c.notas.find(n => n.id === notaId);
+      if (nota) {
+        console.log("✅ Nota encontrada nas colunas:", nota);
+        handleOpenNota(nota);
+        return;
+      }
+    }
+
+    // Se não encontrou, busca diretamente no banco (para notas recém-criadas)
+    console.log("⚠️ Nota não encontrada nas colunas, buscando no banco...");
+    const { data: nota, error } = await supabase
+      .from("notas")
+      .select("*")
+      .eq("id", notaId)
+      .single();
+
+    if (error) {
+      console.error("❌ Erro ao buscar nota:", error);
+      alert("Não foi possível abrir a nota.");
+      return;
+    }
+
+    if (nota) {
+      console.log("✅ Nota encontrada no banco:", nota);
+      handleOpenNota(nota);
+    } else {
+      console.error("❌ Nota não existe");
+      alert("Nota não encontrada.");
+    }
+  };
 
   return (
     <Draggable
@@ -250,7 +330,7 @@ export default function Column({
             )}
 
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              {!isRecebidos && (
+              {!isRecebidos && !isDiarioObra && (
                 <button className="btn-add" onClick={() => setActiveColumnId(col.id)}>
                   <FaPlus />
                 </button>
@@ -268,7 +348,7 @@ export default function Column({
                     <FaEllipsisV />
                   </button>
                   {menuOpenPilha === col.id && (
-                    <div className="card-menu-dropdown" style={{ top: "100%", right: 0 }}>
+                    <div className="card-menu-dropdown" style={{ top: "104%", right: 0 }}>
                       <button
                         onClick={() => {
                           setMenuOpenPilha(null);
@@ -299,211 +379,290 @@ export default function Column({
             </div>
           </div>
 
-          <Droppable droppableId={col.id} type="CARD">
-            {(innerProvided) => (
-              <div
-                className={`cards-list ${isArquivo ? 'arquivo-cards-list' : ''}`}
-                ref={innerProvided.innerRef}
-                {...innerProvided.droppableProps}
-                style={{
-                  backgroundColor: bgColor,
-                  border: isRecebidos ? "1px solid rgba(46, 125, 50, 0.2)" : "1px solid rgba(0, 0, 0, 0.08)",
-                  borderRadius: "8px",
-                  padding: "8px",
-                  position: "relative",
-                  minWidth: "280px",
-                  maxWidth: "320px",
-                  marginRight: "16px",
-                }}
-              >
-                {col.notas.map((nota, idx) => {
-                  if (nota.tipo === "Nota Rápida") {
+          {isDiarioObra ? (
+            <div
+              className="cards-list diario-obras-list"
+              style={{
+                backgroundColor: bgColor,
+                border: isRecebidos ? "1px solid rgba(46, 125, 50, 0.2)" : "1px solid rgba(0, 0, 0, 0.08)",
+                borderRadius: "8px",
+                padding: "8px",
+                position: "relative",
+                minWidth: "280px",
+                maxWidth: "280px",
+                marginRight: "16px",
+              }}
+            >
+              <CalendarioDiarioObra
+                pilhaId={col.id}
+                usuarioId={usuarioId}
+                onSelectNota={openNotaById}
+              />
+
+              <Droppable droppableId={col.id} type="CARD" isDropDisabled={true}>
+                {(innerProvided) => (
+                  <div
+                    ref={innerProvided.innerRef}
+                    {...innerProvided.droppableProps}
+                    style={{
+                      marginTop: "16px",
+                      minHeight: "40px",
+                    }}
+                  >
+                    {col.notas
+                      .filter(nota => nota.tipo === "Diário de Obra")
+                      .sort((a, b) => new Date(b.data_entrega) - new Date(a.data_entrega))
+                      .slice(0, 5)
+                      .map((nota, idx) => (
+                        <Draggable
+                          key={String(nota.id)}
+                          draggableId={String(nota.id)}
+                          index={idx}
+                          type="CARD"
+                          isDragDisabled={true}
+                        >
+                          {(prov, snapshot) => (
+                            <div
+                              className={`card-item tipo-rdo ${snapshot.isDragging ? "dragging" : ""}`}
+                              ref={prov.innerRef}
+                              {...prov.draggableProps}
+                              {...prov.dragHandleProps}
+                              onClick={() => handleOpenNota(nota)}
+                              style={{
+                                ...prov.draggableProps.style,
+                                display: "flex",
+                                flexDirection: "column",
+                              }}
+                            >
+                              <strong>{nota.nome}</strong>
+                              {nota.data_entrega && (
+                                <span style={{ color: "#666", fontSize: "0.85em" }}>
+                                  {getDiaSemana(nota.data_entrega)}
+                                </span>
+                              )}
+                              <span style={{ color: "#666", fontSize: "0.85em", fontWeight: "normal" }}>
+                                Diário de Obra
+                              </span>
+                            </div>
+                          )}
+                        </Draggable>
+                      ))}
+                    {innerProvided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </div>
+          ) : (
+            <Droppable droppableId={col.id} type="CARD">
+              {(innerProvided) => (
+                <div
+                  className={`cards-list ${isArquivo ? 'arquivo-cards-list' : ''}`}
+                  ref={innerProvided.innerRef}
+                  {...innerProvided.droppableProps}
+                  style={{
+                    backgroundColor: bgColor,
+                    border: isRecebidos ? "1px solid rgba(46, 125, 50, 0.2)" : "1px solid rgba(0, 0, 0, 0.08)",
+                    borderRadius: "8px",
+                    padding: "8px",
+                    position: "relative",
+                    minWidth: "280px",
+                    maxWidth: "280px",
+                    marginRight: "16px",
+                  }}
+                >
+                  {col.notas.map((nota, idx) => {
+                    if (nota.tipo === "Nota Rápida") {
+                      const isConcluida = notasConcluidas.has(String(nota.id));
+                      const isEditingDate = dataConclusaoEdit.hasOwnProperty(String(nota.id));
+                      return (
+                        <Draggable key={String(nota.id)} draggableId={String(nota.id)} index={idx} type="CARD">
+                          {(prov, snapshot) => (
+                            <div
+                              ref={prov.innerRef}
+                              {...prov.draggableProps}
+                              style={{ ...prov.draggableProps.style, userSelect: "text" }}
+                            >
+                              <NotaRapidaCard
+                                nota={nota}
+                                onSaveResponsavel={onSaveResponsavelRapida}
+                                onSaveDataEntrega={onSaveDataEntregaRapida}
+                                onSaveDescricao={handleSaveDescricaoRapida}
+                                onRemoveResponsavel={onRemoveResponsavelRapida}
+                                isConcluida={isConcluida}
+                                isEditingDate={isEditingDate}
+                                dataConclusaoEdit={dataConclusaoEdit}
+                                dataConclusaoSalva={dataConclusaoSalva}
+                                setDataConclusaoEdit={setDataConclusaoEdit}
+                                saveDataConclusao={saveDataConclusao}
+                                menuOpenNota={menuOpenNota}
+                                setMenuOpenNota={setMenuOpenNota}
+                                handleEditNota={handleEditNota}
+                                handleDeleteNota={handleDeleteNota}
+                                toggleConclusaoNota={toggleConclusaoNota}
+                                pilhaId={col.id}
+                                dragHandleProps={prov.dragHandleProps}
+                                containerId={donoContainerId}
+                                usuarioId={usuarioId}
+                                entityType={entityType}
+                                entityId={entity?.id}
+                              />
+                            </div>
+                          )}
+                        </Draggable>
+                      );
+                    }
+
                     const isConcluida = notasConcluidas.has(String(nota.id));
                     const isEditingDate = dataConclusaoEdit.hasOwnProperty(String(nota.id));
+
+                    let cardBackgroundColor = "#ffffff";
+                    let cardBorderLeft = "none";
+                    if (nota.respondida) {
+                      cardBackgroundColor = "#e6f4ea";
+                      cardBorderLeft = "4px solid #34a853";
+                    } else if (nota.enviada) {
+                      cardBackgroundColor = "#fce8e6";
+                      cardBorderLeft = "4px solid #ea4335";
+                    }
+
                     return (
                       <Draggable key={String(nota.id)} draggableId={String(nota.id)} index={idx} type="CARD">
                         {(prov, snapshot) => (
-                          <div ref={prov.innerRef} {...prov.draggableProps} style={{ ...prov.draggableProps.style, userSelect: "text" }}>
-                            <NotaRapidaCard
-                              nota={nota}
-                              onSaveResponsavel={onSaveResponsavelRapida}
-                              onSaveDataEntrega={onSaveDataEntregaRapida}
-                              onSaveDescricao={handleSaveDescricaoRapida}
-                              onRemoveResponsavel={onRemoveResponsavelRapida}
-                              isConcluida={isConcluida}
-                              isEditingDate={isEditingDate}
-                              dataConclusaoEdit={dataConclusaoEdit}
-                              dataConclusaoSalva={dataConclusaoSalva}
-                              setDataConclusaoEdit={setDataConclusaoEdit}
-                              saveDataConclusao={saveDataConclusao}
-                              menuOpenNota={menuOpenNota}
-                              setMenuOpenNota={setMenuOpenNota}
-                              handleEditNota={handleEditNota}
-                              handleDeleteNota={handleDeleteNota}
-                              toggleConclusaoNota={toggleConclusaoNota}
-                              pilhaId={col.id}
-                              dragHandleProps={prov.dragHandleProps}
-                              containerId={donoContainerId}
-                              usuarioId={usuarioId}
-                              entityType={entityType} // ← REPASSADO
-                              entityId={entity?.id}   // ← REPASSADO
-                            />
+                          <div
+                            className={`card-item tipo-${(nota.tipo || "lista").toLowerCase()} ${snapshot.isDragging ? "dragging" : ""} ${isConcluida ? "concluida" : ""}`}
+                            ref={prov.innerRef}
+                            {...prov.draggableProps}
+                            {...prov.dragHandleProps}
+                            style={{
+                              ...prov.draggableProps.style,
+                              userSelect: "none",
+                              backgroundColor: cardBackgroundColor,
+                              borderLeft: cardBorderLeft,
+                            }}
+                            onClick={() => handleOpenNota(nota)}
+                          >
+                            <div className="concluir-checkbox-wrapper">
+                              <input
+                                type="checkbox"
+                                checked={isConcluida}
+                                readOnly
+                                className="concluir-checkbox"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleConclusaoNota(nota.id, isConcluida);
+                                }}
+                              />
+                              {isConcluida && (
+                                <button
+                                  className="arquivar-btn"
+                                  title={col.arquivada ? "Restaurar nota" : "Arquivar nota"}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleArquivarNota(nota, col.id);
+                                  }}
+                                >
+                                  <FaFileExport size={14} />
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="card-info">
+                              <div className="card-title-wrapper">
+                                <strong>{nota.nome}</strong>
+                              </div>
+                              <p>
+                                {nota.tipo}
+                                {nota.tipo === "Atas" && notaProgresso[nota.id] !== undefined && <> - {notaProgresso[nota.id]}%</>}
+                              </p>
+
+                              <div
+                                className="data-conclusao-container"
+                                data-nota-id={nota.id}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {isEditingDate ? (
+                                  <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "4px" }}>
+                                    <input
+                                      type="date"
+                                      value={dataConclusaoEdit[nota.id] || ""}
+                                      onChange={(e) => setDataConclusaoEdit(prev => ({ ...prev, [nota.id]: e.target.value }))}
+                                      onClick={(e) => e.stopPropagation()}
+                                      style={{ fontSize: "0.85em", padding: "2px 4px" }}
+                                    />
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        saveDataConclusao(nota.id, dataConclusaoEdit[nota.id]);
+                                      }}
+                                      style={{ fontSize: "0.8em" }}
+                                    >
+                                      ✓
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDataConclusaoEdit(prev => {
+                                          const cp = { ...prev };
+                                          delete cp[nota.id];
+                                          return cp;
+                                        });
+                                      }}
+                                      style={{ fontSize: "0.8em", color: "#e53e3e" }}
+                                    >
+                                      ✖
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setDataConclusaoEdit(prev => ({ ...prev, [nota.id]: dataConclusaoSalva[nota.id] || "" }));
+                                    }}
+                                    style={{
+                                      marginTop: "4px",
+                                      fontSize: "0.85em",
+                                      color: dataConclusaoSalva[nota.id] ? "#444" : "#999",
+                                      fontStyle: dataConclusaoSalva[nota.id] ? "normal" : "italic",
+                                    }}
+                                  >
+                                    {dataConclusaoSalva[nota.id]
+                                      ? new Date(dataConclusaoSalva[nota.id]).toLocaleDateString("pt-BR")
+                                      : "Data da entrega"}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {!isConcluida && (
+                              <div className="card-menu-wrapper" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  className="card-menu-btn"
+                                  onClick={() => setMenuOpenNota(menuOpenNota === nota.id ? null : nota.id)}
+                                >
+                                  <FaEllipsisV />
+                                </button>
+                                {menuOpenNota === nota.id && (
+                                  <div className="card-menu-dropdown">
+                                    <button onClick={() => handleEditNota(nota, col.id)}>
+                                      <FaEdit /> Editar
+                                    </button>
+                                    <button onClick={() => handleDeleteNota(nota.id, col.id)}>
+                                      <FaTrash /> Excluir
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         )}
                       </Draggable>
                     );
-                  }
-
-                  const isConcluida = notasConcluidas.has(String(nota.id));
-                  const isEditingDate = dataConclusaoEdit.hasOwnProperty(String(nota.id));
-
-                  let cardBackgroundColor = "#ffffff";
-                  let cardBorderLeft = "none";
-                  if (nota.respondida) {
-                    cardBackgroundColor = "#e6f4ea";
-                    cardBorderLeft = "4px solid #34a853";
-                  } else if (nota.enviada) {
-                    cardBackgroundColor = "#fce8e6";
-                    cardBorderLeft = "4px solid #ea4335";
-                  }
-
-                  return (
-                    <Draggable key={String(nota.id)} draggableId={String(nota.id)} index={idx} type="CARD">
-                      {(prov, snapshot) => (
-                        <div
-                          className={`card-item tipo-${(nota.tipo || "lista").toLowerCase()} ${snapshot.isDragging ? "dragging" : ""} ${isConcluida ? "concluida" : ""}`}
-                          ref={prov.innerRef}
-                          {...prov.draggableProps}
-                          {...prov.dragHandleProps}
-                          style={{
-                            ...prov.draggableProps.style,
-                            userSelect: "none",
-                            backgroundColor: cardBackgroundColor,
-                            borderLeft: cardBorderLeft,
-                          }}
-                          onClick={() => handleOpenNota(nota)}
-                        >
-                          <div className="concluir-checkbox-wrapper">
-                            <input
-                              type="checkbox"
-                              checked={isConcluida}
-                              readOnly
-                              className="concluir-checkbox"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleConclusaoNota(nota.id, isConcluida);
-                              }}
-                            />
-                            {isConcluida && (
-                              <button
-                                className="arquivar-btn"
-                                title={col.arquivada ? "Restaurar nota" : "Arquivar nota"}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleArquivarNota(nota, col.id);
-                                }}
-                              >
-                                <FaFileExport size={14} />
-                              </button>
-                            )}
-                          </div>
-
-                          <div className="card-info">
-                            <div className="card-title-wrapper">
-                              <strong>{nota.nome}</strong>
-                            </div>
-                            <p>
-                              {nota.tipo}
-                              {nota.tipo === "Atas" && notaProgresso[nota.id] !== undefined && <> - {notaProgresso[nota.id]}%</>}
-                            </p>
-
-                            <div
-                              className="data-conclusao-container"
-                              data-nota-id={nota.id}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              {isEditingDate ? (
-                                <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "4px" }}>
-                                  <input
-                                    type="date"
-                                    value={dataConclusaoEdit[nota.id] || ""}
-                                    onChange={(e) => setDataConclusaoEdit(prev => ({ ...prev, [nota.id]: e.target.value }))}
-                                    onClick={(e) => e.stopPropagation()}
-                                    style={{ fontSize: "0.85em", padding: "2px 4px" }}
-                                  />
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      saveDataConclusao(nota.id, dataConclusaoEdit[nota.id]);
-                                    }}
-                                    style={{ fontSize: "0.8em" }}
-                                  >
-                                    ✓
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setDataConclusaoEdit(prev => {
-                                        const cp = { ...prev };
-                                        delete cp[nota.id];
-                                        return cp;
-                                      });
-                                    }}
-                                    style={{ fontSize: "0.8em", color: "#e53e3e" }}
-                                  >
-                                    ✖
-                                  </button>
-                                </div>
-                              ) : (
-                                <div
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setDataConclusaoEdit(prev => ({ ...prev, [nota.id]: dataConclusaoSalva[nota.id] || "" }));
-                                  }}
-                                  style={{
-                                    marginTop: "4px",
-                                    fontSize: "0.85em",
-                                    color: dataConclusaoSalva[nota.id] ? "#444" : "#999",
-                                    fontStyle: dataConclusaoSalva[nota.id] ? "normal" : "italic",
-                                  }}
-                                >
-                                  {dataConclusaoSalva[nota.id]
-                                    ? new Date(dataConclusaoSalva[nota.id]).toLocaleDateString("pt-BR")
-                                    : "Data da entrega"}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {!isConcluida && (
-                            <div className="card-menu-wrapper" onClick={(e) => e.stopPropagation()}>
-                              <button
-                                className="card-menu-btn"
-                                onClick={() => setMenuOpenNota(menuOpenNota === nota.id ? null : nota.id)}
-                              >
-                                <FaEllipsisV />
-                              </button>
-                              {menuOpenNota === nota.id && (
-                                <div className="card-menu-dropdown">
-                                  <button onClick={() => handleEditNota(nota, col.id)}>
-                                    <FaEdit /> Editar
-                                  </button>
-                                  <button onClick={() => handleDeleteNota(nota.id, col.id)}>
-                                    <FaTrash /> Excluir
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </Draggable>
-                  );
-                })}
-                {innerProvided.placeholder}
-              </div>
-            )}
-          </Droppable>
+                  })}
+                  {innerProvided.placeholder}
+                </div>
+              )}
+            </Droppable>
+          )}
         </div>
       )}
     </Draggable>

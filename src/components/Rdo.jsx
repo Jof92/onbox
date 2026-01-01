@@ -29,24 +29,38 @@ const Rdo = ({ notaId, onClose, usuarioId }) => {
   // Carregar dados existentes da nota
   useEffect(() => {
     const fetchRdo = async () => {
+      console.log("📥 Carregando RDO para nota:", notaId);
+      
       const { data: nota, error } = await supabase
         .from("notas")
-        .select("data_entrega, campos_rdo")
+        .select("data_entrega, descricao")
         .eq("id", notaId)
         .single();
 
       if (error) {
-        console.error("Erro ao carregar RDO:", error);
+        console.error("❌ Erro ao carregar RDO:", error);
         return;
       }
 
-      const campos = nota?.campos_rdo || {};
+      console.log("✅ Nota carregada:", nota);
+
+      // Tenta parsear os campos do RDO da descrição (JSON)
+      let campos = {};
+      if (nota?.descricao) {
+        try {
+          campos = JSON.parse(nota.descricao);
+          console.log("📋 Campos RDO parseados:", campos);
+        } catch (e) {
+          console.log("ℹ️ Descrição não é JSON válido, usando RDO vazio");
+        }
+      }
+
       const dataEntrega = nota?.data_entrega
         ? nota.data_entrega.split("T")[0]
         : "";
 
       const diaSemanaMap = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SAB"];
-      const dataObj = new Date(dataEntrega);
+      const dataObj = new Date(dataEntrega + "T00:00:00");
       const diaSemana = dataEntrega
         ? diaSemanaMap[dataObj.getDay()]
         : "";
@@ -85,9 +99,11 @@ const Rdo = ({ notaId, onClose, usuarioId }) => {
     if (!notaId) return;
     setLoading(true);
 
+    console.log("💾 Salvando RDO...");
+
+    // Salva os campos do RDO como JSON na coluna "descricao"
     const payload = {
-      campos_rdo: data,
-      // Opcional: sincroniza data_entrega com data_obra
+      descricao: JSON.stringify(data),
       data_entrega: data.data_obra || null,
     };
 
@@ -97,10 +113,12 @@ const Rdo = ({ notaId, onClose, usuarioId }) => {
       .eq("id", notaId);
 
     setLoading(false);
+    
     if (error) {
+      console.error("❌ Erro ao salvar:", error);
       alert("Erro ao salvar o Diário de Obra.");
-      console.error(error);
     } else {
+      console.log("✅ RDO salvo com sucesso!");
       alert("Diário de Obra salvo com sucesso!");
       onClose();
     }

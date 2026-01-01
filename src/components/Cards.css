@@ -26,9 +26,8 @@
   display: flex;
     align-items: center;
     justify-content: center;
-    flex: 1 1;
-    max-width: 300px;
-    margin-left:30px;
+    max-width: 500px;
+  
 }
 
 
@@ -70,7 +69,6 @@
   font-size: 22px;
   font-weight: 600;
   color: #1e293b;
-  margin: 0 16px;
 }
 
 .cards-header .project-name {
@@ -1090,4 +1088,97 @@
   opacity: 0.15;
   z-index: 1;
   pointer-events: none;
+}
+
+.floating-add-column-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 1000;
+}
+
+.floating-add-column-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #ff9800;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  transition: transform 0.2s;
+}
+
+.floating-add-column-btn:hover {
+  transform: scale(1.1);
+  background: #f57c00;
+}
+
+.add-column-menu {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 8px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  padding: 8px 0;
+  min-width: 160px;
+  z-index: 1001;
+}
+
+.add-column-menu button {
+  width: 100%;
+  padding: 10px 16px;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: #333;
+}
+
+.add-column-menu button:hover {
+  background-color: #f0f0f0;
+}
+
+.add-column-menu button:first-child {
+  background: #2196f3;
+  color: white;
+  font-weight: bold;
+  padding: 12px 16px;
+}
+
+.add-column-menu button:first-child:hover {
+  background: #1976d2;
+}
+
+.card-item.tipo-rdo {
+  background-color: #f9f9f9;
+  border-right: 6px solid #878787;
+  padding: 10px;
+  margin-bottom: 8px;
+  font-size: 0.9em;
+  cursor: pointer;
+}
+
+.card-item.tipo-rdo:hover {
+  background-color: #f0f0f0;
+}
+
+
+.diario-obras-list{
+  background-color: rgb(234, 239, 246);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 8px;
+    padding: 8px;
+    position: relative;
+    min-width: 280px;
+    max-width: 320px;
+    margin-right: 16px;
 }
