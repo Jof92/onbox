@@ -1,0 +1,304 @@
+/* src/components/ProjectForm.css */
+
+.project-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.project-modal-content {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.project-modal-content h2 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  font-size: 1.5rem;
+  color: #333;
+  text-align: center;
+}
+
+.project-photo-upload {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.project-photo-circle {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background-color: #f0f0f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+  border: 2px solid #ccc;
+}
+
+.project-photo-circle img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+  color: #444;
+  text-align: center;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.form-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.form-row .form-group {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+/* Engenheiro responsável */
+.engineer-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.engineer-input-wrapper {
+  flex: 1;
+  position: relative;
+}
+
+.engineer-avatar-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.engineer-avatar-container img,
+.engineer-avatar-placeholder {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid #28a745;
+}
+
+.engineer-avatar-placeholder {
+  background-color: #6c757d;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.remove-engineer-btn {
+  background: none;
+  border: none;
+  color: #dc3545;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+/* Membros */
+.members-input-wrapper {
+  position: relative;
+}
+
+.selected-members {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 12px;
+    border: 1px solid rgb(189, 189, 253);
+    border-radius: 10px;
+}
+
+.member-avatar-item {
+  text-align: center;
+  padding: 5px;
+}
+
+.member-avatar-item img,
+.member-avatar-placeholder {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid #007bff;
+}
+
+.member-avatar-placeholder {
+  background-color: #ccc;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.member-avatar-item span {
+  font-size: 10px;
+  display: block;
+  margin-top: 2px;
+}
+
+/* Dropdown de sugestões */
+.suggestions-dropdown {
+  position: absolute;
+  z-index: 1000;
+  width: 100%;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  max-height: 150px;
+  overflow-y: auto;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.suggestion-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  align-items: center;
+}
+
+.suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.suggestion-item img,
+.suggestion-avatar-placeholder {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.suggestion-avatar-placeholder {
+  background-color: #ccc;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+
+/* Listas (Pavimentos / EAP) */
+.list-header {
+  font-weight: 600;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.list-container {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.list-item {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.list-item:last-child {
+  margin-bottom: 0;
+}
+
+.list-item input {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.add-icon,
+.delete-icon {
+  cursor: pointer;
+  color: #666;
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+.add-icon:hover {
+  color: #28a745;
+}
+
+.delete-icon:hover {
+  color: #dc3545;
+}
+
+/* Botões */
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.save-btn,
+.cancel-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.save-btn {
+  background-color: #28a745;
+  color: white;
+}
+
+.save-btn:hover {
+  background-color: #218838;
+}
+
+.cancel-btn {
+  background-color: #6c757d;
+  color: white;
+}
+
+.cancel-btn:hover {
+  background-color: #5a6268;
+}

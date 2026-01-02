@@ -2,8 +2,11 @@
 import React, { useState, useEffect } from "react";
 import "./Rdo.css";
 import { supabase } from "../supabaseClient";
+import { FaTimes } from "react-icons/fa"; // Ícone de fechar igual ao das outras notas
 
-const Rdo = ({ notaId, onClose, usuarioId }) => {
+const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
+  // ⚠️ Adicionamos `projetoAtual` como prop para exibir o nome no header
+
   const [data, setData] = useState({
     data_obra: "",
     dia_semana: "",
@@ -25,12 +28,30 @@ const Rdo = ({ notaId, onClose, usuarioId }) => {
   });
 
   const [loading, setLoading] = useState(false);
+  const [projetoNome, setProjetoNome] = useState("");
+
+  // Carregar nome do projeto
+  useEffect(() => {
+    const fetchProjetoNome = async () => {
+      if (!projetoAtual?.id) return;
+      const { data: proj, error } = await supabase
+        .from("projects")
+        .select("name")
+        .eq("id", projetoAtual.id)
+        .single();
+      if (!error && proj) {
+        setProjetoNome(proj.name);
+      }
+    };
+    fetchProjetoNome();
+  }, [projetoAtual]);
 
   // Carregar dados existentes da nota
   useEffect(() => {
     const fetchRdo = async () => {
+      if (!notaId) return;
       console.log("📥 Carregando RDO para nota:", notaId);
-      
+
       const { data: nota, error } = await supabase
         .from("notas")
         .select("data_entrega, descricao")
@@ -44,7 +65,6 @@ const Rdo = ({ notaId, onClose, usuarioId }) => {
 
       console.log("✅ Nota carregada:", nota);
 
-      // Tenta parsear os campos do RDO da descrição (JSON)
       let campos = {};
       if (nota?.descricao) {
         try {
@@ -55,15 +75,10 @@ const Rdo = ({ notaId, onClose, usuarioId }) => {
         }
       }
 
-      const dataEntrega = nota?.data_entrega
-        ? nota.data_entrega.split("T")[0]
-        : "";
-
+      const dataEntrega = nota?.data_entrega ? nota.data_entrega.split("T")[0] : "";
       const diaSemanaMap = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SAB"];
       const dataObj = new Date(dataEntrega + "T00:00:00");
-      const diaSemana = dataEntrega
-        ? diaSemanaMap[dataObj.getDay()]
-        : "";
+      const diaSemana = dataEntrega ? diaSemanaMap[dataObj.getDay()] : "";
 
       setData((prev) => ({
         ...prev,
@@ -73,7 +88,7 @@ const Rdo = ({ notaId, onClose, usuarioId }) => {
       }));
     };
 
-    if (notaId) fetchRdo();
+    fetchRdo();
   }, [notaId]);
 
   const updateField = (field, value) => {
@@ -89,9 +104,13 @@ const Rdo = ({ notaId, onClose, usuarioId }) => {
   };
 
   const addRow = (arrayKey) => {
+    const emptyRow = arrayKey === "equipamentos"
+      ? { codigo: "", descricao: "", total: "", em_uso: "" }
+      : { funcao: "", total: "", presentes: "" };
+
     setData((prev) => ({
       ...prev,
-      [arrayKey]: [...prev[arrayKey], { funcao: "", total: "", presentes: "", codigo: "", descricao: "", em_uso: "" }],
+      [arrayKey]: [...prev[arrayKey], emptyRow],
     }));
   };
 
@@ -101,7 +120,6 @@ const Rdo = ({ notaId, onClose, usuarioId }) => {
 
     console.log("💾 Salvando RDO...");
 
-    // Salva os campos do RDO como JSON na coluna "descricao"
     const payload = {
       descricao: JSON.stringify(data),
       data_entrega: data.data_obra || null,
@@ -113,417 +131,449 @@ const Rdo = ({ notaId, onClose, usuarioId }) => {
       .eq("id", notaId);
 
     setLoading(false);
-    
+
     if (error) {
       console.error("❌ Erro ao salvar:", error);
       alert("Erro ao salvar o Diário de Obra.");
     } else {
       console.log("✅ RDO salvo com sucesso!");
+      window.dispatchEvent(new CustomEvent('rdoAtualizado', { 
+        detail: { notaId, data: payload } 
+      }));
       alert("Diário de Obra salvo com sucesso!");
       onClose();
     }
   };
 
+  // Formatar data para exibir no header (ex: 03/01/2026)
+  const formatDate = (dateStr) => {
+    if (!dateStr) return "";
+    const d = new Date(dateStr);
+    const dia = String(d.getDate()).padStart(2, '0');
+    const mes = String(d.getMonth() + 1).padStart(2, '0');
+    const ano = d.getFullYear();
+    return `${dia}/${mes}/${ano}`;
+  };
+
   return (
     <div className="rdo-modal-container">
-      <div className="rdo-header">
-        <h2>Diário de Obra (RDO)</h2>
-        <button className="rdo-close-btn" onClick={onClose}>
-          ×
-        </button>
+      {/* ✅ Header igual às demais notas */}
+      <div className="listagem-card">
+        <div className="listagem-header-container">
+          <div className="listagem-header-titles">
+            <span className="project-name">
+              Diário de obra - {projetoNome || "Projeto não informado"}
+            </span>
+            <div className="sub-info">
+              <span className="nota-name">{`(${formatDate(data.data_obra)})`}</span>
+            </div>
+          </div>
+          {onClose && (
+            <button
+              className="listagem-close-btn"
+              onClick={onClose}
+              aria-label="Fechar"
+            >
+              <FaTimes />
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Dados Gerais */}
-      <div className="rdo-section">
-        <div className="rdo-row">
-          <div className="rdo-col">
-            <label>Data:</label>
-            <input
-              type="date"
-              value={data.data_obra}
-              onChange={(e) => updateField("data_obra", e.target.value)}
-            />
+      {/* Restante do formulário */}
+      <div className="rdo-content">
+        {/* Dados Gerais */}
+        <div className="rdo-section">
+          <div className="rdo-row">
+            <div className="rdo-col">
+              <label>Data:</label>
+              <input
+                type="date"
+                value={data.data_obra}
+                onChange={(e) => updateField("data_obra", e.target.value)}
+              />
+            </div>
+            <div className="rdo-col">
+              <label>Dia:</label>
+              <input type="text" value={data.dia_semana} readOnly />
+            </div>
           </div>
-          <div className="rdo-col">
-            <label>Dia:</label>
-            <input type="text" value={data.dia_semana} readOnly />
-          </div>
-        </div>
 
-        <div className="rdo-row">
-          <div className="rdo-col">
-            <label>Início da Obra:</label>
-            <input
-              type="date"
-              value={data.inicio_obra || ""}
-              onChange={(e) => updateField("inicio_obra", e.target.value)}
-            />
+          <div className="rdo-row">
+            <div className="rdo-col">
+              <label>Início da Obra:</label>
+              <input
+                type="date"
+                value={data.inicio_obra || ""}
+                onChange={(e) => updateField("inicio_obra", e.target.value)}
+              />
+            </div>
+            <div className="rdo-col">
+              <label>Término Previsto:</label>
+              <input
+                type="date"
+                value={data.termino_obra || ""}
+                onChange={(e) => updateField("termino_obra", e.target.value)}
+              />
+            </div>
+            <div className="rdo-col">
+              <label>Atraso (dias):</label>
+              <input
+                type="text"
+                value={data.atraso_dias || ""}
+                onChange={(e) => updateField("atraso_dias", e.target.value)}
+                placeholder="0"
+              />
+            </div>
           </div>
-          <div className="rdo-col">
-            <label>Término Previsto:</label>
-            <input
-              type="date"
-              value={data.termino_obra || ""}
-              onChange={(e) => updateField("termino_obra", e.target.value)}
-            />
-          </div>
-          <div className="rdo-col">
-            <label>Atraso (dias):</label>
+
+          <div>
+            <label>Engenheiro Responsável:</label>
             <input
               type="text"
-              value={data.atraso_dias || ""}
-              onChange={(e) => updateField("atraso_dias", e.target.value)}
-              placeholder="0"
+              value={data.engenheiro || ""}
+              onChange={(e) => updateField("engenheiro", e.target.value)}
+              placeholder="Nome e CREA"
             />
           </div>
         </div>
 
-        <div>
-          <label>Engenheiro Responsável:</label>
-          <input
-            type="text"
-            value={data.engenheiro || ""}
-            onChange={(e) => updateField("engenheiro", e.target.value)}
-            placeholder="Nome e CREA"
-          />
+        {/* Condições Climáticas */}
+        <div className="rdo-section">
+          <h3>Condições Climáticas</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Período</th>
+                <th>Condição</th>
+                <th>Obra Operacional?</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Manhã</td>
+                <td>
+                  <label>
+                    <input
+                      type="radio"
+                      name="clima_manha"
+                      checked={data.clima_manha === "chuvoso"}
+                      onChange={() => updateField("clima_manha", "chuvoso")}
+                    />{" "}
+                    Chuvoso
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="clima_manha"
+                      checked={data.clima_manha === "seco"}
+                      onChange={() => updateField("clima_manha", "seco")}
+                    />{" "}
+                    Seco
+                  </label>
+                </td>
+                <td>
+                  <label>
+                    <input
+                      type="radio"
+                      name="op_manha"
+                      checked={data.obra_op_manha === "sim"}
+                      onChange={() => updateField("obra_op_manha", "sim")}
+                    />{" "}
+                    Sim
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="op_manha"
+                      checked={data.obra_op_manha === "nao"}
+                      onChange={() => updateField("obra_op_manha", "nao")}
+                    />{" "}
+                    Não
+                  </label>
+                </td>
+              </tr>
+              <tr>
+                <td>Tarde</td>
+                <td>
+                  <label>
+                    <input
+                      type="radio"
+                      name="clima_tarde"
+                      checked={data.clima_tarde === "chuvoso"}
+                      onChange={() => updateField("clima_tarde", "chuvoso")}
+                    />{" "}
+                    Chuvoso
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="clima_tarde"
+                      checked={data.clima_tarde === "seco"}
+                      onChange={() => updateField("clima_tarde", "seco")}
+                    />{" "}
+                    Seco
+                  </label>
+                </td>
+                <td>
+                  <label>
+                    <input
+                      type="radio"
+                      name="op_tarde"
+                      checked={data.obra_op_tarde === "sim"}
+                      onChange={() => updateField("obra_op_tarde", "sim")}
+                    />{" "}
+                    Sim
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="op_tarde"
+                      checked={data.obra_op_tarde === "nao"}
+                      onChange={() => updateField("obra_op_tarde", "nao")}
+                    />{" "}
+                    Não
+                  </label>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-      </div>
 
-      {/* Condições Climáticas */}
-      <div className="rdo-section">
-        <h3>Condições Climáticas</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Período</th>
-              <th>Condição</th>
-              <th>Obra Operacional?</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Manhã</td>
-              <td>
-                <label>
-                  <input
-                    type="radio"
-                    name="clima_manha"
-                    checked={data.clima_manha === "chuvoso"}
-                    onChange={() => updateField("clima_manha", "chuvoso")}
-                  />{" "}
-                  Chuvoso
-                </label>
-                <label>
-                  <input
-                    type="radio"
-                    name="clima_manha"
-                    checked={data.clima_manha === "seco"}
-                    onChange={() => updateField("clima_manha", "seco")}
-                  />{" "}
-                  Seco
-                </label>
-              </td>
-              <td>
-                <label>
-                  <input
-                    type="radio"
-                    name="op_manha"
-                    checked={data.obra_op_manha === "sim"}
-                    onChange={() => updateField("obra_op_manha", "sim")}
-                  />{" "}
-                  Sim
-                </label>
-                <label>
-                  <input
-                    type="radio"
-                    name="op_manha"
-                    checked={data.obra_op_manha === "nao"}
-                    onChange={() => updateField("obra_op_manha", "nao")}
-                  />{" "}
-                  Não
-                </label>
-              </td>
-            </tr>
-            <tr>
-              <td>Tarde</td>
-              <td>
-                <label>
-                  <input
-                    type="radio"
-                    name="clima_tarde"
-                    checked={data.clima_tarde === "chuvoso"}
-                    onChange={() => updateField("clima_tarde", "chuvoso")}
-                  />{" "}
-                  Chuvoso
-                </label>
-                <label>
-                  <input
-                    type="radio"
-                    name="clima_tarde"
-                    checked={data.clima_tarde === "seco"}
-                    onChange={() => updateField("clima_tarde", "seco")}
-                  />{" "}
-                  Seco
-                </label>
-              </td>
-              <td>
-                <label>
-                  <input
-                    type="radio"
-                    name="op_tarde"
-                    checked={data.obra_op_tarde === "sim"}
-                    onChange={() => updateField("obra_op_tarde", "sim")}
-                  />{" "}
-                  Sim
-                </label>
-                <label>
-                  <input
-                    type="radio"
-                    name="op_tarde"
-                    checked={data.obra_op_tarde === "nao"}
-                    onChange={() => updateField("obra_op_tarde", "nao")}
-                  />{" "}
-                  Não
-                </label>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      {/* Atividades Executadas */}
-      <div className="rdo-section">
-        <h3>Atividades Executadas</h3>
-        <div>
-          <label>Pavimentos/Setores envolvidos:</label>
-          <input
-            type="text"
-            value={data.pavimentos || ""}
-            onChange={(e) => updateField("pavimentos", e.target.value)}
-            placeholder="Ex: Térreo, 1º Pavimento..."
-          />
+        {/* Atividades Executadas */}
+        <div className="rdo-section">
+          <h3>Atividades Executadas</h3>
+          <div>
+            <label>Pavimentos/Setores envolvidos:</label>
+            <input
+              type="text"
+              value={data.pavimentos || ""}
+              onChange={(e) => updateField("pavimentos", e.target.value)}
+              placeholder="Ex: Térreo, 1º Pavimento..."
+            />
+          </div>
+          <div>
+            <label>Descrição dos Serviços Realizados:</label>
+            <textarea
+              value={data.atividades || ""}
+              onChange={(e) => updateField("atividades", e.target.value)}
+              placeholder="Descreva as atividades do dia..."
+            />
+          </div>
         </div>
-        <div>
-          <label>Descrição dos Serviços Realizados:</label>
+
+        {/* Efetivo Próprio */}
+        <div className="rdo-section">
+          <div className="rdo-section-header">
+            <h3>Efetivo Próprio</h3>
+            <button type="button" onClick={() => addRow("efetivo_proprio")}>
+              +
+            </button>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Função</th>
+                <th>Total</th>
+                <th>Presentes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.efetivo_proprio.map((item, idx) => (
+                <tr key={idx}>
+                  <td>
+                    <input
+                      type="text"
+                      value={item.funcao || ""}
+                      onChange={(e) =>
+                        updateArrayField("efetivo_proprio", idx, "funcao", e.target.value)
+                      }
+                      placeholder="Função"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      value={item.total || ""}
+                      onChange={(e) =>
+                        updateArrayField("efetivo_proprio", idx, "total", e.target.value)
+                      }
+                      placeholder="0"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      value={item.presentes || ""}
+                      onChange={(e) =>
+                        updateArrayField("efetivo_proprio", idx, "presentes", e.target.value)
+                      }
+                      placeholder="0"
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Efetivo Terceirizado */}
+        <div className="rdo-section">
+          <div className="rdo-section-header">
+            <h3>Efetivo Terceirizado</h3>
+            <button type="button" onClick={() => addRow("efetivo_terceirizado")}>
+              +
+            </button>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Função</th>
+                <th>Total</th>
+                <th>Presentes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.efetivo_terceirizado.map((item, idx) => (
+                <tr key={idx}>
+                  <td>
+                    <input
+                      type="text"
+                      value={item.funcao || ""}
+                      onChange={(e) =>
+                        updateArrayField("efetivo_terceirizado", idx, "funcao", e.target.value)
+                      }
+                      placeholder="Função"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      value={item.total || ""}
+                      onChange={(e) =>
+                        updateArrayField("efetivo_terceirizado", idx, "total", e.target.value)
+                      }
+                      placeholder="0"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      value={item.presentes || ""}
+                      onChange={(e) =>
+                        updateArrayField("efetivo_terceirizado", idx, "presentes", e.target.value)
+                      }
+                      placeholder="0"
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Equipamentos */}
+        <div className="rdo-section">
+          <div className="rdo-section-header">
+            <h3>Equipamentos</h3>
+            <button type="button" onClick={() => addRow("equipamentos")}>
+              +
+            </button>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Descrição</th>
+                <th>Total</th>
+                <th>Em Uso</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.equipamentos.map((item, idx) => (
+                <tr key={idx}>
+                  <td>
+                    <input
+                      type="text"
+                      value={item.codigo || ""}
+                      onChange={(e) =>
+                        updateArrayField("equipamentos", idx, "codigo", e.target.value)
+                      }
+                      placeholder="Cód."
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      value={item.descricao || ""}
+                      onChange={(e) =>
+                        updateArrayField("equipamentos", idx, "descricao", e.target.value)
+                      }
+                      placeholder="Descrição"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      value={item.total || ""}
+                      onChange={(e) =>
+                        updateArrayField("equipamentos", idx, "total", e.target.value)
+                      }
+                      placeholder="0"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      value={item.em_uso || ""}
+                      onChange={(e) =>
+                        updateArrayField("equipamentos", idx, "em_uso", e.target.value)
+                      }
+                      placeholder="0"
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Intercorrências */}
+        <div className="rdo-section">
+          <h3>Intercorrências</h3>
           <textarea
-            value={data.atividades || ""}
-            onChange={(e) => updateField("atividades", e.target.value)}
-            placeholder="Descreva as atividades do dia..."
+            value={data.intercorrencias || ""}
+            onChange={(e) => updateField("intercorrencias", e.target.value)}
+            placeholder="Descreva imprevistos, paralisações, não conformidades, etc."
           />
         </div>
-      </div>
 
-      {/* Efetivo Próprio */}
-      <div className="rdo-section">
-        <div className="rdo-section-header">
-          <h3>Efetivo Próprio</h3>
-          <button type="button" onClick={() => addRow("efetivo_proprio")}>
-            +
+        {/* Fotos (área visual) */}
+        <div className="rdo-section">
+          <h3>Espaço para Inclusão de Fotos</h3>
+          <div className="rdo-photo-placeholder">Área reservada para anexar imagens do dia</div>
+          <div className="rdo-photo-placeholder">Área reservada para anexar imagens do dia</div>
+        </div>
+
+        {/* Responsável */}
+        <div className="rdo-section">
+          <label>Responsável pelo preenchimento:</label>
+          <input
+            type="text"
+            value={data.responsavel_preenchimento || ""}
+            onChange={(e) => updateField("responsavel_preenchimento", e.target.value)}
+          />
+        </div>
+
+        {/* Ações */}
+        <div className="rdo-actions">
+          <button className="btn-cancel" onClick={onClose} disabled={loading}>
+            Cancelar
+          </button>
+          <button className="btn-save" onClick={saveRdo} disabled={loading}>
+            {loading ? "Salvando..." : "Salvar RDO"}
           </button>
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Função</th>
-              <th>Total</th>
-              <th>Presentes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.efetivo_proprio.map((item, idx) => (
-              <tr key={idx}>
-                <td>
-                  <input
-                    type="text"
-                    value={item.funcao || ""}
-                    onChange={(e) =>
-                      updateArrayField("efetivo_proprio", idx, "funcao", e.target.value)
-                    }
-                    placeholder="Função"
-                  />
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    value={item.total || ""}
-                    onChange={(e) =>
-                      updateArrayField("efetivo_proprio", idx, "total", e.target.value)
-                    }
-                    placeholder="0"
-                  />
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    value={item.presentes || ""}
-                    onChange={(e) =>
-                      updateArrayField("efetivo_proprio", idx, "presentes", e.target.value)
-                    }
-                    placeholder="0"
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Efetivo Terceirizado */}
-      <div className="rdo-section">
-        <div className="rdo-section-header">
-          <h3>Efetivo Terceirizado</h3>
-          <button type="button" onClick={() => addRow("efetivo_terceirizado")}>
-            +
-          </button>
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Função</th>
-              <th>Total</th>
-              <th>Presentes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.efetivo_terceirizado.map((item, idx) => (
-              <tr key={idx}>
-                <td>
-                  <input
-                    type="text"
-                    value={item.funcao || ""}
-                    onChange={(e) =>
-                      updateArrayField("efetivo_terceirizado", idx, "funcao", e.target.value)
-                    }
-                    placeholder="Função"
-                  />
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    value={item.total || ""}
-                    onChange={(e) =>
-                      updateArrayField("efetivo_terceirizado", idx, "total", e.target.value)
-                    }
-                    placeholder="0"
-                  />
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    value={item.presentes || ""}
-                    onChange={(e) =>
-                      updateArrayField("efetivo_terceirizado", idx, "presentes", e.target.value)
-                    }
-                    placeholder="0"
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Equipamentos */}
-      <div className="rdo-section">
-        <div className="rdo-section-header">
-          <h3>Equipamentos</h3>
-          <button type="button" onClick={() => addRow("equipamentos")}>
-            +
-          </button>
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Código</th>
-              <th>Descrição</th>
-              <th>Total</th>
-              <th>Em Uso</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.equipamentos.map((item, idx) => (
-              <tr key={idx}>
-                <td>
-                  <input
-                    type="text"
-                    value={item.codigo || ""}
-                    onChange={(e) =>
-                      updateArrayField("equipamentos", idx, "codigo", e.target.value)
-                    }
-                    placeholder="Cód."
-                  />
-                </td>
-                <td>
-                  <input
-                    type="text"
-                    value={item.descricao || ""}
-                    onChange={(e) =>
-                      updateArrayField("equipamentos", idx, "descricao", e.target.value)
-                    }
-                    placeholder="Descrição"
-                  />
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    value={item.total || ""}
-                    onChange={(e) =>
-                      updateArrayField("equipamentos", idx, "total", e.target.value)
-                    }
-                    placeholder="0"
-                  />
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    value={item.em_uso || ""}
-                    onChange={(e) =>
-                      updateArrayField("equipamentos", idx, "em_uso", e.target.value)
-                    }
-                    placeholder="0"
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Intercorrências */}
-      <div className="rdo-section">
-        <h3>Intercorrências</h3>
-        <textarea
-          value={data.intercorrencias || ""}
-          onChange={(e) => updateField("intercorrencias", e.target.value)}
-          placeholder="Descreva imprevistos, paralisações, não conformidades, etc."
-        />
-      </div>
-
-      {/* Fotos (área visual) */}
-      <div className="rdo-section">
-        <h3>Espaço para Inclusão de Fotos</h3>
-        <div className="rdo-photo-placeholder">Área reservada para anexar imagens do dia</div>
-        <div className="rdo-photo-placeholder">Área reservada para anexar imagens do dia</div>
-      </div>
-
-      {/* Responsável */}
-      <div className="rdo-section">
-        <label>Responsável pelo preenchimento:</label>
-        <input
-          type="text"
-          value={data.responsavel_preenchimento || ""}
-          onChange={(e) => updateField("responsavel_preenchimento", e.target.value)}
-        />
-      </div>
-
-      {/* Ações */}
-      <div className="rdo-actions">
-        <button className="btn-cancel" onClick={onClose} disabled={loading}>
-          Cancelar
-        </button>
-        <button className="btn-save" onClick={saveRdo} disabled={loading}>
-          {loading ? "Salvando..." : "Salvar RDO"}
-        </button>
       </div>
     </div>
   );

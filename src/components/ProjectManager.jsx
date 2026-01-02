@@ -256,105 +256,123 @@ export default function ProjectManager({ containerAtual, user, onSidebarUpdate }
 
   // === Projetos ===
   const handleSaveProject = async (formData) => {
-    const {
+  const {
+    name,
+    type,
+    pavimentos,
+    eap,
+    photoFile,
+    membrosSelecionados,
+    engenheiroResponsavel,
+    dataInicio,
+    dataFinalizacao
+  } = formData;
+
+  if (!name?.trim()) return alert("Digite o nome do projeto!");
+  setLoading(true);
+
+  let currentProjectId = isEditing ? selectedProject?.id : null;
+  let projectResult;
+
+  try {
+    // Dados base do projeto
+    const projectData = {
       name,
-      type,
-      pavimentos,
-      eap,
-      photoFile,
-      membrosSelecionados
-    } = formData;
+      type: type || "vertical",
+      engenheiro_id: engenheiroResponsavel?.id || null,
+      data_inicio: dataInicio || null,
+      data_finalizacao: dataFinalizacao || null
+    };
 
-    if (!name?.trim()) return alert("Digite o nome do projeto!");
-    setLoading(true);
-
-    let currentProjectId = isEditing ? selectedProject?.id : null;
-    let projectResult;
-
-    try {
-      if (isEditing && selectedProject) {
-        const { data, error } = await supabase
-          .from("projects")
-          .update({ name, type })
-          .eq("id", selectedProject.id)
-          .select()
-          .single();
-        if (error) throw error;
-        projectResult = data;
-      } else {
-        const { data, error } = await supabase
-          .from("projects")
-          .insert([{ name, type, user_id: containerAtual }])
-          .select()
-          .single();
-        if (error) throw error;
-        projectResult = data;
-        currentProjectId = data.id;
-      }
-
-      if (photoFile) {
-        const fileName = `${Date.now()}_${photoFile.name}`;
-        const { error: uploadError } = await supabase.storage
-          .from("projects_photos")
-          .upload(fileName, photoFile, { upsert: true });
-        if (uploadError) throw uploadError;
-
-        const { data: urlData } = supabase.storage.from("projects_photos").getPublicUrl(fileName);
-        await supabase.from("projects_photos").insert([
-          { project_id: currentProjectId, photo_url: urlData.publicUrl },
-        ]);
-      }
-
-      await supabase.from("pavimentos").delete().eq("project_id", currentProjectId);
-      const pavimentosToInsert = pavimentos
-        .filter(Boolean)
-        .map((name, index) => ({ name, project_id: currentProjectId, ordem: index }));
-      if (pavimentosToInsert.length > 0) {
-        await supabase.from("pavimentos").insert(pavimentosToInsert);
-      }
-
-      await supabase.from("eap").delete().eq("project_id", currentProjectId);
-      const eapToInsert = eap
-        .filter(Boolean)
-        .map((name, index) => ({ name, project_id: currentProjectId, ordem: index }));
-      if (eapToInsert.length > 0) {
-        await supabase.from("eap").insert(eapToInsert);
-      }
-
-      if (membrosSelecionados?.length > 0) {
-        if (isEditing) {
-          await supabase.from("project_members").delete().eq("project_id", currentProjectId);
-        }
-        const membrosParaInserir = membrosSelecionados.map(m => ({
-          project_id: currentProjectId,
-          user_id: m.id,
-          added_by: containerAtual
-        }));
-        const { error: membrosError } = await supabase.from("project_members").insert(membrosParaInserir);
-        if (membrosError) throw membrosError;
-
-        const notificacoes = membrosSelecionados.map(m => ({
-          user_id: m.id,
-          remetente_id: containerAtual,
-          mensagem: `${profile?.nome || "Você"} te adicionou ao projeto "${projectResult.name}"`,
-          projeto_id: currentProjectId,
-          lido: false,
-          created_at: new Date().toISOString(),
-          tipo: "convite_projeto"
-        }));
-        await supabase.from("notificacoes").insert(notificacoes);
-      }
-
-      setShowForm(false);
-      setIsEditing(false);
-      setSelectedProject(null);
-      await fetchProjects(containerAtual);
-    } catch (err) {
-      alert("Erro ao salvar projeto.");
-    } finally {
-      setLoading(false);
+    if (isEditing && selectedProject) {
+      const { data, error } = await supabase
+        .from("projects")
+        .update(projectData)
+        .eq("id", selectedProject.id)
+        .select()
+        .single();
+      if (error) throw error;
+      projectResult = data;
+    } else {
+      const { data, error } = await supabase
+        .from("projects")
+        .insert([{ ...projectData, user_id: containerAtual }])
+        .select()
+        .single();
+      if (error) throw error;
+      projectResult = data;
+      currentProjectId = data.id;
     }
-  };
+
+    // Upload de foto
+    if (photoFile) {
+      const fileName = `${Date.now()}_${photoFile.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from("projects_photos")
+        .upload(fileName, photoFile, { upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage.from("projects_photos").getPublicUrl(fileName);
+      await supabase.from("projects_photos").insert([
+        { project_id: currentProjectId, photo_url: urlData.publicUrl },
+      ]);
+    }
+
+    // Pavimentos
+    await supabase.from("pavimentos").delete().eq("project_id", currentProjectId);
+    const pavimentosToInsert = pavimentos
+      .filter(Boolean)
+      .map((name, index) => ({ name, project_id: currentProjectId, ordem: index }));
+    if (pavimentosToInsert.length > 0) {
+      await supabase.from("pavimentos").insert(pavimentosToInsert);
+    }
+
+    // EAP
+    await supabase.from("eap").delete().eq("project_id", currentProjectId);
+    const eapToInsert = eap
+      .filter(Boolean)
+      .map((name, index) => ({ name, project_id: currentProjectId, ordem: index }));
+    if (eapToInsert.length > 0) {
+      await supabase.from("eap").insert(eapToInsert);
+    }
+
+    // Membros
+    if (membrosSelecionados?.length > 0) {
+      if (isEditing) {
+        await supabase.from("project_members").delete().eq("project_id", currentProjectId);
+      }
+      const membrosParaInserir = membrosSelecionados.map(m => ({
+        project_id: currentProjectId,
+        user_id: m.id,
+        added_by: containerAtual
+      }));
+      const { error: membrosError } = await supabase.from("project_members").insert(membrosParaInserir);
+      if (membrosError) throw membrosError;
+
+      // Notificações
+      const notificacoes = membrosSelecionados.map(m => ({
+        user_id: m.id,
+        remetente_id: containerAtual,
+        mensagem: `${profile?.nome || "Você"} te adicionou ao projeto "${projectResult.name}"`,
+        projeto_id: currentProjectId,
+        lido: false,
+        created_at: new Date().toISOString(),
+        tipo: "convite_projeto"
+      }));
+      await supabase.from("notificacoes").insert(notificacoes);
+    }
+
+    setShowForm(false);
+    setIsEditing(false);
+    setSelectedProject(null);
+    await fetchProjects(containerAtual);
+  } catch (err) {
+    console.error("Erro ao salvar projeto:", err);
+    alert("Erro ao salvar projeto.");
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleDeleteProject = async (projectId) => {
     if (!window.confirm("Deseja realmente apagar este projeto?")) return;
@@ -386,41 +404,53 @@ export default function ProjectManager({ containerAtual, user, onSidebarUpdate }
     }
   };
 
-  const handleEditProject = async (project) => {
-    const { data: membros } = await supabase
-      .from("project_members")
-      .select("user_id")
-      .eq("project_id", project.id);
+    const handleEditProject = async (project) => {
+      // Carregar membros
+      const { data: membros } = await supabase
+        .from("project_members")
+        .select("user_id")
+        .eq("project_id", project.id);
 
-    let membrosSelecionados = [];
-    let membrosTexto = "";
+      let membrosSelecionados = [];
 
-    if (membros?.length) {
-      const userIds = membros.map(m => m.user_id);
-      const { data: perfis } = await supabase
-        .from("profiles")
-        .select("id, nickname, avatar_url")
-        .in("id", userIds);
-      membrosSelecionados = perfis || [];
-      membrosTexto = perfis?.map(p => `@${p.nickname}`).join(" ") || "";
-    }
+      if (membros?.length) {
+        const userIds = membros.map(m => m.user_id);
+        const { data: perfis } = await supabase
+          .from("profiles")
+          .select("id, nickname, avatar_url")
+          .in("id", userIds);
+        membrosSelecionados = perfis || [];
+      }
 
-    const formData = {
-      name: project.name || "",
-      type: project.type || "vertical",
-      pavimentos: project.pavimentos?.map((p) => p.name) || [],
-      eap: project.eap?.map((e) => e.name) || [],
-      photoFile: null,
-      photoUrl: project.photo_url || null,
-      membrosTexto,
-      membrosSelecionados,
+      // Carregar dados do engenheiro responsável
+      let engenheiroResponsavel = null;
+      if (project.engenheiro_id) {
+        const { data: engenheiro } = await supabase
+          .from("profiles")
+          .select("id, nickname, avatar_url")
+          .eq("id", project.engenheiro_id)
+          .single();
+        engenheiroResponsavel = engenheiro;
+      }
+
+      const formData = {
+        name: project.name || "",
+        type: project.type || "vertical",
+        pavimentos: project.pavimentos?.map((p) => p.name) || [],
+        eap: project.eap?.map((e) => e.name) || [],
+        photoFile: null,
+        photoUrl: project.photo_url || null,
+        membrosSelecionados,
+        engenheiroResponsavel,
+        dataInicio: project.data_inicio || "",
+        dataFinalizacao: project.data_finalizacao || "",
+      };
+
+      setSelectedProject(project);
+      setIsEditing(true);
+      setInitialFormData(formData);
+      setShowForm(true);
     };
-
-    setSelectedProject(project);
-    setIsEditing(true);
-    setInitialFormData(formData);
-    setShowForm(true);
-  };
 
   // === Setores ===
   const handleOpenSetoresManager = () => {

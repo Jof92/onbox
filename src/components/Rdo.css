@@ -2,11 +2,9 @@
 .rdo-modal-container {
   max-width: 960px;
   margin: 0 auto;
-  padding: 20px;
   font-family: Arial, sans-serif;
   line-height: 1.5;
   color: #333;
-  overflow-y: auto;
   max-height: 85vh;
   background: #eee;
 }
@@ -150,4 +148,7 @@
 .btn-cancel:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+.rdo-content{
+    padding: 10px;
 }

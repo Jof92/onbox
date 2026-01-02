@@ -175,18 +175,56 @@ export default function Column({
   useEffect(() => {
     if (!isDiarioObra) return;
 
+    // Listener para nova nota RDO (atualização instantânea)
+    const handleNovaNotaRDO = (event) => {
+      const { nota, pilhaId: eventPilhaId } = event.detail;
+      if (eventPilhaId === col.id) {
+        console.log("⚡ Nova nota RDO detectada, atualizando lista imediatamente");
+        setColumns(prev =>
+          prev.map(c =>
+            c.id === col.id 
+              ? { ...c, notas: [nota, ...c.notas] } 
+              : c
+          )
+        );
+      }
+    };
+
+    // Listener para RDO atualizado
+    const handleRdoAtualizado = (event) => {
+      const { notaId, data: updatedData } = event.detail;
+      console.log("⚡ RDO atualizado, sincronizando lista");
+      setColumns(prev =>
+        prev.map(c =>
+          c.id === col.id
+            ? {
+                ...c,
+                notas: c.notas.map(n =>
+                  n.id === notaId ? { ...n, ...updatedData } : n
+                )
+              }
+            : c
+        )
+      );
+    };
+
+    window.addEventListener('novaNotaRDO', handleNovaNotaRDO);
+    window.addEventListener('rdoAtualizado', handleRdoAtualizado);
+
+    // Listener para mudanças no banco (backup/sincronização)
     const subscription = supabase
       .channel(`rdo-${col.id}`)
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*', // INSERT, UPDATE, DELETE
           schema: 'public',
           table: 'notas',
           filter: `pilha_id=eq.${col.id}`
         },
         async (payload) => {
-          if (payload.new.tipo === "Diário de Obra") {
+          if (payload.new?.tipo === "Diário de Obra" || payload.old?.tipo === "Diário de Obra") {
+            console.log("📡 Sincronização Supabase - mudança detectada");
             const { data: notasRaw } = await supabase
               .from("notas")
               .select("*")
@@ -194,7 +232,7 @@ export default function Column({
               .eq("tipo", "Diário de Obra")
               .order("data_entrega", { ascending: false });
 
-            if (notasRaw && notasRaw.length > 0) {
+            if (notasRaw) {
               setColumns(prev =>
                 prev.map(c =>
                   c.id === col.id ? { ...c, notas: notasRaw } : c
@@ -207,6 +245,8 @@ export default function Column({
       .subscribe();
 
     return () => {
+      window.removeEventListener('novaNotaRDO', handleNovaNotaRDO);
+      window.removeEventListener('rdoAtualizado', handleRdoAtualizado);
       supabase.removeChannel(subscription);
     };
   }, [col.id, isDiarioObra, setColumns]);

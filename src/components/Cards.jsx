@@ -57,12 +57,29 @@ export default function Cards() {
     );
   };
 
-  const updateUrlWithNota = (notaId) => {
-    const urlParams = new URLSearchParams(location.search);
-    if (notaId) urlParams.set('nota', notaId);
-    else urlParams.delete('nota');
-    navigate(`${location.pathname}?${urlParams.toString()}`, { replace: false });
-  };
+ // Substitua a função updateUrlWithNota no Cards.jsx por esta versão:
+
+const updateUrlWithNota = (notaId) => {
+  console.log("🔗 updateUrlWithNota chamado com:", notaId);
+  
+  const urlParams = new URLSearchParams(location.search);
+  
+  if (notaId) {
+    urlParams.set('nota', notaId);
+    console.log("✅ Adicionando nota à URL:", notaId);
+  } else {
+    urlParams.delete('nota');
+    console.log("❌ Removendo nota da URL");
+  }
+  
+  const newUrl = `${location.pathname}?${urlParams.toString()}`;
+  console.log("🔗 Nova URL será:", newUrl);
+  
+  // IMPORTANTE: replace: false para manter no histórico
+  navigate(newUrl, { replace: false });
+  
+  console.log("✅ URL atualizada");
+};
 
   const handleSaveNomeRapida = async (notaId, novoNome) => {
     if (!novoNome.trim()) return;
@@ -414,30 +431,40 @@ export default function Cards() {
 
   // Substitua o useEffect que monitora a URL no Cards.jsx (linha ~469) por este:
 
+// Substitua o useEffect que monitora a URL no Cards.jsx (linha ~469) por este:
+
 useEffect(() => {
   const urlParams = new URLSearchParams(location.search);
   const notaId = urlParams.get("nota");
   
-  console.log("🔄 useEffect URL - notaId:", notaId, "| columnsAtivas:", columnsAtivas.length);
+  console.log("🔄 useEffect URL - notaId:", notaId, "| columnsAtivas:", columnsAtivas.length, "| notaSelecionada:", notaSelecionada?.id);
   
-  // Se não há notaId na URL mas há notaSelecionada, limpa
-  if (!notaId && notaSelecionada) {
-    console.log("❌ Sem notaId na URL, limpando notaSelecionada");
-    setNotaSelecionada(null);
-    setIsNotaRecebidos(false);
-    setProjetoOrigem(null);
-    setNotaOrigem(null);
+  // IMPORTANTE: Se já temos a nota selecionada com o mesmo ID, não faz nada
+  if (notaSelecionada && notaId && String(notaSelecionada.id) === notaId) {
+    console.log("✅ Nota já selecionada corretamente, mantendo:", notaId);
     return;
+  }
+  
+  // Se não há notaId na URL mas há notaSelecionada, limpa APENAS se passou tempo suficiente
+  if (!notaId && notaSelecionada) {
+    console.log("⚠️ Sem notaId na URL mas há notaSelecionada - aguardando...");
+    // Aguarda um pouco para ver se a URL será atualizada
+    const timer = setTimeout(() => {
+      const urlParamsCheck = new URLSearchParams(window.location.search);
+      const notaIdCheck = urlParamsCheck.get("nota");
+      if (!notaIdCheck && notaSelecionada) {
+        console.log("❌ Confirmado: sem notaId na URL após delay, limpando");
+        setNotaSelecionada(null);
+        setIsNotaRecebidos(false);
+        setProjetoOrigem(null);
+        setNotaOrigem(null);
+      }
+    }, 200); // Aguarda 200ms
+    return () => clearTimeout(timer);
   }
   
   // Se há notaId na URL e colunas carregadas
   if (notaId && columnsAtivas.length > 0) {
-    // Se já temos a nota selecionada com o mesmo ID, não faz nada
-    if (notaSelecionada && String(notaSelecionada.id) === notaId) {
-      console.log("✅ Nota já selecionada, mantendo:", notaId);
-      return;
-    }
-    
     // Tenta encontrar a nota nas colunas
     let found = false;
     for (const col of columnsAtivas) {
@@ -454,7 +481,7 @@ useEffect(() => {
     }
     
     // Se não encontrou mas há notaId na URL, busca no banco
-    if (!found && !notaSelecionada) {
+    if (!found && (!notaSelecionada || String(notaSelecionada.id) !== notaId)) {
       console.log("⚠️ Nota não encontrada nas colunas, buscando no banco...");
       const buscarNota = async () => {
         const { data: nota, error } = await supabase
@@ -474,8 +501,6 @@ useEffect(() => {
       buscarNota();
     }
   }
-  
-  // IMPORTANTE: Removemos notaSelecionada das dependências para evitar loop
 }, [columnsAtivas, location.search]);
 
   const loadOrigemData = async (notaEspelhoId) => {
@@ -703,6 +728,8 @@ useEffect(() => {
 
 // Substitua a função handleOpenNota no Cards.jsx por esta versão melhorada:
 
+// Substitua a função handleOpenNota no Cards.jsx por esta versão melhorada:
+
 const handleOpenNota = (nota) => {
   console.log("📖 handleOpenNota chamado com:", nota);
   
@@ -724,6 +751,9 @@ const handleOpenNota = (nota) => {
   console.log("📋 isRecebidos:", isRecebidos);
   console.log("🎯 Setando notaSelecionada...");
 
+  // IMPORTANTE: Atualizar URL ANTES de setar o estado
+  updateUrlWithNota(nota.id);
+  
   setNotaSelecionada(nota);
   setIsNotaRecebidos(isRecebidos);
   
@@ -733,8 +763,6 @@ const handleOpenNota = (nota) => {
     setProjetoOrigem(null);
     setNotaOrigem(null);
   }
-  
-  updateUrlWithNota(nota.id);
   
   console.log("✅ Modal deve abrir agora com nota ID:", nota.id);
 };

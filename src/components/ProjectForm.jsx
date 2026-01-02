@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { FaPlus, FaTrash, FaCamera } from "react-icons/fa";
 import { supabase } from "../supabaseClient";
-import "./Containers.css";
+import "./ProjectForm.css";
 
 export default function ProjectForm({
   isOpen,
@@ -14,39 +14,81 @@ export default function ProjectForm({
   isEditing = false,
 }) {
   const inputRef = useRef(null);
+  const engenheiroInputRef = useRef(null);
 
   const [formData, setFormData] = useState({
-    name: initialData?.name || "",
-    type: initialData?.type || "vertical",
-    pavimentos: initialData?.pavimentos || [],
-    eap: initialData?.eap || [],
+    name: "",
+    engenheiroResponsavel: null,
+    engenheiroTexto: "",
+    dataInicio: "",
+    dataFinalizacao: "",
+    pavimentos: [],
+    eap: [],
     photoFile: null,
-    photoUrl: initialData?.photoUrl || null,
-    membrosTexto: initialData?.membrosTexto || "",
-    membrosSelecionados: initialData?.membrosSelecionados || [],
+    photoUrl: null,
+    membrosTexto: "",
+    membrosSelecionados: [],
   });
 
   const [sugestoesMembros, setSugestoesMembros] = useState([]);
   const [mostrarSugestoesMembros, setMostrarSugestoesMembros] = useState(false);
 
-  // Atualiza estado quando initialData muda (ex: ao editar)
+  const [sugestoesEngenheiro, setSugestoesEngenheiro] = useState([]);
+  const [mostrarSugestoesEngenheiro, setMostrarSugestoesEngenheiro] = useState(false);
+
+  // Função reutilizável para buscar membros do container com convite aceito
+  const buscarMembrosDoContainer = async (termo) => {
+    if (!termo.trim() || !containerAtual) return [];
+
+    try {
+      const { data: convites } = await supabase
+        .from("convites")
+        .select("user_id")
+        .eq("remetente_id", containerAtual)
+        .eq("status", "aceito");
+
+      const userIds = convites?.map((c) => c.user_id).filter(Boolean) || [];
+      if (userIds.length === 0) return [];
+
+      const { data: perfis } = await supabase
+        .from("profiles")
+        .select("id, nickname, avatar_url")
+        .in("id", userIds)
+        .ilike("nickname", `%${termo}%`)
+        .limit(5);
+
+      return perfis || [];
+    } catch (err) {
+      console.error("Erro ao buscar membros do container:", err);
+      return [];
+    }
+  };
+
+  // Atualiza estado quando o modal abre ou initialData muda
   useEffect(() => {
     if (isOpen && initialData) {
       setFormData({
         name: initialData.name || "",
-        type: initialData.type || "vertical",
+        engenheiroResponsavel: initialData.engenheiroResponsavel || null,
+        engenheiroTexto: initialData.engenheiroResponsavel
+          ? `@${initialData.engenheiroResponsavel.nickname}`
+          : "",
+        dataInicio: initialData.dataInicio || "",
+        dataFinalizacao: initialData.dataFinalizacao || "",
         pavimentos: initialData.pavimentos || [],
         eap: initialData.eap || [],
         photoFile: null,
         photoUrl: initialData.photoUrl || null,
-        membrosTexto: initialData.membrosTexto || "",
+        membrosTexto: "",
         membrosSelecionados: initialData.membrosSelecionados || [],
       });
     } else if (isOpen && !isEditing) {
-      // Novo projeto
       setFormData({
         name: "",
-        type: "vertical",
+        engenheiroResponsavel: null,
+        engenheiroTexto: "",
+        dataInicio: "",
+        dataFinalizacao: "",
         pavimentos: [],
         eap: [],
         photoFile: null,
@@ -79,46 +121,11 @@ export default function ProjectForm({
     setLista(novaLista);
   };
 
+  // === Membros ===
   const buscarSugestoesMembros = async (termo) => {
-  if (!termo.trim() || !containerAtual) {
-    setSugestoesMembros([]);
-    return;
-  }
-
-  try {
-    // Busca convites ACEITOS enviados PELO containerAtual (remetente_id = containerAtual)
-    const { data: convites } = await supabase
-      .from("convites")
-      .select("user_id") // 👈 Queremos os IDs dos membros (user_id)
-      .eq("remetente_id", containerAtual) // 👈 Quem enviou é o dono do container
-      .eq("status", "aceito");
-
-    if (!convites?.length) {
-      setSugestoesMembros([]);
-      return;
-    }
-
-    const userIds = convites.map((c) => c.user_id).filter(Boolean); // remove nulls
-
-    if (userIds.length === 0) {
-      setSugestoesMembros([]);
-      return;
-    }
-
-    // Busca perfis desses membros
-    const { data: perfis } = await supabase
-      .from("profiles")
-      .select("id, nickname, avatar_url")
-      .in("id", userIds)
-      .ilike("nickname", `%${termo}%`)
-      .limit(5);
-
-    setSugestoesMembros(perfis || []);
-  } catch (err) {
-    console.error("Erro ao buscar sugestões:", err);
-    setSugestoesMembros([]);
-  }
-};
+    const resultados = await buscarMembrosDoContainer(termo);
+    setSugestoesMembros(resultados);
+  };
 
   const handleMembrosChange = (e) => {
     const valor = e.target.value;
@@ -127,7 +134,6 @@ export default function ProjectForm({
 
     const antes = valor.substring(0, pos);
     const ultimaArroba = antes.lastIndexOf("@");
-
     if (ultimaArroba !== -1) {
       const termo = antes.substring(ultimaArroba + 1).trim();
       if (termo) {
@@ -141,11 +147,11 @@ export default function ProjectForm({
     }
   };
 
-  // ✅ Função atualizada: limpa o input ao selecionar um membro
   const inserirMembro = (perfil) => {
-    // Evita duplicatas
     if (formData.membrosSelecionados.some((m) => m.id === perfil.id)) {
       setMostrarSugestoesMembros(false);
+      setFormData((prev) => ({ ...prev, membrosTexto: "" }));
+      setTimeout(() => inputRef.current?.focus(), 0);
       return;
     }
 
@@ -156,18 +162,60 @@ export default function ProjectForm({
 
     setFormData((prev) => ({
       ...prev,
-      membrosTexto: "", // ✅ Limpa o campo de texto
+      membrosTexto: "",
       membrosSelecionados: novoMembrosSelecionados,
     }));
 
     setMostrarSugestoesMembros(false);
+    setTimeout(() => inputRef.current?.focus(), 0);
+  };
 
-    // Devolve o foco para o input
-    setTimeout(() => {
-      if (inputRef.current) {
-        inputRef.current.focus();
+  // === Engenheiro ===
+  const buscarSugestoesEngenheiro = async (termo) => {
+    const resultados = await buscarMembrosDoContainer(termo);
+    setSugestoesEngenheiro(resultados);
+  };
+
+  const handleEngenheiroChange = (e) => {
+    const valor = e.target.value;
+    setFormData((prev) => ({
+      ...prev,
+      engenheiroTexto: valor,
+      engenheiroResponsavel: null,
+    }));
+
+    const pos = e.target.selectionStart;
+    const antes = valor.substring(0, pos);
+    const ultimaArroba = antes.lastIndexOf("@");
+    if (ultimaArroba !== -1) {
+      const termo = antes.substring(ultimaArroba + 1).trim();
+      if (termo) {
+        setMostrarSugestoesEngenheiro(true);
+        buscarSugestoesEngenheiro(termo);
+      } else {
+        setMostrarSugestoesEngenheiro(false);
       }
-    }, 0);
+    } else {
+      setMostrarSugestoesEngenheiro(false);
+    }
+  };
+
+  const inserirEngenheiro = (perfil) => {
+    setFormData((prev) => ({
+      ...prev,
+      engenheiroResponsavel: perfil,
+      engenheiroTexto: `@${perfil.nickname}`,
+    }));
+    setMostrarSugestoesEngenheiro(false);
+  };
+
+  const removerEngenheiro = () => {
+    setFormData((prev) => ({
+      ...prev,
+      engenheiroResponsavel: null,
+      engenheiroTexto: "",
+    }));
+    setTimeout(() => engenheiroInputRef.current?.focus(), 0);
   };
 
   const handlePhotoChange = (e) => {
@@ -184,7 +232,9 @@ export default function ProjectForm({
   const handleSubmit = () => {
     onSave({
       name: formData.name,
-      type: formData.type,
+      engenheiroResponsavel: formData.engenheiroResponsavel,
+      dataInicio: formData.dataInicio,
+      dataFinalizacao: formData.dataFinalizacao,
       pavimentos: formData.pavimentos,
       eap: formData.eap,
       photoFile: formData.photoFile,
@@ -196,17 +246,13 @@ export default function ProjectForm({
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay1" onClick={onClose}>
-      <div
-        className="modal-content1"
-        onClick={(e) => e.stopPropagation()}
-        style={{ maxHeight: "90vh", overflowY: "auto" }}
-      >
-        <h2>{isEditing ? "Editar Projeto" : "Novo Projeto"}</h2>
+    <div className="project-modal-overlay" onClick={onClose}>
+      <div className="project-modal-content" onClick={(e) => e.stopPropagation()}>
+        <h2>{isEditing ? "EDITAR PROJETO" : "Novo Projeto"}</h2>
 
         {/* Foto */}
         <div className="project-photo-upload">
-          <label htmlFor="photo-upload" className="photo-circle">
+          <label htmlFor="photo-upload" className="project-photo-circle">
             {formData.photoUrl ? (
               <img src={formData.photoUrl} alt="Foto do projeto" />
             ) : (
@@ -223,159 +269,176 @@ export default function ProjectForm({
         </div>
 
         {/* Nome */}
-        <label>Nome do Projeto</label>
-        <input
-          type="text"
-          value={formData.name}
-          onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-          placeholder="Ex: Torre Central"
-        />
+        <div className="form-group">
+          <label>Nome do Projeto</label>
+          <input
+            type="text"
+            value={formData.name}
+            onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+            placeholder=""
+          />
+        </div>
+
+        {/* Engenheiro + Avatar lado a lado */}
+        <div className="form-group">
+          <label>Engenheiro Responsável</label>
+          <div className="engineer-row">
+            <div className="engineer-input-wrapper">
+              <input
+                ref={engenheiroInputRef}
+                type="text"
+                value={formData.engenheiroTexto}
+                onChange={handleEngenheiroChange}
+                placeholder="Digite @ para mencionar"
+                autoComplete="off"
+                onBlur={() => setTimeout(() => setMostrarSugestoesEngenheiro(false), 200)}
+                onKeyPress={(e) => {
+                  if (e.key === "Enter" && mostrarSugestoesEngenheiro && sugestoesEngenheiro.length > 0) {
+                    e.preventDefault();
+                    inserirEngenheiro(sugestoesEngenheiro[0]);
+                  }
+                }}
+              />
+              {mostrarSugestoesEngenheiro && sugestoesEngenheiro.length > 0 && (
+                <div className="suggestions-dropdown">
+                  {sugestoesEngenheiro.map((sug) => (
+                    <div
+                      key={sug.id}
+                      onClick={() => inserirEngenheiro(sug)}
+                      onMouseDown={(e) => e.preventDefault()}
+                      className="suggestion-item"
+                    >
+                      {sug.avatar_url ? (
+                        <img src={sug.avatar_url} alt="" />
+                      ) : (
+                        <div className="suggestion-avatar-placeholder">
+                          {sug.nickname?.charAt(0).toUpperCase() || "?"}
+                        </div>
+                      )}
+                      {sug.nickname}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {formData.engenheiroResponsavel && (
+              <div className="engineer-avatar-container">
+                {formData.engenheiroResponsavel.avatar_url ? (
+                  <img
+                    src={formData.engenheiroResponsavel.avatar_url}
+                    alt={formData.engenheiroResponsavel.nickname}
+                  />
+                ) : (
+                  <div className="engineer-avatar-placeholder">
+                    {formData.engenheiroResponsavel.nickname?.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  className="remove-engineer-btn"
+                  onClick={removerEngenheiro}
+                >
+                  ×
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Datas lado a lado */}
+        <div className="form-row">
+          <div className="form-group">
+            <label>Data de Início</label>
+            <input
+              type="date"
+              value={formData.dataInicio}
+              onChange={(e) => setFormData((prev) => ({ ...prev, dataInicio: e.target.value }))}
+            />
+          </div>
+          <div className="form-group">
+            <label>Data de Finalização</label>
+            <input
+              type="date"
+              value={formData.dataFinalizacao}
+              onChange={(e) => setFormData((prev) => ({ ...prev, dataFinalizacao: e.target.value }))}
+            />
+          </div>
+        </div>
 
         {/* Membros */}
-        <label>Adicionar membros (digite @)</label>
-        <div style={{ position: "relative" }}>
-          <input
-            ref={inputRef}
-            id="membros-input"
-            type="text"
-            value={formData.membrosTexto}
-            onChange={handleMembrosChange}
-            placeholder="Ex: @joao, @maria"
-            style={{ width: "100%", padding: "8px", marginTop: "4px" }}
-            autoComplete="off"
-            onBlur={() => setTimeout(() => setMostrarSugestoesMembros(false), 200)}
-            onKeyPress={(e) => {
-              if (e.key === "Enter" && mostrarSugestoesMembros && sugestoesMembros.length > 0) {
-                e.preventDefault();
-                inserirMembro(sugestoesMembros[0]);
-              }
-            }}
-          />
-
-          {mostrarSugestoesMembros && sugestoesMembros.length > 0 && (
-            <div
-              className="sugestoes-dropdown"
-              style={{
-                position: "absolute",
-                zIndex: 1000,
-                width: "100%",
-                background: "#fff",
-                border: "1px solid #ddd",
-                borderRadius: "4px",
-                maxHeight: "150px",
-                overflowY: "auto",
-                boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
+        <div className="form-group">
+          <label>Adicionar membros (digite @)</label>
+          <div className="members-input-wrapper">
+            <input
+              ref={inputRef}
+              type="text"
+              value={formData.membrosTexto}
+              onChange={handleMembrosChange} 
+              placeholder=""
+              autoComplete="off"
+              onBlur={() => setTimeout(() => setMostrarSugestoesMembros(false), 200)}
+              onKeyPress={(e) => {
+                if (e.key === "Enter" && mostrarSugestoesMembros && sugestoesMembros.length > 0) {
+                  e.preventDefault();
+                  inserirMembro(sugestoesMembros[0]);
+                }
               }}
-            >
-              {sugestoesMembros.map((sug) => (
-                <div
-                  key={sug.id}
-                  onClick={() => inserirMembro(sug)}
-                  onMouseDown={(e) => e.preventDefault()} // previne blur do input
-                  style={{
-                    padding: "8px 12px",
-                    cursor: "pointer",
-                    borderBottom: "1px solid #eee",
-                    display: "flex",
-                    alignItems: "center",
-                  }}
-                >
-                  {sug.avatar_url ? (
-                    <img
-                      src={sug.avatar_url}
-                      alt=""
-                      style={{
-                        width: "20px",
-                        height: "20px",
-                        borderRadius: "50%",
-                        marginRight: "8px",
-                      }}
-                    />
+            />
+            {mostrarSugestoesMembros && sugestoesMembros.length > 0 && (
+              <div className="suggestions-dropdown">
+                {sugestoesMembros.map((sug) => (
+                  <div
+                    key={sug.id}
+                    onClick={() => inserirMembro(sug)}
+                    onMouseDown={(e) => e.preventDefault()}
+                    className="suggestion-item"
+                  >
+                    {sug.avatar_url ? (
+                      <img src={sug.avatar_url} alt="" />
+                    ) : (
+                      <div className="suggestion-avatar-placeholder">
+                        {sug.nickname?.charAt(0).toUpperCase() || "?"}
+                      </div>
+                    )}
+                    {sug.nickname}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Avatares dos membros - centralizados */}
+          {formData.membrosSelecionados.length > 0 && (
+            <div className="selected-members">
+              {formData.membrosSelecionados.map((membro) => (
+                <div key={membro.id} className="member-avatar-item">
+                  {membro.avatar_url ? (
+                    <img src={membro.avatar_url} alt={membro.nickname} />
                   ) : (
-                    <div
-                      style={{
-                        width: "20px",
-                        height: "20px",
-                        borderRadius: "50%",
-                        backgroundColor: "#ccc",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: "#fff",
-                        fontSize: "12px",
-                        marginRight: "8px",
-                      }}
-                    >
-                      {sug.nickname?.charAt(0).toUpperCase() || "?"}
+                    <div className="member-avatar-placeholder">
+                      {membro.nickname?.charAt(0).toUpperCase()}
                     </div>
                   )}
-                  {sug.nickname}
+                  <span>{membro.nickname}</span>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        {/* Avatares dos membros selecionados */}
-        {formData.membrosSelecionados.length > 0 && (
-          <div style={{ marginTop: "8px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            {formData.membrosSelecionados.map((membro) => (
-              <div key={membro.id} style={{ position: "relative", textAlign: "center" }}>
-                {membro.avatar_url ? (
-                  <img
-                    src={membro.avatar_url}
-                    alt={membro.nickname}
-                    style={{
-                      width: "32px",
-                      height: "32px",
-                      borderRadius: "50%",
-                      border: "2px solid #007bff",
-                    }}
-                  />
-                ) : (
-                  <div
-                    style={{
-                      width: "32px",
-                      height: "32px",
-                      borderRadius: "50%",
-                      backgroundColor: "#ccc",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "#fff",
-                      fontWeight: "bold",
-                      border: "2px solid #007bff",
-                    }}
-                  >
-                    {membro.nickname?.charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <span style={{ fontSize: "10px", display: "block", marginTop: "2px" }}>
-                  {membro.nickname}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Tipo */}
-        <label>Tipo de Projeto</label>
-        <select
-          value={formData.type}
-          onChange={(e) => setFormData((prev) => ({ ...prev, type: e.target.value }))}
-        >
-          <option value="vertical">Edificação Vertical</option>
-          <option value="horizontal">Edificação Horizontal</option>
-        </select>
-
-        {/* Pavimentos */}
-        {formData.type === "vertical" && (
-          <div>
+        {/* Pavimentos e EAP lado a lado */}
+        <div className="form-row">
+          <div className="form-group">
             <div className="list-header">
               Pavimentos{" "}
               <FaPlus
                 className="add-icon"
-                onClick={() => adicionarItem(formData.pavimentos, (v) => setFormData((prev) => ({ ...prev, pavimentos: v })))}
+                onClick={() =>
+                  adicionarItem(formData.pavimentos, (v) =>
+                    setFormData((prev) => ({ ...prev, pavimentos: v }))
+                  )
+                }
               />
             </div>
             <div className="list-container">
@@ -385,41 +448,66 @@ export default function ProjectForm({
                     type="text"
                     placeholder={`Pavimento ${i + 1}`}
                     value={p}
-                    onChange={(e) => atualizarItem(formData.pavimentos, (v) => setFormData((prev) => ({ ...prev, pavimentos: v })), i, e.target.value)}
+                    onChange={(e) =>
+                      atualizarItem(
+                        formData.pavimentos,
+                        (v) => setFormData((prev) => ({ ...prev, pavimentos: v })),
+                        i,
+                        e.target.value
+                      )
+                    }
                   />
                   <FaTrash
                     className="delete-icon"
-                    onClick={() => removerItem(formData.pavimentos, (v) => setFormData((prev) => ({ ...prev, pavimentos: v })), i)}
+                    onClick={() =>
+                      removerItem(
+                        formData.pavimentos,
+                        (v) => setFormData((prev) => ({ ...prev, pavimentos: v })),
+                        i
+                      )
+                    }
                   />
                 </div>
               ))}
             </div>
           </div>
-        )}
 
-        {/* EAP */}
-        <div className="list-header">
-          EAP{" "}
-          <FaPlus
-            className="add-icon"
-            onClick={() => adicionarItem(formData.eap, (v) => setFormData((prev) => ({ ...prev, eap: v })))}
-          />
-        </div>
-        <div className="list-container">
-          {formData.eap.map((e, i) => (
-            <div key={i} className="list-item">
-              <input
-                type="text"
-                placeholder={`EAP ${i + 1}`}
-                value={e}
-                onChange={(ev) => atualizarItem(formData.eap, (v) => setFormData((prev) => ({ ...prev, eap: v })), i, ev.target.value)}
-              />
-              <FaTrash
-                className="delete-icon"
-                onClick={() => removerItem(formData.eap, (v) => setFormData((prev) => ({ ...prev, eap: v })), i)}
+          <div className="form-group">
+            <div className="list-header">
+              EAP{" "}
+              <FaPlus
+                className="add-icon"
+                onClick={() =>
+                  adicionarItem(formData.eap, (v) => setFormData((prev) => ({ ...prev, eap: v })))
+                }
               />
             </div>
-          ))}
+            <div className="list-container">
+              {formData.eap.map((e, i) => (
+                <div key={i} className="list-item">
+                  <input
+                    type="text"
+                    placeholder={`EAP ${i + 1}`}
+                    value={e}
+                    onChange={(ev) =>
+                      atualizarItem(
+                        formData.eap,
+                        (v) => setFormData((prev) => ({ ...prev, eap: v })),
+                        i,
+                        ev.target.value
+                      )
+                    }
+                  />
+                  <FaTrash
+                    className="delete-icon"
+                    onClick={() =>
+                      removerItem(formData.eap, (v) => setFormData((prev) => ({ ...prev, eap: v })), i)
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Botões */}
