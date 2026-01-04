@@ -3,12 +3,14 @@ import React, { useState, useEffect, useRef } from "react";
 import "./Rdo.css";
 import { supabase } from "../supabaseClient";
 import { FaTimes, FaTrash } from "react-icons/fa";
+import { FaMagnifyingGlass } from "react-icons/fa6";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCloudSun,
   faCloudShowersHeavy,
 } from "@fortawesome/free-solid-svg-icons";
 import { faSun } from "@fortawesome/free-regular-svg-icons";
+import BuscaInsumo from "./BuscaInsumo";
 
 const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
   const responsavelInputRef = useRef(null);
@@ -38,6 +40,10 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
   // Estados para autocomplete
   const [sugestoesMembros, setSugestoesMembros] = useState([]);
   const [mostrarSugestoesMembros, setMostrarSugestoesMembros] = useState(false);
+
+  // Novos estados para busca de insumos em equipamentos
+  const [buscaInsumoAberta, setBuscaInsumoAberta] = useState(false);
+  const [linhaBuscaAtiva, setLinhaBuscaAtiva] = useState(null);
 
   // Carregar nome do projeto, engenheiro e pavimentos
   useEffect(() => {
@@ -73,7 +79,6 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
         termino_obra: proj.data_finalizacao || "",
       }));
 
-      // MANTIDO EXATAMENTE COMO VOCÊ ENVIOU
       if (proj.engenheiro_id) {
         const { data: user, error: userError } = await supabase
           .from("profiles")
@@ -267,6 +272,14 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
     }));
   };
 
+  // Nova função para remover linha de qualquer array
+  const removeRow = (arrayKey, index) => {
+    setData((prev) => {
+      const newArray = prev[arrayKey].filter((_, i) => i !== index);
+      return { ...prev, [arrayKey]: newArray };
+    });
+  };
+
   const updatePavimentoDescricao = (pavimento, descricao) => {
     setPavimentosAtividades((prev) =>
       prev.map((item) =>
@@ -279,6 +292,70 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
     setPavimentosAtividades((prev) =>
       prev.filter((item) => item.pavimento !== pavimento)
     );
+  };
+
+  // 🔍 FUNÇÃO DE BUSCA POR CÓDIGO — CORRIGIDA
+  const buscarItemPorCodigo = async (index, codigo) => {
+    if (!codigo?.trim()) {
+      setData((prev) => {
+        const novosEquipamentos = [...prev.equipamentos];
+        novosEquipamentos[index] = { ...novosEquipamentos[index], descricao: "" };
+        return { ...prev, equipamentos: novosEquipamentos };
+      });
+      return;
+    }
+
+    try {
+      const { data: itemEncontrado, error } = await supabase
+        .from("itens")
+        .select("descricao, unidade")
+        .eq("codigo", codigo)
+        .maybeSingle();
+
+      if (error) {
+        console.error("Erro ao buscar item:", error);
+        return;
+      }
+
+      setData((prev) => {
+        const novosEquipamentos = [...prev.equipamentos];
+        if (itemEncontrado) {
+          novosEquipamentos[index] = {
+            ...novosEquipamentos[index],
+            descricao: itemEncontrado.descricao || "",
+          };
+        } else {
+          novosEquipamentos[index] = {
+            ...novosEquipamentos[index],
+            descricao: "",
+          };
+        }
+        return { ...prev, equipamentos: novosEquipamentos };
+      });
+    } catch (err) {
+      console.error("Erro ao buscar item por código:", err);
+      setData((prev) => {
+        const novosEquipamentos = [...prev.equipamentos];
+        novosEquipamentos[index] = { ...novosEquipamentos[index], descricao: "" };
+        return { ...prev, equipamentos: novosEquipamentos };
+      });
+    }
+  };
+
+  // 🔍 FUNÇÃO PARA ABERTURA DA BUSCA
+  const abrirBuscaInsumo = (index) => {
+    setLinhaBuscaAtiva(index);
+    setBuscaInsumoAberta(true);
+  };
+
+  // ✅ CALLBACK AO SELECIONAR UM ITEM NA BUSCA
+  const handleSelecionarInsumo = (codigo) => {
+    if (linhaBuscaAtiva !== null) {
+      updateArrayField("equipamentos", linhaBuscaAtiva, "codigo", codigo);
+      buscarItemPorCodigo(linhaBuscaAtiva, codigo);
+    }
+    setBuscaInsumoAberta(false);
+    setLinhaBuscaAtiva(null);
   };
 
   const saveRdo = async () => {
@@ -351,7 +428,6 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
       <div className="rdo-content">
         <div className="rdo-section">
           <div className="rdo-row">
-            {/* MANTIDO EXATAMENTE COMO VOCÊ ENVIOU */}
             <div className="rdo-col">
               <label>Engenheiro Responsável</label>
               <input
@@ -361,8 +437,6 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
                 className="rdo-input-readonly"
               />
             </div>
-            
-            {/* APENAS ESTE CAMPO FOI ALTERADO */}
             <div className="rdo-col">
               <label>Responsável pelo Preenchimento</label>
               <div style={{ position: "relative" }}>
@@ -381,7 +455,6 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
                     }
                   }}
                 />
-                
                 {mostrarSugestoesMembros && sugestoesMembros.length > 0 && (
                   <div className="suggestions-dropdown">
                     {sugestoesMembros.map((membro) => (
@@ -449,101 +522,101 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
               </tr>
             </thead>
             <tbody>
-                    <tr>
-                        <td>Manhã</td>
-                        <td>
-                        <div
-                            className={`rdo-clima-icon ${data.clima_manha === "chuvoso" ? "selected" : ""}`}
-                            onClick={() => updateField("clima_manha", "chuvoso")}
-                            role="button"
-                            tabIndex={0}
-                            onKeyPress={(e) => e.key === "Enter" && updateField("clima_manha", "chuvoso")}
-                            aria-label="Chuvoso"
-                        >
-                            <FontAwesomeIcon icon={faCloudShowersHeavy} />
-                        </div>
-                        <div
-                            className={`rdo-clima-icon ${data.clima_manha === "seco" ? "selected" : ""}`}
-                            onClick={() => updateField("clima_manha", "seco")}
-                            role="button"
-                            tabIndex={0}
-                            onKeyPress={(e) => e.key === "Enter" && updateField("clima_manha", "seco")}
-                            aria-label="Ensolarado"
-                        >
-                            <FontAwesomeIcon icon={faSun} />
-                        </div>
-                        </td>
-                        <td>
-                        <div
-                            className={`rdo-op-text ${data.obra_op_manha === "sim" ? "selected" : ""}`}
-                            onClick={() => updateField("obra_op_manha", "sim")}
-                            role="button"
-                            tabIndex={0}
-                            onKeyPress={(e) => e.key === "Enter" && updateField("obra_op_manha", "sim")}
-                            aria-label="Obra operacional: Sim"
-                        >
-                            Sim
-                        </div>
-                        <div
-                            className={`rdo-op-text ${data.obra_op_manha === "nao" ? "selected" : ""}`}
-                            onClick={() => updateField("obra_op_manha", "nao")}
-                            role="button"
-                            tabIndex={0}
-                            onKeyPress={(e) => e.key === "Enter" && updateField("obra_op_manha", "nao")}
-                            aria-label="Obra operacional: Não"
-                        >
-                            Não
-                        </div>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>Tarde</td>
-                        <td>
-                        <div
-                            className={`rdo-clima-icon ${data.clima_tarde === "chuvoso" ? "selected" : ""}`}
-                            onClick={() => updateField("clima_tarde", "chuvoso")}
-                            role="button"
-                            tabIndex={0}
-                            onKeyPress={(e) => e.key === "Enter" && updateField("clima_tarde", "chuvoso")}
-                            aria-label="Chuvoso"
-                        >
-                            <FontAwesomeIcon icon={faCloudShowersHeavy} />
-                        </div>
-                        <div
-                            className={`rdo-clima-icon ${data.clima_tarde === "seco" ? "selected" : ""}`}
-                            onClick={() => updateField("clima_tarde", "seco")}
-                            role="button"
-                            tabIndex={0}
-                            onKeyPress={(e) => e.key === "Enter" && updateField("clima_tarde", "seco")}
-                            aria-label="Ensolarado"
-                        >
-                            <FontAwesomeIcon icon={faSun} />
-                        </div>
-                        </td>
-                        <td>
-                        <div
-                            className={`rdo-op-text ${data.obra_op_tarde === "sim" ? "selected" : ""}`}
-                            onClick={() => updateField("obra_op_tarde", "sim")}
-                            role="button"
-                            tabIndex={0}
-                            onKeyPress={(e) => e.key === "Enter" && updateField("obra_op_tarde", "sim")}
-                            aria-label="Obra operacional: Sim"
-                        >
-                            Sim
-                        </div>
-                        <div
-                            className={`rdo-op-text ${data.obra_op_tarde === "nao" ? "selected" : ""}`}
-                            onClick={() => updateField("obra_op_tarde", "nao")}
-                            role="button"
-                            tabIndex={0}
-                            onKeyPress={(e) => e.key === "Enter" && updateField("obra_op_tarde", "nao")}
-                            aria-label="Obra operacional: Não"
-                        >
-                            Não
-                        </div>
-                        </td>
-                    </tr>
-                    </tbody>
+              <tr>
+                <td>Manhã</td>
+                <td>
+                  <div
+                    className={`rdo-clima-icon ${data.clima_manha === "chuvoso" ? "selected" : ""}`}
+                    onClick={() => updateField("clima_manha", "chuvoso")}
+                    role="button"
+                    tabIndex={0}
+                    onKeyPress={(e) => e.key === "Enter" && updateField("clima_manha", "chuvoso")}
+                    aria-label="Chuvoso"
+                  >
+                    <FontAwesomeIcon icon={faCloudShowersHeavy} />
+                  </div>
+                  <div
+                    className={`rdo-clima-icon ${data.clima_manha === "seco" ? "selected" : ""}`}
+                    onClick={() => updateField("clima_manha", "seco")}
+                    role="button"
+                    tabIndex={0}
+                    onKeyPress={(e) => e.key === "Enter" && updateField("clima_manha", "seco")}
+                    aria-label="Ensolarado"
+                  >
+                    <FontAwesomeIcon icon={faSun} />
+                  </div>
+                </td>
+                <td>
+                  <div
+                    className={`rdo-op-text ${data.obra_op_manha === "sim" ? "selected" : ""}`}
+                    onClick={() => updateField("obra_op_manha", "sim")}
+                    role="button"
+                    tabIndex={0}
+                    onKeyPress={(e) => e.key === "Enter" && updateField("obra_op_manha", "sim")}
+                    aria-label="Obra operacional: Sim"
+                  >
+                    Sim
+                  </div>
+                  <div
+                    className={`rdo-op-text ${data.obra_op_manha === "nao" ? "selected" : ""}`}
+                    onClick={() => updateField("obra_op_manha", "nao")}
+                    role="button"
+                    tabIndex={0}
+                    onKeyPress={(e) => e.key === "Enter" && updateField("obra_op_manha", "nao")}
+                    aria-label="Obra operacional: Não"
+                  >
+                    Não
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td>Tarde</td>
+                <td>
+                  <div
+                    className={`rdo-clima-icon ${data.clima_tarde === "chuvoso" ? "selected" : ""}`}
+                    onClick={() => updateField("clima_tarde", "chuvoso")}
+                    role="button"
+                    tabIndex={0}
+                    onKeyPress={(e) => e.key === "Enter" && updateField("clima_tarde", "chuvoso")}
+                    aria-label="Chuvoso"
+                  >
+                    <FontAwesomeIcon icon={faCloudShowersHeavy} />
+                  </div>
+                  <div
+                    className={`rdo-clima-icon ${data.clima_tarde === "seco" ? "selected" : ""}`}
+                    onClick={() => updateField("clima_tarde", "seco")}
+                    role="button"
+                    tabIndex={0}
+                    onKeyPress={(e) => e.key === "Enter" && updateField("clima_tarde", "seco")}
+                    aria-label="Ensolarado"
+                  >
+                    <FontAwesomeIcon icon={faSun} />
+                  </div>
+                </td>
+                <td>
+                  <div
+                    className={`rdo-op-text ${data.obra_op_tarde === "sim" ? "selected" : ""}`}
+                    onClick={() => updateField("obra_op_tarde", "sim")}
+                    role="button"
+                    tabIndex={0}
+                    onKeyPress={(e) => e.key === "Enter" && updateField("obra_op_tarde", "sim")}
+                    aria-label="Obra operacional: Sim"
+                  >
+                    Sim
+                  </div>
+                  <div
+                    className={`rdo-op-text ${data.obra_op_tarde === "nao" ? "selected" : ""}`}
+                    onClick={() => updateField("obra_op_tarde", "nao")}
+                    role="button"
+                    tabIndex={0}
+                    onKeyPress={(e) => e.key === "Enter" && updateField("obra_op_tarde", "nao")}
+                    aria-label="Obra operacional: Não"
+                  >
+                    Não
+                  </div>
+                </td>
+              </tr>
+            </tbody>
           </table>
         </div>
 
@@ -561,7 +634,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
                     onChange={(e) =>
                       updatePavimentoDescricao(item.pavimento, e.target.value)
                     }
-                    placeholder={`Descreva os serviços realizados em ${item.pavimento}...`}
+                    placeholder={`Descreva os serviços realizados no ${item.pavimento}...`}
                   />
                 </div>
                 <button
@@ -591,6 +664,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
                   <th>Função</th>
                   <th>Total</th>
                   <th>Presentes</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -603,7 +677,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
                         onChange={(e) =>
                           updateArrayField("efetivo_proprio", idx, "funcao", e.target.value)
                         }
-                        placeholder="Função"
+                        placeholder=""
                       />
                     </td>
                     <td>
@@ -626,6 +700,16 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
                         placeholder="0"
                       />
                     </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="rdo-pavimento-remover"
+                        onClick={() => removeRow("efetivo_proprio", idx)}
+                        aria-label={`Remover linha ${idx + 1} de efetivo próprio`}
+                      >
+                        <FaTrash />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -642,9 +726,10 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
             <table>
               <thead>
                 <tr>
-                  <th>Função</th>
+                  <th>Empresa</th>
                   <th>Total</th>
                   <th>Presentes</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -657,7 +742,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
                         onChange={(e) =>
                           updateArrayField("efetivo_terceirizado", idx, "funcao", e.target.value)
                         }
-                        placeholder="Função"
+                        placeholder=""
                       />
                     </td>
                     <td>
@@ -680,6 +765,16 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
                         placeholder="0"
                       />
                     </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="rdo-pavimento-remover"
+                        onClick={() => removeRow("efetivo_terceirizado", idx)}
+                        aria-label={`Remover linha ${idx + 1} de efetivo terceirizado`}
+                      >
+                        <FaTrash />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -701,29 +796,41 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
                 <th>Descrição</th>
                 <th>Total</th>
                 <th>Em Uso</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {data.equipamentos.map((item, idx) => (
                 <tr key={idx}>
                   <td>
-                    <input
-                      type="text"
-                      value={item.codigo || ""}
-                      onChange={(e) =>
-                        updateArrayField("equipamentos", idx, "codigo", e.target.value)
-                      }
-                      placeholder="Cód."
-                    />
+                    <div className="codigo-com-lupa">
+                      <input
+                        type="text"
+                        value={item.codigo || ""}
+                        onChange={(e) =>
+                          updateArrayField("equipamentos", idx, "codigo", e.target.value)
+                        }
+                        onBlur={() => buscarItemPorCodigo(idx, item.codigo)}
+                        onKeyPress={(e) => e.key === "Enter" && buscarItemPorCodigo(idx, item.codigo)}
+                        placeholder="Cód."
+                      />
+                      <button
+                        type="button"
+                        className="lupa-busca-btn"
+                        onClick={() => abrirBuscaInsumo(idx)}
+                        title="Buscar insumo"
+                      >
+                        <FaMagnifyingGlass />
+                      </button>
+                    </div>
                   </td>
                   <td>
                     <input
                       type="text"
                       value={item.descricao || ""}
-                      onChange={(e) =>
-                        updateArrayField("equipamentos", idx, "descricao", e.target.value)
-                      }
+                      readOnly
                       placeholder="Descrição"
+                      className="rdo-input-readonly"
                     />
                   </td>
                   <td>
@@ -745,6 +852,16 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
                       }
                       placeholder="0"
                     />
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="rdo-pavimento-remover"
+                      onClick={() => removeRow("equipamentos", idx)}
+                      aria-label={`Remover linha ${idx + 1} de equipamento`}
+                    >
+                      <FaTrash />
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -776,6 +893,16 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
           </button>
         </div>
       </div>
+
+      {/* Modal de Busca de Insumos */}
+      <BuscaInsumo
+        isOpen={buscaInsumoAberta}
+        onClose={() => {
+          setBuscaInsumoAberta(false);
+          setLinhaBuscaAtiva(null);
+        }}
+        onSelect={handleSelecionarInsumo}
+      />
     </div>
   );
 };

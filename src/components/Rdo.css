@@ -139,7 +139,7 @@ table {
 
 th,
 td {
-    padding: 8px;
+    padding: 3px 8px;
     text-align: center;
 }
 
@@ -205,11 +205,12 @@ th {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px;
+  padding: 5px;
   background: #f9fafb;
   border: 1px solid #e5e7eb;
   border-radius: 6px;
   transition: background-color 0.2s;
+  margin-bottom: 5px;
 }
 
 .rdo-pavimento-linha:hover {
@@ -223,11 +224,12 @@ th {
   font-size: 0.875rem;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
 }
 
 .rdo-pavimento-descricao {
   flex: 1;
+margin-bottom: -6px;
 }
 
 .rdo-pavimento-descricao textarea {
@@ -250,7 +252,6 @@ th {
 
 .rdo-pavimento-remover {
   background: none;
-  border: 1px solid #e5e7eb;
   border-radius: 4px;
   width: 32px;
   height: 32px;
@@ -297,7 +298,6 @@ th {
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
-  color: #1f2937;
 }
 
 /* Equipamentos */
@@ -451,4 +451,32 @@ th {
   color: #2e7d32;
   border-color: #2e7d32;
   font-weight: 600;
+}
+/* Estilo para campo de código com lupa */
+.codigo-com-lupa {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.codigo-com-lupa input {
+  width: 80px; /* ajuste conforme necessário */
+  padding: 6px 8px;
+  font-size: 14px;
+}
+
+.lupa-busca-btn {
+  background: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.lupa-busca-btn:hover {
+  background: #e0e0e0;
 }
