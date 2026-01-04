@@ -10,7 +10,7 @@ import "./Cards.css";
 
 const TIPOS_NOTA = [
   { key: "Atas", label: "Atas" },
-  { key: "Diário de Obra", label: "Diário de Obra" }, // ✅ Tipo exato
+  { key: "Diário de Obra", label: "Diário de Obra" },
   { key: "Lista", label: "Lista" },
   { key: "Medição", label: "Medição" },
   { key: "Metas", label: "Metas" },
@@ -32,7 +32,7 @@ export default function ModalNota({
   setNotaEditData,
   saveEditedNota,
   notaSelecionada,
-  project,
+  project, // ✅ Este deve conter: id, name, type, pavimentos, etc.
   usuarioAtual,
   usuarioId,
   notaProgresso,
@@ -170,12 +170,13 @@ export default function ModalNota({
                   );
 
                 case "Diário de Obra":
-                  // ✅ Renderiza o RDO dentro do modal
+                  // ✅ Passa 'project' como 'projetoAtual' para o Rdo
                   return (
                     <Rdo
                       notaId={notaSelecionada.id}
                       onClose={onCloseVisualizarNota}
                       usuarioId={usuarioId}
+                      projetoAtual={project} // 👈 AQUI ESTÁ A CORREÇÃO!
                     />
                   );
 

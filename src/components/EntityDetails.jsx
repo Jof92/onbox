@@ -52,33 +52,34 @@ export default function EntityDetails({
 
   // Carrega engenheiro a partir de engenheiro_id
   useEffect(() => {
-    if (!isProject) return;
+  if (!isProject) return;
 
-    const engenheiroId = entity.engenheiro_id;
+  const engenheiroId = entity.engenheiro_id;
 
-    if (!engenheiroId) {
+  if (!engenheiroId) {
+    setEngenheiro(null);
+    return;
+  }
+
+  const fetchEngenheiro = async () => {
+    try {
+      // ✅ CORRIGIDO: busca 'nickname' ao invés de 'nome'
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, nickname, avatar_url") // ✅ 'nickname'
+        .eq("id", engenheiroId)
+        .single();
+
+      if (error) throw error;
+      setEngenheiro(data);
+    } catch (err) {
+      console.error("Erro ao carregar engenheiro:", err);
       setEngenheiro(null);
-      return;
     }
+  };
 
-    const fetchEngenheiro = async () => {
-      try {
-        const {  data, error } = await supabase
-          .from("profiles")
-          .select("id, nickname, avatar_url")
-          .eq("id", engenheiroId)
-          .single();
-
-        if (error) throw error;
-        setEngenheiro(data);
-      } catch (err) {
-        console.error("Erro ao carregar engenheiro:", err);
-        setEngenheiro(null);
-      }
-    };
-
-    fetchEngenheiro();
-  }, [isProject, entity.engenheiro_id]);
+  fetchEngenheiro();
+}, [isProject, entity.engenheiro_id]);
 
   return (
     <div className="project-details">

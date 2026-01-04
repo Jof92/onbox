@@ -392,7 +392,11 @@ const updateUrlWithNota = (notaId) => {
           }))
         );
 
-        setEntity({ id: entityId, name: entityName, photo_url: entityPhoto, type });
+        // ✅ CORREÇÃO: preserva todos os campos de entityData, incluindo 'pavimentos'
+        setEntity({
+          ...entityData,
+          type,
+        });
 
         if (notaIdFromUrl) {
           const buscar = (cols) => cols.flatMap(col => col.notas).find(n => String(n.id) === notaIdFromUrl && n.tipo !== "Nota Rápida");
