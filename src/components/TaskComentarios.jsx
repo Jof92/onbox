@@ -231,6 +231,9 @@ const notificarPessoasEnvolvidasNaTarefa = async ({
   supabaseClient,
 }) => {
   try {
+    console.log("🔔 Iniciando notificação para tarefa:", notaId);
+    console.log("👤 Autor do comentário:", autorId, autorProfile?.nickname || autorProfile?.nome);
+    
     const notificacoesParaEnviar = [];
     const destinatariosProcessados = new Set();
 
@@ -240,21 +243,37 @@ const notificarPessoasEnvolvidasNaTarefa = async ({
     
     if (mencoes?.length > 0) {
       const nomesMencionados = mencoes.map(m => m.slice(1));
-      const { data: candidatos } = await supabaseClient
+      console.log("📝 Menções encontradas:", nomesMencionados);
+      
+      const { data: candidatos, error: mencaoError } = await supabaseClient
         .from("profiles")
         .select("id, nickname, nome")
         .or(
           `nickname.in.(${nomesMencionados.map(n => `"${n}"`).join(",")}),nome.in.(${nomesMencionados.map(n => `"${n}"`).join(",")})`
         );
       
-      (candidatos || []).forEach(p => mencionadosSet.add(p.id));
+      if (mencaoError) {
+        console.error("❌ Erro ao buscar mencionados:", mencaoError);
+      } else {
+        console.log("✅ Usuários mencionados encontrados:", candidatos?.length || 0);
+        (candidatos || []).forEach(p => mencionadosSet.add(p.id));
+      }
+    } else {
+      console.log("📝 Nenhuma menção encontrada no comentário");
     }
 
     // Enviar notificações para MENCIONADOS
     for (const mencionadoId of mencionadosSet) {
-      if (mencionadoId === autorId) continue;
-      if (destinatariosProcessados.has(mencionadoId)) continue;
+      if (mencionadoId === autorId) {
+        console.log("⏭️ Pulando autor nas menções:", mencionadoId);
+        continue;
+      }
+      if (destinatariosProcessados.has(mencionadoId)) {
+        console.log("⏭️ Usuário já processado:", mencionadoId);
+        continue;
+      }
 
+      console.log("➕ Adicionando notificação de MENÇÃO para:", mencionadoId);
       const mensagem = `${autorProfile?.nickname || autorProfile?.nome || "Alguém"} mencionou você em um comentário na tarefa "${nomeTarefa}".`;
       
       notificacoesParaEnviar.push({
@@ -270,19 +289,34 @@ const notificarPessoasEnvolvidasNaTarefa = async ({
       destinatariosProcessados.add(mencionadoId);
     }
 
-    // 2️⃣ Buscar RESPONSÁVEIS da tarefa (nota_responsaveis)
-    const { data: responsaveis } = await supabaseClient
+    // 2️⃣ Buscar RESPONSÁVEIS ATUAIS da tarefa (nota_responsaveis)
+    console.log("🔍 Buscando responsáveis da tarefa:", notaId);
+    const { data: responsaveis, error: respError } = await supabaseClient
       .from("nota_responsaveis")
       .select("usuario_id")
       .eq("nota_id", notaId);
 
+    if (respError) {
+      console.error("❌ Erro ao buscar responsáveis:", respError);
+    } else {
+      console.log("✅ Responsáveis encontrados:", responsaveis?.length || 0, responsaveis);
+    }
+
     const responsaveisIds = responsaveis?.map(r => r.usuario_id).filter(Boolean) || [];
+    console.log("📋 IDs dos responsáveis:", responsaveisIds);
 
     // Enviar notificações para RESPONSÁVEIS (exceto quem já foi mencionado)
     for (const responsavelId of responsaveisIds) {
-      if (responsavelId === autorId) continue;
-      if (destinatariosProcessados.has(responsavelId)) continue;
+      if (responsavelId === autorId) {
+        console.log("⏭️ Pulando autor nos responsáveis:", responsavelId);
+        continue;
+      }
+      if (destinatariosProcessados.has(responsavelId)) {
+        console.log("⏭️ Responsável já foi mencionado:", responsavelId);
+        continue;
+      }
 
+      console.log("➕ Adicionando notificação de RESPONSÁVEL para:", responsavelId);
       const mensagem = `${autorProfile?.nickname || autorProfile?.nome || "Alguém"} comentou em uma tarefa que você é responsável.`;
       
       notificacoesParaEnviar.push({
@@ -299,12 +333,25 @@ const notificarPessoasEnvolvidasNaTarefa = async ({
     }
 
     // Inserir todas as notificações de uma vez
+    console.log("📤 Total de notificações a enviar:", notificacoesParaEnviar.length);
+    console.log("📋 Destinatários finais:", Array.from(destinatariosProcessados));
+    
     if (notificacoesParaEnviar.length > 0) {
-      await supabaseClient.from("notificacoes").insert(notificacoesParaEnviar);
+      const { error: insertError } = await supabaseClient
+        .from("notificacoes")
+        .insert(notificacoesParaEnviar);
+      
+      if (insertError) {
+        console.error("❌ Erro ao inserir notificações:", insertError);
+      } else {
+        console.log("✅ Notificações enviadas com sucesso!");
+      }
+    } else {
+      console.log("ℹ️ Nenhuma notificação para enviar");
     }
 
   } catch (err) {
-    console.error("Erro ao enviar notificações:", err);
+    console.error("❌ Erro geral ao enviar notificações:", err);
   }
 };
 
