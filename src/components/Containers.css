@@ -69,10 +69,11 @@
   position: relative;
 }
 
-.sidebar-project span {
-  font-style: italic;
-  flex: 1;
-  color: #0d1b2a;
+.sidebar-project > span.project-name {
+    flex: 1 1;
+    color: #0d1b2a;
+    font-size: inherit;     /* sobrescreve o 1.2rem */
+    font-weight: inherit;   /* sobrescreve o 600 */
 }
 
 .sidebar-project .delete-icon {
