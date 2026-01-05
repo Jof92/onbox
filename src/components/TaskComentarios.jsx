@@ -298,35 +298,6 @@ const notificarPessoasEnvolvidasNaTarefa = async ({
       destinatariosProcessados.add(responsavelId);
     }
 
-    // 3️⃣ (OPCIONAL) Buscar pessoas que JÁ COMENTARAM na tarefa
-    const { data: comentariosAnteriores } = await supabaseClient
-      .from("comentarios")
-      .select("user_id")
-      .eq("nota_id", notaId)
-      .neq("user_id", autorId);
-
-    const comentadoresAnteriores = [...new Set(comentariosAnteriores?.map(c => c.user_id).filter(Boolean) || [])];
-
-    // Enviar notificações para quem JÁ COMENTOU (exceto quem já foi processado)
-    for (const comentadorId of comentadoresAnteriores) {
-      if (comentadorId === autorId) continue;
-      if (destinatariosProcessados.has(comentadorId)) continue;
-
-      const mensagem = `${autorProfile?.nickname || autorProfile?.nome || "Alguém"} comentou na tarefa "${nomeTarefa}" onde você já interagiu.`;
-      
-      notificacoesParaEnviar.push({
-        user_id: comentadorId,
-        remetente_id: autorId,
-        nota_id: notaId,
-        projeto_id: projetoAtual?.id || null,
-        tipo: "comentario_na_tarefa",
-        mensagem,
-        lido: false,
-      });
-
-      destinatariosProcessados.add(comentadorId);
-    }
-
     // Inserir todas as notificações de uma vez
     if (notificacoesParaEnviar.length > 0) {
       await supabaseClient.from("notificacoes").insert(notificacoesParaEnviar);
