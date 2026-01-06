@@ -12,6 +12,22 @@ import {
 import { faSun } from "@fortawesome/free-regular-svg-icons";
 import BuscaInsumo from "./BuscaInsumo";
 
+// Ícone de transferência de dados (SVG fornecido)
+const DataTransferIcon = () => (
+  <svg
+    id="Layer_1"
+    data-name="Layer 1"
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 122.88 85.45"
+    width="24"
+    height="24"
+    style={{ verticalAlign: 'middle', marginRight: '8px', cursor: 'pointer' }}
+  >
+    <title>data-transfer</title>
+    <path d="M74.69,32.21a.72.72,0,0,0-.52.21.72.72,0,0,0-.2.52v17.5a6.65,6.65,0,0,0-4.35,0V32.94a5.12,5.12,0,0,1,5.09-5.1h43.08a5.12,5.12,0,0,1,5.09,5.1V80.36a5.12,5.12,0,0,1-5.09,5.09H78.45c1.14-1,2.84-2.69,4.55-4.36h34.81a.72.72,0,0,0,.73-.73V32.94a.72.72,0,0,0-.73-.73ZM53.16,73V65.87a2.59,2.59,0,0,1,2.58-2.58H69.61V58.74a2.13,2.13,0,0,1,.86-1.82c1.44-1,2.85.35,3.85,1.25,2.81,2.57,8.49,8.39,10,9.66a2.09,2.09,0,0,1,0,3.28c-1.53,1.31-7.51,7.45-10.25,9.89-1,.85-2.26,1.89-3.58,1a2.14,2.14,0,0,1-.86-1.82V75.62H55.74A2.62,2.62,0,0,1,53.16,73ZM40.92,7.89,54.39,20.51H40.92V7.89ZM13.71,33a2,2,0,0,1,1.47-.68H38.79a1.93,1.93,0,0,1,1.47.66,2.31,2.31,0,0,1,0,3.06,2,2,0,0,1-1.47.68H15.18a2,2,0,0,1-1.48-.67,2.33,2.33,0,0,1-.57-1.53A2.26,2.26,0,0,1,13.71,33Zm0,25.58a2,2,0,0,1,1.47-.67H45.57a2,2,0,0,1,1.43.63l0,0a2.28,2.28,0,0,1,.58,1.53,2.24,2.24,0,0,1-.57,1.53,2,2,0,0,1-1.48.67H15.18a2,2,0,0,1-1.44-.62l0-.05a2.32,2.32,0,0,1,0-3.06ZM46.14,45.13a2,2,0,0,1,1.47.68,2.32,2.32,0,0,1,0,3.06,2,2,0,0,1-1.48.67h-31a2,2,0,0,1-1.48-.67,2.32,2.32,0,0,1,0-3.06l0,0a2,2,0,0,1,1.43-.64ZM13.71,20.23a2,2,0,0,1,1.47-.68h9.38a2,2,0,0,1,1.43.63l0,0a2.25,2.25,0,0,1,.58,1.53,2.29,2.29,0,0,1-.54,1.48l0,.05a2,2,0,0,1-1.47.67H15.18a2,2,0,0,1-1.44-.62l0,0a2.33,2.33,0,0,1-.57-1.54,2.27,2.27,0,0,1,.57-1.51ZM61.89,22.6c0-1.05-1.44-2.26-2.12-2.92L40.4.83A2.19,2.19,0,0,0,38.67,0H4A4,4,0,0,0,0,4V73.08a4,4,0,0,0,4,4H46.79v-4.5H4.51V4.49h31.9V22.76A2.26,2.26,0,0,0,38.67,25H57.39V56.56h4.5v-34ZM84.46,48.65a2.1,2.1,0,0,1-2-2.17,2.07,2.07,0,0,1,2-2.17H108a2.07,2.07,0,0,1,2,2.17,2.1,2.1,0,0,1-2,2.17H84.46ZM91,62.79a2.11,2.11,0,0,1-2-2.17,2.07,2.07,0,0,1,2-2.17h17a2.07,2.07,0,0,1,2,2.17,2.1,2.1,0,0,1-2,2.17H91Z" />
+  </svg>
+);
+
 const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
   const responsavelInputRef = useRef(null);
 
@@ -36,6 +52,8 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
   const [loading, setLoading] = useState(false);
   const [projetoNome, setProjetoNome] = useState("");
   const [engenheiroNome, setEngenheiroNome] = useState("");
+  const [rdoId, setRdoId] = useState(null);
+  const [rdoCarregado, setRdoCarregado] = useState(false);
 
   // Estados para autocomplete
   const [sugestoesMembros, setSugestoesMembros] = useState([]);
@@ -73,10 +91,11 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
 
       setProjetoNome(proj.name);
 
+      // Só atualiza se não houver dados carregados do RDO
       setData((prev) => ({
         ...prev,
-        inicio_obra: proj.data_inicio || "",
-        termino_obra: proj.data_finalizacao || "",
+        inicio_obra: prev.inicio_obra || proj.data_inicio || "",
+        termino_obra: prev.termino_obra || proj.data_finalizacao || "",
       }));
 
       if (proj.engenheiro_id) {
@@ -110,80 +129,124 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
       }
 
       if (pavimentosData?.length > 0) {
-        setPavimentosAtividades(
-          pavimentosData.map((pav) => ({
-            pavimento: pav.name,
-            descricao: "",
-          }))
-        );
+        // Só sobrescreve se ainda não carregou o RDO
+        if (!rdoCarregado) {
+          setPavimentosAtividades(
+            pavimentosData.map((pav) => ({
+              pavimento: pav.name,
+              descricao: "",
+            }))
+          );
+        }
       } else {
         setPavimentosAtividades([]);
       }
     };
 
     fetchProjetoData();
-  }, [projetoAtual]);
+  }, [projetoAtual, rdoCarregado]);
 
-  // Carregar dados existentes da nota
+  // Carregar dados existentes do RDO
   useEffect(() => {
     const fetchRdo = async () => {
       if (!notaId) return;
 
-      const { data: nota, error } = await supabase
-        .from("notas")
-        .select("data_entrega, descricao")
-        .eq("id", notaId)
-        .single();
+      try {
+        // Buscar dados da nota para pegar a data
+        const { data: nota, error: notaError } = await supabase
+          .from("notas")
+          .select("data_entrega")
+          .eq("id", notaId)
+          .single();
 
-      if (error) {
-        console.error("❌ Erro ao carregar RDO:", error);
-        return;
-      }
-
-      const dataEntrega = nota?.data_entrega ? nota.data_entrega.split("T")[0] : "";
-      setDataOriginal(dataEntrega);
-
-      let diaSemana = "";
-      if (dataEntrega) {
-        const [ano, mes, dia] = dataEntrega.split("-").map(Number);
-        const dataLocal = new Date(ano, mes - 1, dia);
-        const diaSemanaMap = [
-          "Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira",
-          "Quinta-feira", "Sexta-feira", "Sábado"
-        ];
-        diaSemana = diaSemanaMap[dataLocal.getDay()];
-      }
-      setDiaSemanaOriginal(diaSemana);
-
-      let campos = {};
-      if (nota?.descricao) {
-        try {
-          campos = JSON.parse(nota.descricao);
-        } catch (e) {
-          console.log("ℹ️ Descrição não é JSON válido");
+        if (notaError) {
+          console.error("❌ Erro ao carregar nota:", notaError);
+          return;
         }
-      }
 
-      const { data_obra, dia_semana, engenheiro, ...resto } = campos;
-      setData((prev) => ({
-        ...prev,
-        ...resto,
-      }));
+        const dataEntrega = nota?.data_entrega ? nota.data_entrega.split("T")[0] : "";
+        setDataOriginal(dataEntrega);
 
-      if (campos.atividades) {
-        try {
-          const atividadesObj = JSON.parse(campos.atividades);
-          if (typeof atividadesObj === "object" && !Array.isArray(atividadesObj)) {
-            setPavimentosAtividades((prev) =>
-              prev.map((item) => ({
-                ...item,
-                descricao: atividadesObj[item.pavimento] || "",
-              }))
-            );
+        let diaSemana = "";
+        if (dataEntrega) {
+          const [ano, mes, dia] = dataEntrega.split("-").map(Number);
+          const dataLocal = new Date(ano, mes - 1, dia);
+          const diaSemanaMap = [
+            "Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira",
+            "Quinta-feira", "Sexta-feira", "Sábado"
+          ];
+          diaSemana = diaSemanaMap[dataLocal.getDay()];
+        }
+        setDiaSemanaOriginal(diaSemana);
+
+        // Buscar dados do RDO da nova tabela
+        const { data: rdoData, error: rdoError } = await supabase
+          .from("rdos")
+          .select("*")
+          .eq("nota_id", notaId)
+          .maybeSingle();
+
+        if (rdoError) {
+          console.error("❌ Erro ao carregar RDO:", rdoError);
+          return;
+        }
+
+        // Se existe RDO, preencher os dados
+        if (rdoData) {
+          console.log("✅ RDO encontrado, carregando dados...");
+          setRdoId(rdoData.id);
+          setRdoCarregado(true);
+
+          setData({
+            inicio_obra: rdoData.inicio_obra || "",
+            termino_obra: rdoData.termino_obra || "",
+            atraso_dias: rdoData.atraso_dias || "",
+            clima_manha: rdoData.clima_manha || "",
+            clima_tarde: rdoData.clima_tarde || "",
+            obra_op_manha: rdoData.obra_op_manha || "",
+            obra_op_tarde: rdoData.obra_op_tarde || "",
+            efetivo_proprio: Array.isArray(rdoData.efetivo_proprio) && rdoData.efetivo_proprio.length > 0
+              ? rdoData.efetivo_proprio
+              : [{ funcao: "", total: "", presentes: "" }],
+            efetivo_terceirizado: Array.isArray(rdoData.efetivo_terceirizado) && rdoData.efetivo_terceirizado.length > 0
+              ? rdoData.efetivo_terceirizado
+              : [{ funcao: "", total: "", presentes: "" }],
+            equipamentos: Array.isArray(rdoData.equipamentos) && rdoData.equipamentos.length > 0
+              ? rdoData.equipamentos
+              : [{ codigo: "", descricao: "", total: "", em_uso: "" }],
+            intercorrencias: rdoData.intercorrencias || "",
+            responsavel_preenchimento: rdoData.responsavel_preenchimento || "",
+          });
+
+          // Carregar pavimentos do projeto primeiro
+          const { data: pavimentosData } = await supabase
+            .from("pavimentos")
+            .select("id, name, ordem")
+            .eq("project_id", projetoAtual.id)
+            .order("ordem", { ascending: true });
+
+          if (pavimentosData && pavimentosData.length > 0) {
+            // Criar lista de pavimentos com as descrições do RDO
+            const pavimentosComDescricao = pavimentosData.map((pav) => ({
+              pavimento: pav.name,
+              descricao: rdoData.atividades?.[pav.name] || "",
+            }));
+            setPavimentosAtividades(pavimentosComDescricao);
           }
-        } catch (e) {
-          console.warn("Atividades não é um objeto válido");
+
+          // Se tiver nomes salvos, usar eles
+          if (rdoData.projeto_nome) {
+            setProjetoNome(rdoData.projeto_nome);
+          }
+          if (rdoData.engenheiro_nome) {
+            setEngenheiroNome(rdoData.engenheiro_nome);
+          }
+        } else {
+          console.log("ℹ️ Nenhum RDO encontrado, criando novo...");
+          setRdoCarregado(true);
         }
+      } catch (err) {
+        console.error("❌ Erro ao carregar RDO:", err);
       }
     };
 
@@ -272,7 +335,6 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
     }));
   };
 
-  // Nova função para remover linha de qualquer array
   const removeRow = (arrayKey, index) => {
     setData((prev) => {
       const newArray = prev[arrayKey].filter((_, i) => i !== index);
@@ -294,7 +356,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
     );
   };
 
-  // 🔍 FUNÇÃO DE BUSCA POR CÓDIGO — CORRIGIDA
+  // Buscar item por código
   const buscarItemPorCodigo = async (index, codigo) => {
     if (!codigo?.trim()) {
       setData((prev) => {
@@ -342,13 +404,11 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
     }
   };
 
-  // 🔍 FUNÇÃO PARA ABERTURA DA BUSCA
   const abrirBuscaInsumo = (index) => {
     setLinhaBuscaAtiva(index);
     setBuscaInsumoAberta(true);
   };
 
-  // ✅ CALLBACK AO SELECIONAR UM ITEM NA BUSCA
   const handleSelecionarInsumo = (codigo) => {
     if (linhaBuscaAtiva !== null) {
       updateArrayField("equipamentos", linhaBuscaAtiva, "codigo", codigo);
@@ -358,38 +418,83 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
     setLinhaBuscaAtiva(null);
   };
 
+  // Função para salvar RDO na nova tabela
   const saveRdo = async () => {
-    if (!notaId) return;
+    if (!notaId || !projetoAtual?.id || !usuarioId) {
+      alert("Dados insuficientes para salvar o RDO.");
+      return;
+    }
+
     setLoading(true);
 
-    const atividadesObj = {};
-    pavimentosAtividades.forEach((item) => {
-      if (item.descricao.trim()) {
-        atividadesObj[item.pavimento] = item.descricao.trim();
+    try {
+      // Montar objeto de atividades
+      const atividadesObj = {};
+      pavimentosAtividades.forEach((item) => {
+        if (item.descricao.trim()) {
+          atividadesObj[item.pavimento] = item.descricao.trim();
+        }
+      });
+
+      // Preparar payload
+      const payload = {
+        nota_id: notaId,
+        project_id: projetoAtual.id,
+        data_rdo: dataOriginal || null,
+        dia_semana: diaSemanaOriginal || "",
+        projeto_nome: projetoNome || "",
+        engenheiro_nome: engenheiroNome || "",
+        inicio_obra: data.inicio_obra || null,
+        termino_obra: data.termino_obra || null,
+        atraso_dias: data.atraso_dias || "",
+        clima_manha: data.clima_manha || "",
+        clima_tarde: data.clima_tarde || "",
+        obra_op_manha: data.obra_op_manha || "",
+        obra_op_tarde: data.obra_op_tarde || "",
+        efetivo_proprio: data.efetivo_proprio || [],
+        efetivo_terceirizado: data.efetivo_terceirizado || [],
+        equipamentos: data.equipamentos || [],
+        atividades: atividadesObj,
+        intercorrencias: data.intercorrencias || "",
+        responsavel_preenchimento: data.responsavel_preenchimento || "",
+        created_by: usuarioId,
+      };
+
+      let result;
+      if (rdoId) {
+        // Atualizar RDO existente
+        console.log("🔄 Atualizando RDO existente:", rdoId);
+        result = await supabase
+          .from("rdos")
+          .update(payload)
+          .eq("id", rdoId);
+      } else {
+        // Criar novo RDO
+        console.log("➕ Criando novo RDO");
+        const insertResult = await supabase
+          .from("rdos")
+          .insert([payload])
+          .select();
+
+        result = insertResult;
+
+        if (insertResult.data && insertResult.data.length > 0) {
+          setRdoId(insertResult.data[0].id);
+        }
       }
-    });
 
-    const payload = {
-      descricao: JSON.stringify({
-        ...data,
-        atividades: JSON.stringify(atividadesObj),
-      }),
-      data_entrega: dataOriginal || null,
-    };
+      if (result.error) {
+        throw result.error;
+      }
 
-    const { error } = await supabase
-      .from("notas")
-      .update(payload)
-      .eq("id", notaId);
-
-    setLoading(false);
-
-    if (error) {
-      console.error("❌ Erro ao salvar:", error);
-      alert("Erro ao salvar o Diário de Obra.");
-    } else {
+      console.log("✅ RDO salvo com sucesso!");
       alert("Diário de Obra salvo com sucesso!");
       onClose();
+    } catch (error) {
+      console.error("❌ Erro ao salvar RDO:", error);
+      alert(`Erro ao salvar o Diário de Obra: ${error.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -654,9 +759,12 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
           <div className="rdo-efetivo-col">
             <div className="rdo-section-header">
               <h3>Efetivo Próprio</h3>
-              <button type="button" onClick={() => addRow("efetivo_proprio")}>
-                +
-              </button>
+              <div className="rdo-add-button-group">
+                <DataTransferIcon />
+                <button type="button" onClick={() => addRow("efetivo_proprio")}>
+                  +
+                </button>
+              </div>
             </div>
             <table>
               <thead>
@@ -719,9 +827,12 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
           <div className="rdo-efetivo-col">
             <div className="rdo-section-header">
               <h3>Efetivo Terceirizado</h3>
-              <button type="button" onClick={() => addRow("efetivo_terceirizado")}>
-                +
-              </button>
+              <div className="rdo-add-button-group">
+                <DataTransferIcon />
+                <button type="button" onClick={() => addRow("efetivo_terceirizado")}>
+                  +
+                </button>
+              </div>
             </div>
             <table>
               <thead>
@@ -785,9 +896,12 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
         <div className="rdo-section">
           <div className="rdo-section-header">
             <h3>Equipamentos</h3>
-            <button type="button" onClick={() => addRow("equipamentos")}>
-              +
-            </button>
+            <div className="rdo-add-button-group">
+              <DataTransferIcon />
+              <button type="button" onClick={() => addRow("equipamentos")}>
+                +
+              </button>
+            </div>
           </div>
           <table>
             <thead>

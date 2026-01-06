@@ -89,9 +89,11 @@
 }
 
 .collab-section {
-  margin-bottom: 20px;
-  height: 23.5em;
+  height: 28em;
   overflow: auto;
+  border: 1px solid #dedede;
+  padding: 10px;
+  border-radius: 10px;
 }
 
 .collab-section1 {
@@ -458,4 +460,47 @@
 .caminho-separador {
   color: #999;
   user-select: none;
+}
+
+/* Estilos para borda colorida nas notificações */
+.notificacao-item.tipo-lista {
+  border-left: 6px solid #22c55e;
+}
+
+.notificacao-item.tipo-atas {
+  border-left: 6px solid #3b82f6;
+}
+
+.notificacao-item.tipo-tarefas {
+  border-left: 6px solid #facc15;
+}
+
+.notificacao-item.tipo-nota-rapida {
+  border-left: 6px solid #f63bcc;
+}
+
+.notificacao-item.tipo-rdo {
+  border-left: 6px solid #878787;
+}
+
+/* Fallback para notificações sem tipo */
+.notificacao-item {
+  border-left: 6px solid #e2e8f0;
+}
+
+/* Botão "Abrir" nas notificações */
+.btn-abrir-notificacao {
+  margin-left: 12px;
+  padding: 4px 10px;
+  font-size: 0.85rem;
+  background-color: #4f46e5;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-abrir-notificacao:hover {
+  background-color: #4338ca;
 }
