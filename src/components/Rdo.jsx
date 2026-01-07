@@ -12,8 +12,8 @@ import {
 import { faSun } from "@fortawesome/free-regular-svg-icons";
 import BuscaInsumo from "./BuscaInsumo";
 
-// Ícone de transferência de dados (SVG fornecido)
-const DataTransferIcon = () => (
+// Ícone de transferência de dados (SVG fornecido) – agora aceita onClick
+const DataTransferIcon = ({ onClick }) => (
   <svg
     id="Layer_1"
     data-name="Layer 1"
@@ -22,6 +22,7 @@ const DataTransferIcon = () => (
     width="24"
     height="24"
     style={{ verticalAlign: 'middle', marginRight: '8px', cursor: 'pointer' }}
+    onClick={onClick}
   >
     <title>data-transfer</title>
     <path d="M74.69,32.21a.72.72,0,0,0-.52.21.72.72,0,0,0-.2.52v17.5a6.65,6.65,0,0,0-4.35,0V32.94a5.12,5.12,0,0,1,5.09-5.1h43.08a5.12,5.12,0,0,1,5.09,5.1V80.36a5.12,5.12,0,0,1-5.09,5.09H78.45c1.14-1,2.84-2.69,4.55-4.36h34.81a.72.72,0,0,0,.73-.73V32.94a.72.72,0,0,0-.73-.73ZM53.16,73V65.87a2.59,2.59,0,0,1,2.58-2.58H69.61V58.74a2.13,2.13,0,0,1,.86-1.82c1.44-1,2.85.35,3.85,1.25,2.81,2.57,8.49,8.39,10,9.66a2.09,2.09,0,0,1,0,3.28c-1.53,1.31-7.51,7.45-10.25,9.89-1,.85-2.26,1.89-3.58,1a2.14,2.14,0,0,1-.86-1.82V75.62H55.74A2.62,2.62,0,0,1,53.16,73ZM40.92,7.89,54.39,20.51H40.92V7.89ZM13.71,33a2,2,0,0,1,1.47-.68H38.79a1.93,1.93,0,0,1,1.47.66,2.31,2.31,0,0,1,0,3.06,2,2,0,0,1-1.47.68H15.18a2,2,0,0,1-1.48-.67,2.33,2.33,0,0,1-.57-1.53A2.26,2.26,0,0,1,13.71,33Zm0,25.58a2,2,0,0,1,1.47-.67H45.57a2,2,0,0,1,1.43.63l0,0a2.28,2.28,0,0,1,.58,1.53,2.24,2.24,0,0,1-.57,1.53,2,2,0,0,1-1.48.67H15.18a2,2,0,0,1-1.44-.62l0-.05a2.32,2.32,0,0,1,0-3.06ZM46.14,45.13a2,2,0,0,1,1.47.68,2.32,2.32,0,0,1,0,3.06,2,2,0,0,1-1.48.67h-31a2,2,0,0,1-1.48-.67,2.32,2.32,0,0,1,0-3.06l0,0a2,2,0,0,1,1.43-.64ZM13.71,20.23a2,2,0,0,1,1.47-.68h9.38a2,2,0,0,1,1.43.63l0,0a2.25,2.25,0,0,1,.58,1.53,2.29,2.29,0,0,1-.54,1.48l0,.05a2,2,0,0,1-1.47.67H15.18a2,2,0,0,1-1.44-.62l0,0a2.33,2.33,0,0,1-.57-1.54,2.27,2.27,0,0,1,.57-1.51ZM61.89,22.6c0-1.05-1.44-2.26-2.12-2.92L40.4.83A2.19,2.19,0,0,0,38.67,0H4A4,4,0,0,0,0,4V73.08a4,4,0,0,0,4,4H46.79v-4.5H4.51V4.49h31.9V22.76A2.26,2.26,0,0,0,38.67,25H57.39V56.56h4.5v-34ZM84.46,48.65a2.1,2.1,0,0,1-2-2.17,2.07,2.07,0,0,1,2-2.17H108a2.07,2.07,0,0,1,2,2.17,2.1,2.1,0,0,1-2,2.17H84.46ZM91,62.79a2.11,2.11,0,0,1-2-2.17,2.07,2.07,0,0,1,2-2.17h17a2.07,2.07,0,0,1,2,2.17,2.1,2.1,0,0,1-2,2.17H91Z" />
@@ -44,6 +45,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
     equipamentos: [{ codigo: "", descricao: "", total: "", em_uso: "" }],
     intercorrencias: "",
     responsavel_preenchimento: "",
+    fotos: [], // ✅ campo para armazenar fotos (File[] ou string[])
   });
 
   const [dataOriginal, setDataOriginal] = useState("");
@@ -63,7 +65,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
   const [buscaInsumoAberta, setBuscaInsumoAberta] = useState(false);
   const [linhaBuscaAtiva, setLinhaBuscaAtiva] = useState(null);
 
-  // Carregar nome do projeto, engenheiro e pavimentos
+  // Carregar nome do projeto e engenheiro
   useEffect(() => {
     const fetchProjetoData = async () => {
       if (!projetoAtual?.id) {
@@ -116,31 +118,6 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
       } else {
         setEngenheiroNome("Não atribuído");
       }
-
-      const { data: pavimentosData, error: pavError } = await supabase
-        .from("pavimentos")
-        .select("id, name, ordem")
-        .eq("project_id", projetoAtual.id)
-        .order("ordem", { ascending: true });
-
-      if (pavError) {
-        console.error("❌ Erro ao carregar pavimentos:", pavError);
-        return;
-      }
-
-      if (pavimentosData?.length > 0) {
-        // Só sobrescreve se ainda não carregou o RDO
-        if (!rdoCarregado) {
-          setPavimentosAtividades(
-            pavimentosData.map((pav) => ({
-              pavimento: pav.name,
-              descricao: "",
-            }))
-          );
-        }
-      } else {
-        setPavimentosAtividades([]);
-      }
     };
 
     fetchProjetoData();
@@ -191,6 +168,34 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
           return;
         }
 
+        // Carregar pavimentos do projeto atual
+        const { data: pavimentosData, error: pavError } = await supabase
+          .from("pavimentos")
+          .select("id, name, ordem")
+          .eq("project_id", projetoAtual.id)
+          .order("ordem", { ascending: true });
+
+        if (pavError) {
+          console.error("❌ Erro ao carregar pavimentos:", pavError);
+          setPavimentosAtividades([]);
+        } else {
+          let pavimentosComDescricao = [];
+          if (rdoData && rdoData.atividades && Object.keys(rdoData.atividades).length > 0) {
+            // ✅ SÓ inclui pavimentos que estão em 'atividades'
+            pavimentosComDescricao = Object.keys(rdoData.atividades).map((pavNome) => ({
+              pavimento: pavNome,
+              descricao: rdoData.atividades[pavNome] || "",
+            }));
+          } else {
+            // Novo RDO: carregar todos os pavimentos do projeto com descrições vazias
+            pavimentosComDescricao = pavimentosData.map((pav) => ({
+              pavimento: pav.name,
+              descricao: "",
+            }));
+          }
+          setPavimentosAtividades(pavimentosComDescricao);
+        }
+
         // Se existe RDO, preencher os dados
         if (rdoData) {
           console.log("✅ RDO encontrado, carregando dados...");
@@ -216,31 +221,11 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
               : [{ codigo: "", descricao: "", total: "", em_uso: "" }],
             intercorrencias: rdoData.intercorrencias || "",
             responsavel_preenchimento: rdoData.responsavel_preenchimento || "",
+            fotos: Array.isArray(rdoData.fotos) ? rdoData.fotos : [], // ✅ carregar fotos
           });
 
-          // Carregar pavimentos do projeto primeiro
-          const { data: pavimentosData } = await supabase
-            .from("pavimentos")
-            .select("id, name, ordem")
-            .eq("project_id", projetoAtual.id)
-            .order("ordem", { ascending: true });
-
-          if (pavimentosData && pavimentosData.length > 0) {
-            // Criar lista de pavimentos com as descrições do RDO
-            const pavimentosComDescricao = pavimentosData.map((pav) => ({
-              pavimento: pav.name,
-              descricao: rdoData.atividades?.[pav.name] || "",
-            }));
-            setPavimentosAtividades(pavimentosComDescricao);
-          }
-
-          // Se tiver nomes salvos, usar eles
-          if (rdoData.projeto_nome) {
-            setProjetoNome(rdoData.projeto_nome);
-          }
-          if (rdoData.engenheiro_nome) {
-            setEngenheiroNome(rdoData.engenheiro_nome);
-          }
+          if (rdoData.projeto_nome) setProjetoNome(rdoData.projeto_nome);
+          if (rdoData.engenheiro_nome) setEngenheiroNome(rdoData.engenheiro_nome);
         } else {
           console.log("ℹ️ Nenhum RDO encontrado, criando novo...");
           setRdoCarregado(true);
@@ -251,7 +236,64 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
     };
 
     fetchRdo();
-  }, [notaId]);
+  }, [notaId, projetoAtual]);
+
+  // ✅ Função para copiar dados do último RDO do mesmo projeto
+  const copiarDoUltimoRdo = async (tipo) => {
+    if (!projetoAtual?.id) {
+      console.warn("Projeto não disponível para buscar último RDO");
+      return;
+    }
+
+    try {
+      let query = supabase
+        .from("rdos")
+        .select("*")
+        .eq("project_id", projetoAtual.id)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (rdoId) {
+        query = query.neq("id", rdoId);
+      }
+
+      const { data: rdos, error } = await query;
+
+      if (error) {
+        console.error("Erro ao buscar último RDO:", error);
+        alert("Erro ao buscar dados do último Diário de Obra.");
+        return;
+      }
+
+      if (!rdos || rdos.length === 0) {
+        alert("Nenhum Diário de Obra anterior encontrado para copiar.");
+        return;
+      }
+
+      const ultimoRdo = rdos[0];
+      let dadosCopiados = [];
+
+      if (tipo === "efetivo_proprio") {
+        dadosCopiados = Array.isArray(ultimoRdo.efetivo_proprio) 
+          ? ultimoRdo.efetivo_proprio 
+          : [{ funcao: "", total: "", presentes: "" }];
+      } else if (tipo === "efetivo_terceirizado") {
+        dadosCopiados = Array.isArray(ultimoRdo.efetivo_terceirizado) 
+          ? ultimoRdo.efetivo_terceirizado 
+          : [{ funcao: "", total: "", presentes: "" }];
+      } else if (tipo === "equipamentos") {
+        dadosCopiados = Array.isArray(ultimoRdo.equipamentos) 
+          ? ultimoRdo.equipamentos 
+          : [{ codigo: "", descricao: "", total: "", em_uso: "" }];
+      }
+
+      setData(prev => ({ ...prev, [tipo]: dadosCopiados }));
+      console.log(`✅ Dados de ${tipo} copiados do RDO ID: ${ultimoRdo.id}`);
+    } catch (err) {
+      console.error("Erro inesperado ao copiar do último RDO:", err);
+      alert("Erro ao copiar dados do último Diário de Obra.");
+    }
+  };
 
   // Função para buscar membros do projeto
   const buscarMembrosDoProjetoRdo = async (termo) => {
@@ -280,12 +322,11 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
     }
   };
 
-  // Handler para mudanças no campo de responsável
   const handleResponsavelChange = async (e) => {
     const valor = e.target.value;
     const pos = e.target.selectionStart;
 
-    updateField("responsavel_preenchimento", valor);
+    setData(prev => ({ ...prev, responsavel_preenchimento: valor }));
 
     const antes = valor.substring(0, pos);
     const ultimaArroba = antes.lastIndexOf("@");
@@ -304,9 +345,8 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
     }
   };
 
-  // Inserir membro selecionado
   const inserirResponsavel = (perfil) => {
-    updateField("responsavel_preenchimento", perfil.name || perfil.nickname);
+    setData(prev => ({ ...prev, responsavel_preenchimento: perfil.name || perfil.nickname }));
     setMostrarSugestoesMembros(false);
     setTimeout(() => responsavelInputRef.current?.focus(), 0);
   };
@@ -418,7 +458,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
     setLinhaBuscaAtiva(null);
   };
 
-  // Função para salvar RDO na nova tabela
+  // ✅ Função para salvar RDO com upload de fotos
   const saveRdo = async () => {
     if (!notaId || !projetoAtual?.id || !usuarioId) {
       alert("Dados insuficientes para salvar o RDO.");
@@ -428,7 +468,38 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
     setLoading(true);
 
     try {
-      // Montar objeto de atividades
+      // Upload das fotos
+      let fotosUrls = [];
+      if (data.fotos.length > 0) {
+        const uploadPromises = data.fotos.map(async (foto, idx) => {
+          // Se já é string, é URL (já salva antes)
+          if (typeof foto === 'string') return foto;
+
+          // Garantir um nome para o arquivo
+          const fileExt = (foto.name?.split('.').pop() || 'jpg').toLowerCase();
+          const fileName = `rdo-${notaId}-${Date.now()}-${idx}.${fileExt}`;
+          const filePath = `rdo-fotos/${notaId}/${fileName}`;
+
+          const { error: uploadError } = await supabase.storage
+            .from('rdo-fotos')
+            .upload(filePath, foto, {
+              cacheControl: '3600',
+              upsert: false,
+            });
+
+          if (uploadError) throw uploadError;
+
+          const { data: { publicUrl } } = supabase.storage
+            .from('rdo-fotos')
+            .getPublicUrl(filePath);
+
+          return publicUrl;
+        });
+
+        fotosUrls = await Promise.all(uploadPromises);
+      }
+
+      // Montar atividades
       const atividadesObj = {};
       pavimentosAtividades.forEach((item) => {
         if (item.descricao.trim()) {
@@ -436,7 +507,6 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
         }
       });
 
-      // Preparar payload
       const payload = {
         nota_id: notaId,
         project_id: projetoAtual.id,
@@ -457,19 +527,18 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
         atividades: atividadesObj,
         intercorrencias: data.intercorrencias || "",
         responsavel_preenchimento: data.responsavel_preenchimento || "",
+        fotos: fotosUrls,
         created_by: usuarioId,
       };
 
       let result;
       if (rdoId) {
-        // Atualizar RDO existente
         console.log("🔄 Atualizando RDO existente:", rdoId);
         result = await supabase
           .from("rdos")
           .update(payload)
           .eq("id", rdoId);
       } else {
-        // Criar novo RDO
         console.log("➕ Criando novo RDO");
         const insertResult = await supabase
           .from("rdos")
@@ -477,22 +546,19 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
           .select();
 
         result = insertResult;
-
-        if (insertResult.data && insertResult.data.length > 0) {
+        if (insertResult.data?.[0]?.id) {
           setRdoId(insertResult.data[0].id);
         }
       }
 
-      if (result.error) {
-        throw result.error;
-      }
+      if (result.error) throw result.error;
 
       console.log("✅ RDO salvo com sucesso!");
       alert("Diário de Obra salvo com sucesso!");
       onClose();
     } catch (error) {
       console.error("❌ Erro ao salvar RDO:", error);
-      alert(`Erro ao salvar o Diário de Obra: ${error.message}`);
+      alert(`Erro ao salvar o Diário de Obra: ${error.message || 'Erro desconhecido'}`);
     } finally {
       setLoading(false);
     }
@@ -531,6 +597,8 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
       </div>
 
       <div className="rdo-content">
+        {/* ... outras seções ... */}
+
         <div className="rdo-section">
           <div className="rdo-row">
             <div className="rdo-col">
@@ -760,7 +828,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
             <div className="rdo-section-header">
               <h3>Efetivo Próprio</h3>
               <div className="rdo-add-button-group">
-                <DataTransferIcon />
+                <DataTransferIcon onClick={() => copiarDoUltimoRdo("efetivo_proprio")} />
                 <button type="button" onClick={() => addRow("efetivo_proprio")}>
                   +
                 </button>
@@ -828,7 +896,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
             <div className="rdo-section-header">
               <h3>Efetivo Terceirizado</h3>
               <div className="rdo-add-button-group">
-                <DataTransferIcon />
+                <DataTransferIcon onClick={() => copiarDoUltimoRdo("efetivo_terceirizado")} />
                 <button type="button" onClick={() => addRow("efetivo_terceirizado")}>
                   +
                 </button>
@@ -897,7 +965,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
           <div className="rdo-section-header">
             <h3>Equipamentos</h3>
             <div className="rdo-add-button-group">
-              <DataTransferIcon />
+              <DataTransferIcon onClick={() => copiarDoUltimoRdo("equipamentos")} />
               <button type="button" onClick={() => addRow("equipamentos")}>
                 +
               </button>
@@ -992,10 +1060,139 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
           />
         </div>
 
+        {/* ✅ SEÇÃO DE FOTOS - TOTALMENTE FUNCIONAL */}
         <div className="rdo-section">
           <h3>Espaço para Inclusão de Fotos</h3>
-          <div className="rdo-photo-placeholder">Área reservada para anexar imagens do dia</div>
-          <div className="rdo-photo-placeholder">Área reservada para anexar imagens do dia</div>
+
+          {/* Pré-visualização */}
+          {data.fotos.length > 0 && (
+            <div className="rdo-fotos-preview" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', margin: '8px 0' }}>
+              {data.fotos.map((foto, idx) => (
+                <div key={idx} style={{ position: 'relative', width: '100px', height: '100px' }}>
+                  <img
+                    src={typeof foto === 'string' ? foto : URL.createObjectURL(foto)}
+                    alt={`Foto ${idx + 1}`}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const novasFotos = data.fotos.filter((_, i) => i !== idx);
+                      setData(prev => ({ ...prev, fotos: novasFotos }));
+                    }}
+                    style={{
+                      position: 'absolute',
+                      top: '-8px',
+                      right: '-8px',
+                      background: '#ff4d4d',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '50%',
+                      width: '20px',
+                      height: '20px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: 0,
+                    }}
+                    aria-label="Remover foto"
+                  >
+                    <FaTrash size={10} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Botões */}
+          <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+            {/* Escolher da galeria */}
+            <label
+              style={{
+                padding: '8px 16px',
+                background: '#007bff',
+                color: 'white',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              📁 Escolher da galeria
+              <input
+                type="file"
+                multiple
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  setData(prev => ({
+                    ...prev,
+                    fotos: [...prev.fotos, ...files]
+                  }));
+                }}
+              />
+            </label>
+
+            {/* Tirar foto */}
+            <button
+              type="button"
+              onClick={async () => {
+                if (!navigator.mediaDevices?.getUserMedia) {
+                  alert("Câmera não suportada neste dispositivo.");
+                  return;
+                }
+
+                try {
+                  const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                  const video = document.createElement('video');
+                  video.srcObject = stream;
+                  video.play();
+
+                  await new Promise(resolve => {
+                    video.onloadedmetadata = () => resolve(video);
+                  });
+
+                  const canvas = document.createElement('canvas');
+                  canvas.width = video.videoWidth;
+                  canvas.height = video.videoHeight;
+                  const ctx = canvas.getContext('2d');
+                  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                  canvas.toBlob((blob) => {
+                    if (blob) {
+                      blob.name = `camera-${Date.now()}.jpg`;
+                      setData(prev => ({
+                        ...prev,
+                        fotos: [...prev.fotos, blob]
+                      }));
+                    }
+                    stream.getTracks().forEach(track => track.stop());
+                  }, 'image/jpeg', 0.9);
+                } catch (err) {
+                  console.error("Erro ao acessar câmera:", err);
+                  alert("Não foi possível acessar a câmera. Verifique as permissões.");
+                }
+              }}
+              style={{
+                padding: '8px 16px',
+                background: '#28a745',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              📷 Tirar foto
+            </button>
+          </div>
         </div>
 
         <div className="rdo-actions">

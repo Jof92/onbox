@@ -500,3 +500,94 @@ margin-bottom: -6px;
   background: #f5f5f5;
   cursor: pointer;
 }
+
+/* === Seção de Fotos - Nova Funcionalidade === */
+
+.rdo-fotos-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.rdo-fotos-preview > div {
+  position: relative;
+  width: 100px;
+  height: 100px;
+}
+
+.rdo-fotos-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #eee;
+}
+
+.rdo-fotos-preview button {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: #ff4d4d;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 0;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.rdo-foto-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.rdo-foto-actions label,
+.rdo-foto-actions button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.rdo-foto-actions label {
+  background: #007bff;
+  color: white;
+}
+
+.rdo-foto-actions button {
+  background: #28a745;
+  color: white;
+}
+
+.rdo-foto-actions label:hover,
+.rdo-foto-actions button:hover {
+  opacity: 0.9;
+}
+
+/* Responsivo */
+@media (max-width: 600px) {
+  .rdo-foto-actions {
+    flex-direction: column;
+  }
+  
+  .rdo-foto-actions label,
+  .rdo-foto-actions button {
+    width: 100%;
+    justify-content: center;
+  }
+}
