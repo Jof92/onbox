@@ -118,7 +118,7 @@
 }
 
 .ata-section textarea {
-  height: 15em;
+  height: 15em !important;
   overflow-y: auto
 }
 
