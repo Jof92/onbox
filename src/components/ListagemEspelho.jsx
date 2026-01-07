@@ -299,13 +299,13 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
                 <React.Fragment key={row.id ?? visualIdx}>
                   <tr className={row.selecionado ? "linha-selecionada" : ""}>
                     <td>
-                      {row.isCriar && (
+                      
                         <input
                           type="checkbox"
                           checked={row.selecionado}
                           onChange={(e) => toggleSelecionado(row.id, e.target.checked)}
                         />
-                      )}
+                     
                     </td>
                     <td>{row.ordem}</td>
                     <td>
