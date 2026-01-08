@@ -446,7 +446,7 @@ const TaskComentarios = ({ notaId, userId, userProfile, projetoAtual, containerI
     const hora = date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
     if (isSameDay(date, hoje)) return `Hoje às ${hora}`;
     if (isSameDay(date, ontem)) return `Ontem às ${hora}`;
-    return `em ${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()} às ${hora}`;
+    return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()} às ${hora}`;
   };
 
   const podeEditarComentario = (createdAt, autorId) => {

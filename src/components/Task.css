@@ -1397,15 +1397,32 @@
     padding: 12px 16px;
   }
 
-  .task-title {
-    margin: 16px;
-    font-size: 20px;
-  }
-
   .task-title-container {
     flex-direction: column;}
 
-    .responsaveis-e-data-wrapper {
-    justify-content: flex-end;}
+  .responsaveis-e-data-wrapper {
+      margin-right: 25px;
+      justify-content: flex-end;
+      margin-top: none;
+    }
+
+    .comentario-resposta {
+      margin-left: 2em;
+    }
+
+    .comentario-header span {
+      font-size: 8px !important;
+      margin-right: 0;
+    }
+
+    .grupo-responsaveis-tarefa {
+      gap: 0;
+    }
+
+    .anexos-header {
+      justify-content: center;
+    }
+
+
 }
 
