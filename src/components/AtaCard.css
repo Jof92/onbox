@@ -417,3 +417,18 @@
   margin-top: 4px;
   font-size: 0.9em;
 }
+
+@media (max-width: 767px) {
+  .ata-card{
+    width: 100%;
+  }
+
+  .objetivo-item{
+    flex-direction: column;
+  }
+
+  .objetivo-item span {
+    flex: 0 1 auto;
+    justify-content: space-around;
+  }
+}

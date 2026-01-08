@@ -107,11 +107,3 @@ a:hover {
   transform: scale(1.02);
 }
 
-
-
-/* 📱 RESPONSIVIDADE */
-@media (max-width: 600px) {
-  .app-main {
-    padding-top: 6rem;
-  }
-}

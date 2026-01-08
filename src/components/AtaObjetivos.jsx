@@ -612,7 +612,7 @@ export default function AtaObjetivos({
                     )}
                   </div>
 
-                  <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "4px", justifyContent:'center', }}>
                     <input
                       type="date"
                       value={o.dataEntrega || ""}

@@ -212,7 +212,6 @@ select {
 
 @media (max-width: 768px) {
   .listagem-header-container {
-    flex-direction: column;
     align-items: flex-start;
     gap: 6px;
   }

@@ -1159,7 +1159,7 @@
 }
 
 .card-item.tipo-rdo {
-  background-color: #f9f9f9;
+  background-color: #fff;
   border-right: 6px solid #878787;
   padding: 10px;
   margin-bottom: 8px;
@@ -1181,4 +1181,38 @@
     min-width: 280px;
     max-width: 320px;
     margin-right: 16px;
+}
+
+@media (max-width: 767px) {
+
+  .modal-content{
+    padding: 0;
+  }
+  .cards-header-members {
+    display: none;
+  }
+
+  .cards-header {
+    flex-direction: column;
+    gap:0;
+
+  }
+
+   .btn-header-action {
+    width: 20px;
+    height: 20px;
+  }
+
+  .btn-header-action svg {
+    width: 1em;
+  }
+
+  .cards-body{
+    flex-direction: column;
+  }
+
+  .cards-list{
+    max-width: none !important;
+    margin-right: 0 !important;
+  }
 }
