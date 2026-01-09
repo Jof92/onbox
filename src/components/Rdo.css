@@ -14,7 +14,7 @@ textarea {
     resize: vertical;
     font-size: 0.875rem;
     line-height: 1.5;
-    height: 30px !important;
+    height: 170px !important;
     transition: border-color 0.2s, box-shadow 0.2s;
 }
 
@@ -82,7 +82,6 @@ textarea {
 
 .rdo-section h3 {
   margin-top: 0;
-  margin-bottom: 12px;
   font-size: 1rem;
   font-weight: 600;
   color: #0066cc;
@@ -94,7 +93,6 @@ textarea {
 .rdo-row {
   display: flex;
   gap: 16px;
-  margin-bottom: 16px;
   flex-wrap: wrap;
 }
 
@@ -105,7 +103,7 @@ textarea {
 
 .rdo-col label {
   display: block;
-  margin-bottom: 4px;
+  margin: 0;
   font-size: 0.875rem;
   font-weight: 500;
   color: #374151;
@@ -138,7 +136,7 @@ textarea {
 table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 8px;
+  margin-top: 4px;
 }
 
 th,
@@ -187,7 +185,6 @@ th {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
 }
 
 .rdo-section-header button {
@@ -295,7 +292,6 @@ margin-bottom: -6px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
 }
 
 .rdo-efetivo-col h3 {
@@ -319,7 +315,6 @@ margin-bottom: -6px;
 /* Botões de ação */
 .rdo-actions {
   display: flex;
-  justify-content: flex-end;
   gap: 12px;
   margin-top: 20px;
 }
@@ -419,10 +414,10 @@ margin-bottom: -6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 20px;
+  height: 20px;
   margin: 0 8px;
-  border-radius: 50%;
+  border-radius: 10px;
   background: #f0f0f0;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -432,7 +427,7 @@ margin-bottom: -6px;
 .rdo-clima-icon.selected {
   background: #e3f2fd;
   color: #1976d2;
-  border: 2px solid #1976d2;
+  border: 1px solid #1976d2;
   transform: scale(1.1);
 }
 
@@ -503,81 +498,183 @@ margin-bottom: -6px;
 
 /* === Seção de Fotos - Nova Funcionalidade === */
 
+/* --- Estilos para a seção de Fotos e Lightbox --- */
+
 .rdo-fotos-preview {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin: 12px 0;
+  gap: 8px;
+  margin: 8px 0;
+  justify-content: center;
 }
 
-.rdo-fotos-preview > div {
+.rdo-foto-item {
   position: relative;
   width: 100px;
   height: 100px;
+  cursor: pointer;
 }
 
-.rdo-fotos-preview img {
+.rdo-foto-thumb {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 6px;
-  border: 1px solid #eee;
+  border-radius: 4px;
+  border: 1px solid #ddd;
 }
 
-.rdo-fotos-preview button {
+.rdo-foto-remove {
   position: absolute;
-  top: -6px;
-  right: -6px;
+  top: -8px;
+  right: -8px;
   background: #ff4d4d;
   color: white;
   border: none;
   border-radius: 50%;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  font-size: 10px;
   padding: 0;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  z-index: 2;
 }
 
-.rdo-foto-actions {
+.rdo-fotos-actions {
   display: flex;
   gap: 12px;
-  flex-wrap: wrap;
   margin-top: 8px;
 }
 
-.rdo-foto-actions label,
-.rdo-foto-actions button {
+.rdo-btn {
   padding: 8px 16px;
   border: none;
   border-radius: 4px;
-  font-size: 0.9rem;
   cursor: pointer;
+  font-size: 14px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-weight: 500;
-  white-space: nowrap;
+  text-decoration: none;
 }
 
-.rdo-foto-actions label {
-  background: #007bff;
+.rdo-btn-primary { background: #007bff; color: white; }
+.rdo-btn-success { background: #28a745; color: white; }
+.rdo-file-input { display: none; }
+
+/* Lightbox */
+.no-scroll { overflow: hidden; }
+
+.rdo-lightbox {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  cursor: pointer;
+}
+
+.rdo-lightbox-content {
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
+  cursor: default;
+}
+
+.rdo-lightbox-img {
+  max-width: 100%;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.rdo-lightbox-nav {
+  position: fixed;
+  top: 50%;
+  background: rgba(255, 255, 255, 0.2);
   color: white;
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.rdo-foto-actions button {
-  background: #28a745;
+.rdo-lightbox-prev { left: 10px; }
+.rdo-lightbox-next { right: 10px; }
+
+.rdo-lightbox-counter {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
   color: white;
+  font-size: 14px;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 4px 8px;
+  border-radius: 4px;
 }
 
-.rdo-foto-actions label:hover,
-.rdo-foto-actions button:hover {
-  opacity: 0.9;
+/* Ícone de transferência */
+.data-transfer-icon {
+  vertical-align: middle;
+  margin-right: 8px;
+  cursor: pointer;
 }
+
+/* Wrapper relativo para dropdown de menções */
+.relative-input-wrapper {
+  position: relative;
+}
+.rdo-export-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.rdo-export-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid #ccc;
+  background: white;
+  color: #333;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.rdo-export-btn:hover {
+  background-color: #f5f5f5;
+  border-color: #999;
+}
+
+.rdo-pdf-btn {
+  color: #b00000;
+}
+
+.rdo-pdf-btn:hover {
+  background-color: #fef2f2;
+  border-color: #b00000;
+}
+
+.rdo-main-actions {
+  display: flex;
+  gap: 12px;
+}
+
+
 
 /* Responsivo */
 @media (max-width: 600px) {

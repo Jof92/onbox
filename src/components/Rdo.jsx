@@ -8,11 +8,20 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCloudSun,
   faCloudShowersHeavy,
+  faPersonDigging,
+  faUserGroup,
+  faGear,
+  faTriangleExclamation,
+  faCamera,
+  faPrint,
 } from "@fortawesome/free-solid-svg-icons";
-import { faSun } from "@fortawesome/free-regular-svg-icons";
+import {
+  faSun,
+  faFilePdf,
+} from "@fortawesome/free-regular-svg-icons";
 import BuscaInsumo from "./BuscaInsumo";
 
-// Ícone de transferência de dados (SVG fornecido) – agora aceita onClick
+// Ícone de transferência de dados (SVG fornecido)
 const DataTransferIcon = ({ onClick }) => (
   <svg
     id="Layer_1"
@@ -21,7 +30,7 @@ const DataTransferIcon = ({ onClick }) => (
     viewBox="0 0 122.88 85.45"
     width="24"
     height="24"
-    style={{ verticalAlign: 'middle', marginRight: '8px', cursor: 'pointer' }}
+    className="data-transfer-icon"
     onClick={onClick}
   >
     <title>data-transfer</title>
@@ -31,7 +40,6 @@ const DataTransferIcon = ({ onClick }) => (
 
 const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
   const responsavelInputRef = useRef(null);
-
   const [data, setData] = useState({
     inicio_obra: "",
     termino_obra: "",
@@ -45,9 +53,8 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
     equipamentos: [{ codigo: "", descricao: "", total: "", em_uso: "" }],
     intercorrencias: "",
     responsavel_preenchimento: "",
-    fotos: [], // ✅ campo para armazenar fotos (File[] ou string[])
+    fotos: [],
   });
-
   const [dataOriginal, setDataOriginal] = useState("");
   const [diaSemanaOriginal, setDiaSemanaOriginal] = useState("");
   const [pavimentosAtividades, setPavimentosAtividades] = useState([]);
@@ -56,44 +63,25 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
   const [engenheiroNome, setEngenheiroNome] = useState("");
   const [rdoId, setRdoId] = useState(null);
   const [rdoCarregado, setRdoCarregado] = useState(false);
-
-  // Estados para autocomplete
   const [sugestoesMembros, setSugestoesMembros] = useState([]);
   const [mostrarSugestoesMembros, setMostrarSugestoesMembros] = useState(false);
-
-  // Novos estados para busca de insumos em equipamentos
   const [buscaInsumoAberta, setBuscaInsumoAberta] = useState(false);
   const [linhaBuscaAtiva, setLinhaBuscaAtiva] = useState(null);
+  const [fotoEmExibicao, setFotoEmExibicao] = useState(null);
 
-  // Carregar nome do projeto e engenheiro
+  // Carregar projeto
   useEffect(() => {
     const fetchProjetoData = async () => {
-      if (!projetoAtual?.id) {
-        console.warn("⚠️ projetoAtual não definido ou sem ID");
-        return;
-      }
-
-      console.log("📥 Carregando dados do projeto:", projetoAtual.id);
-
+      if (!projetoAtual?.id) return;
       const { data: proj, error } = await supabase
         .from("projects")
         .select("name, engenheiro_id, data_inicio, data_finalizacao")
         .eq("id", projetoAtual.id)
         .single();
 
-      if (error) {
-        console.error("❌ Erro ao carregar projeto:", error);
-        return;
-      }
-
-      if (!proj) {
-        console.warn("⚠️ Projeto não encontrado");
-        return;
-      }
+      if (error || !proj) return;
 
       setProjetoNome(proj.name);
-
-      // Só atualiza se não houver dados carregados do RDO
       setData((prev) => ({
         ...prev,
         inicio_obra: prev.inicio_obra || proj.data_inicio || "",
@@ -101,45 +89,29 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
       }));
 
       if (proj.engenheiro_id) {
-        const { data: user, error: userError } = await supabase
+        const { data: user } = await supabase
           .from("profiles")
-          .select("nome, avatar_url")
+          .select("nome")
           .eq("id", proj.engenheiro_id)
           .single();
-
-        if (userError) {
-          console.error("❌ Erro ao carregar engenheiro:", userError);
-          setEngenheiroNome("Não atribuído");
-        } else if (user) {
-          setEngenheiroNome(user.nome || "Nome não cadastrado");
-        } else {
-          setEngenheiroNome("Não atribuído");
-        }
+        setEngenheiroNome(user?.nome || "Não atribuído");
       } else {
         setEngenheiroNome("Não atribuído");
       }
     };
-
     fetchProjetoData();
   }, [projetoAtual, rdoCarregado]);
 
-  // Carregar dados existentes do RDO
+  // Carregar RDO
   useEffect(() => {
     const fetchRdo = async () => {
       if (!notaId) return;
-
       try {
-        // Buscar dados da nota para pegar a data
-        const { data: nota, error: notaError } = await supabase
+        const { data: nota } = await supabase
           .from("notas")
           .select("data_entrega")
           .eq("id", notaId)
           .single();
-
-        if (notaError) {
-          console.error("❌ Erro ao carregar nota:", notaError);
-          return;
-        }
 
         const dataEntrega = nota?.data_entrega ? nota.data_entrega.split("T")[0] : "";
         setDataOriginal(dataEntrega);
@@ -148,60 +120,37 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
         if (dataEntrega) {
           const [ano, mes, dia] = dataEntrega.split("-").map(Number);
           const dataLocal = new Date(ano, mes - 1, dia);
-          const diaSemanaMap = [
-            "Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira",
-            "Quinta-feira", "Sexta-feira", "Sábado"
-          ];
-          diaSemana = diaSemanaMap[dataLocal.getDay()];
+          const dias = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
+          diaSemana = dias[dataLocal.getDay()];
         }
         setDiaSemanaOriginal(diaSemana);
 
-        // Buscar dados do RDO da nova tabela
-        const { data: rdoData, error: rdoError } = await supabase
+        const { data: rdoData } = await supabase
           .from("rdos")
           .select("*")
           .eq("nota_id", notaId)
           .maybeSingle();
 
-        if (rdoError) {
-          console.error("❌ Erro ao carregar RDO:", rdoError);
-          return;
-        }
-
-        // Carregar pavimentos do projeto atual
-        const { data: pavimentosData, error: pavError } = await supabase
+        const { data: pavimentosData } = await supabase
           .from("pavimentos")
-          .select("id, name, ordem")
+          .select("name")
           .eq("project_id", projetoAtual.id)
           .order("ordem", { ascending: true });
 
-        if (pavError) {
-          console.error("❌ Erro ao carregar pavimentos:", pavError);
-          setPavimentosAtividades([]);
+        let pavimentosComDescricao = [];
+        if (rdoData?.atividades && Object.keys(rdoData.atividades).length > 0) {
+          pavimentosComDescricao = Object.keys(rdoData.atividades).map(p => ({
+            pavimento: p,
+            descricao: rdoData.atividades[p] || "",
+          }));
         } else {
-          let pavimentosComDescricao = [];
-          if (rdoData && rdoData.atividades && Object.keys(rdoData.atividades).length > 0) {
-            // ✅ SÓ inclui pavimentos que estão em 'atividades'
-            pavimentosComDescricao = Object.keys(rdoData.atividades).map((pavNome) => ({
-              pavimento: pavNome,
-              descricao: rdoData.atividades[pavNome] || "",
-            }));
-          } else {
-            // Novo RDO: carregar todos os pavimentos do projeto com descrições vazias
-            pavimentosComDescricao = pavimentosData.map((pav) => ({
-              pavimento: pav.name,
-              descricao: "",
-            }));
-          }
-          setPavimentosAtividades(pavimentosComDescricao);
+          pavimentosComDescricao = pavimentosData.map(p => ({ pavimento: p.name, descricao: "" }));
         }
+        setPavimentosAtividades(pavimentosComDescricao);
 
-        // Se existe RDO, preencher os dados
         if (rdoData) {
-          console.log("✅ RDO encontrado, carregando dados...");
           setRdoId(rdoData.id);
           setRdoCarregado(true);
-
           setData({
             inicio_obra: rdoData.inicio_obra || "",
             termino_obra: rdoData.termino_obra || "",
@@ -210,139 +159,78 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
             clima_tarde: rdoData.clima_tarde || "",
             obra_op_manha: rdoData.obra_op_manha || "",
             obra_op_tarde: rdoData.obra_op_tarde || "",
-            efetivo_proprio: Array.isArray(rdoData.efetivo_proprio) && rdoData.efetivo_proprio.length > 0
-              ? rdoData.efetivo_proprio
-              : [{ funcao: "", total: "", presentes: "" }],
-            efetivo_terceirizado: Array.isArray(rdoData.efetivo_terceirizado) && rdoData.efetivo_terceirizado.length > 0
-              ? rdoData.efetivo_terceirizado
-              : [{ funcao: "", total: "", presentes: "" }],
-            equipamentos: Array.isArray(rdoData.equipamentos) && rdoData.equipamentos.length > 0
-              ? rdoData.equipamentos
-              : [{ codigo: "", descricao: "", total: "", em_uso: "" }],
+            efetivo_proprio: Array.isArray(rdoData.efetivo_proprio) ? rdoData.efetivo_proprio : [{ funcao: "", total: "", presentes: "" }],
+            efetivo_terceirizado: Array.isArray(rdoData.efetivo_terceirizado) ? rdoData.efetivo_terceirizado : [{ funcao: "", total: "", presentes: "" }],
+            equipamentos: Array.isArray(rdoData.equipamentos) ? rdoData.equipamentos : [{ codigo: "", descricao: "", total: "", em_uso: "" }],
             intercorrencias: rdoData.intercorrencias || "",
             responsavel_preenchimento: rdoData.responsavel_preenchimento || "",
-            fotos: Array.isArray(rdoData.fotos) ? rdoData.fotos : [], // ✅ carregar fotos
+            fotos: Array.isArray(rdoData.fotos) ? rdoData.fotos : [],
           });
-
           if (rdoData.projeto_nome) setProjetoNome(rdoData.projeto_nome);
           if (rdoData.engenheiro_nome) setEngenheiroNome(rdoData.engenheiro_nome);
         } else {
-          console.log("ℹ️ Nenhum RDO encontrado, criando novo...");
           setRdoCarregado(true);
         }
       } catch (err) {
-        console.error("❌ Erro ao carregar RDO:", err);
+        console.error("Erro ao carregar RDO:", err);
       }
     };
-
     fetchRdo();
   }, [notaId, projetoAtual]);
 
-  // ✅ Função para copiar dados do último RDO do mesmo projeto
+  // Funções auxiliares
   const copiarDoUltimoRdo = async (tipo) => {
-    if (!projetoAtual?.id) {
-      console.warn("Projeto não disponível para buscar último RDO");
-      return;
-    }
-
+    if (!projetoAtual?.id) return;
     try {
-      let query = supabase
-        .from("rdos")
-        .select("*")
-        .eq("project_id", projetoAtual.id)
-        .order("created_at", { ascending: false })
-        .limit(1);
-
-      if (rdoId) {
-        query = query.neq("id", rdoId);
-      }
-
-      const { data: rdos, error } = await query;
-
-      if (error) {
-        console.error("Erro ao buscar último RDO:", error);
-        alert("Erro ao buscar dados do último Diário de Obra.");
-        return;
-      }
-
-      if (!rdos || rdos.length === 0) {
+      let query = supabase.from("rdos").select("*").eq("project_id", projetoAtual.id).order("created_at", { ascending: false }).limit(1);
+      if (rdoId) query = query.neq("id", rdoId);
+      const { data: rdos } = await query;
+      if (!rdos?.[0]) {
         alert("Nenhum Diário de Obra anterior encontrado para copiar.");
         return;
       }
-
-      const ultimoRdo = rdos[0];
-      let dadosCopiados = [];
-
-      if (tipo === "efetivo_proprio") {
-        dadosCopiados = Array.isArray(ultimoRdo.efetivo_proprio) 
-          ? ultimoRdo.efetivo_proprio 
-          : [{ funcao: "", total: "", presentes: "" }];
-      } else if (tipo === "efetivo_terceirizado") {
-        dadosCopiados = Array.isArray(ultimoRdo.efetivo_terceirizado) 
-          ? ultimoRdo.efetivo_terceirizado 
-          : [{ funcao: "", total: "", presentes: "" }];
-      } else if (tipo === "equipamentos") {
-        dadosCopiados = Array.isArray(ultimoRdo.equipamentos) 
-          ? ultimoRdo.equipamentos 
-          : [{ codigo: "", descricao: "", total: "", em_uso: "" }];
-      }
-
-      setData(prev => ({ ...prev, [tipo]: dadosCopiados }));
-      console.log(`✅ Dados de ${tipo} copiados do RDO ID: ${ultimoRdo.id}`);
+      const ultimo = rdos[0];
+      let dados = [];
+      if (tipo === "efetivo_proprio") dados = ultimo.efetivo_proprio || [{ funcao: "", total: "", presentes: "" }];
+      if (tipo === "efetivo_terceirizado") dados = ultimo.efetivo_terceirizado || [{ funcao: "", total: "", presentes: "" }];
+      if (tipo === "equipamentos") dados = ultimo.equipamentos || [{ codigo: "", descricao: "", total: "", em_uso: "" }];
+      setData(prev => ({ ...prev, [tipo]: dados }));
     } catch (err) {
-      console.error("Erro inesperado ao copiar do último RDO:", err);
       alert("Erro ao copiar dados do último Diário de Obra.");
     }
   };
 
-  // Função para buscar membros do projeto
   const buscarMembrosDoProjetoRdo = async (termo) => {
     if (!termo.trim() || !projetoAtual?.id) return [];
-
-    try {
-      const { data: membrosData } = await supabase
-        .from("project_members")
-        .select("user_id")
-        .eq("project_id", projetoAtual.id);
-
-      const userIds = membrosData?.map((m) => m.user_id).filter(Boolean) || [];
-      if (userIds.length === 0) return [];
-
-      const { data: perfis } = await supabase
-        .from("profiles")
-        .select("id, name, nickname, avatar_url")
-        .in("id", userIds)
-        .or(`name.ilike.%${termo}%,nickname.ilike.%${termo}%`)
-        .limit(5);
-
-      return perfis || [];
-    } catch (err) {
-      console.error("Erro ao buscar membros do projeto:", err);
-      return [];
-    }
+    const { data: membros } = await supabase
+      .from("project_members")
+      .select("user_id")
+      .eq("project_id", projetoAtual.id);
+    const ids = membros?.map(m => m.user_id).filter(Boolean) || [];
+    if (ids.length === 0) return [];
+    const { data: perfis } = await supabase
+      .from("profiles")
+      .select("id, name, nickname")
+      .in("id", ids)
+      .or(`name.ilike.%${termo}%,nickname.ilike.%${termo}%`)
+      .limit(5);
+    return perfis || [];
   };
 
   const handleResponsavelChange = async (e) => {
     const valor = e.target.value;
     const pos = e.target.selectionStart;
-
     setData(prev => ({ ...prev, responsavel_preenchimento: valor }));
-
     const antes = valor.substring(0, pos);
-    const ultimaArroba = antes.lastIndexOf("@");
-
-    if (ultimaArroba !== -1) {
-      const termo = antes.substring(ultimaArroba + 1).trim();
+    const arroba = antes.lastIndexOf("@");
+    if (arroba !== -1) {
+      const termo = antes.substring(arroba + 1).trim();
       if (termo) {
         setMostrarSugestoesMembros(true);
-        const resultados = await buscarMembrosDoProjetoRdo(termo);
-        setSugestoesMembros(resultados);
-      } else {
-        setMostrarSugestoesMembros(false);
-      }
-    } else {
-      setMostrarSugestoesMembros(false);
-    }
+        const res = await buscarMembrosDoProjetoRdo(termo);
+        setSugestoesMembros(res);
+      } else setMostrarSugestoesMembros(false);
+    } else setMostrarSugestoesMembros(false);
   };
 
   const inserirResponsavel = (perfil) => {
@@ -351,160 +239,96 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
     setTimeout(() => responsavelInputRef.current?.focus(), 0);
   };
 
-  const updateField = (field, value) => {
-    setData((prev) => ({ ...prev, [field]: value }));
-  };
-
+  const updateField = (field, value) => setData(prev => ({ ...prev, [field]: value }));
   const updateArrayField = (arrayKey, index, field, value) => {
-    setData((prev) => {
-      const newArray = [...prev[arrayKey]];
-      newArray[index] = { ...newArray[index], [field]: value };
-      return { ...prev, [arrayKey]: newArray };
+    setData(prev => {
+      const arr = [...prev[arrayKey]];
+      arr[index] = { ...arr[index], [field]: value };
+      return { ...prev, [arrayKey]: arr };
     });
   };
 
-  const addRow = (arrayKey) => {
-    const emptyRow =
-      arrayKey === "equipamentos"
-        ? { codigo: "", descricao: "", total: "", em_uso: "" }
-        : { funcao: "", total: "", presentes: "" };
-
-    setData((prev) => ({
-      ...prev,
-      [arrayKey]: [...prev[arrayKey], emptyRow],
-    }));
+  const addRow = (key) => {
+    const row = key === "equipamentos"
+      ? { codigo: "", descricao: "", total: "", em_uso: "" }
+      : { funcao: "", total: "", presentes: "" };
+    setData(prev => ({ ...prev, [key]: [...prev[key], row] }));
   };
 
-  const removeRow = (arrayKey, index) => {
-    setData((prev) => {
-      const newArray = prev[arrayKey].filter((_, i) => i !== index);
-      return { ...prev, [arrayKey]: newArray };
-    });
+  const removeRow = (key, idx) => {
+    setData(prev => ({ ...prev, [key]: prev[key].filter((_, i) => i !== idx) }));
   };
 
-  const updatePavimentoDescricao = (pavimento, descricao) => {
-    setPavimentosAtividades((prev) =>
-      prev.map((item) =>
-        item.pavimento === pavimento ? { ...item, descricao } : item
-      )
+  const updatePavimentoDescricao = (pav, desc) => {
+    setPavimentosAtividades(prev =>
+      prev.map(item => item.pavimento === pav ? { ...item, descricao: desc } : item)
     );
   };
 
-  const removerPavimentoDoRdo = (pavimento) => {
-    setPavimentosAtividades((prev) =>
-      prev.filter((item) => item.pavimento !== pavimento)
-    );
+  const removerPavimentoDoRdo = (pav) => {
+    setPavimentosAtividades(prev => prev.filter(item => item.pavimento !== pav));
   };
 
-  // Buscar item por código
-  const buscarItemPorCodigo = async (index, codigo) => {
-    if (!codigo?.trim()) {
-      setData((prev) => {
-        const novosEquipamentos = [...prev.equipamentos];
-        novosEquipamentos[index] = { ...novosEquipamentos[index], descricao: "" };
-        return { ...prev, equipamentos: novosEquipamentos };
+  const buscarItemPorCodigo = async (idx, cod) => {
+    if (!cod?.trim()) {
+      setData(prev => {
+        const eq = [...prev.equipamentos];
+        eq[idx].descricao = "";
+        return { ...prev, equipamentos: eq };
       });
       return;
     }
-
-    try {
-      const { data: itemEncontrado, error } = await supabase
-        .from("itens")
-        .select("descricao, unidade")
-        .eq("codigo", codigo)
-        .maybeSingle();
-
-      if (error) {
-        console.error("Erro ao buscar item:", error);
-        return;
-      }
-
-      setData((prev) => {
-        const novosEquipamentos = [...prev.equipamentos];
-        if (itemEncontrado) {
-          novosEquipamentos[index] = {
-            ...novosEquipamentos[index],
-            descricao: itemEncontrado.descricao || "",
-          };
-        } else {
-          novosEquipamentos[index] = {
-            ...novosEquipamentos[index],
-            descricao: "",
-          };
-        }
-        return { ...prev, equipamentos: novosEquipamentos };
-      });
-    } catch (err) {
-      console.error("Erro ao buscar item por código:", err);
-      setData((prev) => {
-        const novosEquipamentos = [...prev.equipamentos];
-        novosEquipamentos[index] = { ...novosEquipamentos[index], descricao: "" };
-        return { ...prev, equipamentos: novosEquipamentos };
-      });
-    }
+    const { data: item } = await supabase
+      .from("itens")
+      .select("descricao")
+      .eq("codigo", cod)
+      .maybeSingle();
+    setData(prev => {
+      const eq = [...prev.equipamentos];
+      eq[idx].descricao = item?.descricao || "";
+      return { ...prev, equipamentos: eq };
+    });
   };
 
-  const abrirBuscaInsumo = (index) => {
-    setLinhaBuscaAtiva(index);
+  const abrirBuscaInsumo = (idx) => {
+    setLinhaBuscaAtiva(idx);
     setBuscaInsumoAberta(true);
   };
 
-  const handleSelecionarInsumo = (codigo) => {
+  const handleSelecionarInsumo = (cod) => {
     if (linhaBuscaAtiva !== null) {
-      updateArrayField("equipamentos", linhaBuscaAtiva, "codigo", codigo);
-      buscarItemPorCodigo(linhaBuscaAtiva, codigo);
+      updateArrayField("equipamentos", linhaBuscaAtiva, "codigo", cod);
+      buscarItemPorCodigo(linhaBuscaAtiva, cod);
     }
     setBuscaInsumoAberta(false);
     setLinhaBuscaAtiva(null);
   };
 
-  // ✅ Função para salvar RDO com upload de fotos
   const saveRdo = async () => {
     if (!notaId || !projetoAtual?.id || !usuarioId) {
       alert("Dados insuficientes para salvar o RDO.");
       return;
     }
-
     setLoading(true);
-
     try {
-      // Upload das fotos
       let fotosUrls = [];
       if (data.fotos.length > 0) {
-        const uploadPromises = data.fotos.map(async (foto, idx) => {
-          // Se já é string, é URL (já salva antes)
-          if (typeof foto === 'string') return foto;
-
-          // Garantir um nome para o arquivo
-          const fileExt = (foto.name?.split('.').pop() || 'jpg').toLowerCase();
-          const fileName = `rdo-${notaId}-${Date.now()}-${idx}.${fileExt}`;
-          const filePath = `rdo-fotos/${notaId}/${fileName}`;
-
-          const { error: uploadError } = await supabase.storage
-            .from('rdo-fotos')
-            .upload(filePath, foto, {
-              cacheControl: '3600',
-              upsert: false,
-            });
-
-          if (uploadError) throw uploadError;
-
-          const { data: { publicUrl } } = supabase.storage
-            .from('rdo-fotos')
-            .getPublicUrl(filePath);
-
+        const uploads = data.fotos.map(async (foto, i) => {
+          if (typeof foto === "string") return foto;
+          const ext = (foto.name?.split(".").pop() || "jpg").toLowerCase();
+          const name = `rdo-${notaId}-${Date.now()}-${i}.${ext}`;
+          const path = `rdo-fotos/${notaId}/${name}`;
+          const { error } = await supabase.storage.from("rdo-fotos").upload(path, foto);
+          if (error) throw error;
+          const { data: { publicUrl } } = supabase.storage.from("rdo-fotos").getPublicUrl(path);
           return publicUrl;
         });
-
-        fotosUrls = await Promise.all(uploadPromises);
+        fotosUrls = await Promise.all(uploads);
       }
 
-      // Montar atividades
-      const atividadesObj = {};
-      pavimentosAtividades.forEach((item) => {
-        if (item.descricao.trim()) {
-          atividadesObj[item.pavimento] = item.descricao.trim();
-        }
+      const atividades = {};
+      pavimentosAtividades.forEach(item => {
+        if (item.descricao.trim()) atividades[item.pavimento] = item.descricao.trim();
       });
 
       const payload = {
@@ -524,41 +348,26 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
         efetivo_proprio: data.efetivo_proprio || [],
         efetivo_terceirizado: data.efetivo_terceirizado || [],
         equipamentos: data.equipamentos || [],
-        atividades: atividadesObj,
+        atividades,
         intercorrencias: data.intercorrencias || "",
         responsavel_preenchimento: data.responsavel_preenchimento || "",
         fotos: fotosUrls,
         created_by: usuarioId,
       };
 
-      let result;
       if (rdoId) {
-        console.log("🔄 Atualizando RDO existente:", rdoId);
-        result = await supabase
-          .from("rdos")
-          .update(payload)
-          .eq("id", rdoId);
+        const { error } = await supabase.from("rdos").update(payload).eq("id", rdoId);
+        if (error) throw error;
       } else {
-        console.log("➕ Criando novo RDO");
-        const insertResult = await supabase
-          .from("rdos")
-          .insert([payload])
-          .select();
-
-        result = insertResult;
-        if (insertResult.data?.[0]?.id) {
-          setRdoId(insertResult.data[0].id);
-        }
+        const { data: res } = await supabase.from("rdos").insert([payload]).select();
+        if (res?.[0]?.id) setRdoId(res[0].id);
       }
 
-      if (result.error) throw result.error;
-
-      console.log("✅ RDO salvo com sucesso!");
       alert("Diário de Obra salvo com sucesso!");
       onClose();
     } catch (error) {
-      console.error("❌ Erro ao salvar RDO:", error);
-      alert(`Erro ao salvar o Diário de Obra: ${error.message || 'Erro desconhecido'}`);
+      console.error("Erro ao salvar RDO:", error);
+      alert(`Erro ao salvar: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -585,11 +394,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
             </div>
           </div>
           {onClose && (
-            <button
-              className="listagem-close-btn"
-              onClick={onClose}
-              aria-label="Fechar"
-            >
+            <button className="listagem-close-btn" onClick={onClose} aria-label="Fechar">
               <FaTimes />
             </button>
           )}
@@ -597,22 +402,16 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
       </div>
 
       <div className="rdo-content">
-        {/* ... outras seções ... */}
-
+        {/* Engenheiro e responsável */}
         <div className="rdo-section">
           <div className="rdo-row">
             <div className="rdo-col">
               <label>Engenheiro Responsável</label>
-              <input
-                type="text"
-                value={engenheiroNome}
-                readOnly
-                className="rdo-input-readonly"
-              />
+              <input type="text" value={engenheiroNome} readOnly className="rdo-input-readonly" />
             </div>
             <div className="rdo-col">
               <label>Responsável pelo Preenchimento</label>
-              <div style={{ position: "relative" }}>
+              <div className="relative-input-wrapper">
                 <input
                   ref={responsavelInputRef}
                   type="text"
@@ -630,20 +429,16 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
                 />
                 {mostrarSugestoesMembros && sugestoesMembros.length > 0 && (
                   <div className="suggestions-dropdown">
-                    {sugestoesMembros.map((membro) => (
+                    {sugestoesMembros.map(membro => (
                       <div
                         key={membro.id}
                         onClick={() => inserirResponsavel(membro)}
                         onMouseDown={(e) => e.preventDefault()}
                         className="suggestion-item"
                       >
-                        {membro.avatar_url ? (
-                          <img src={membro.avatar_url} alt="" />
-                        ) : (
-                          <div className="suggestion-avatar-placeholder">
-                            {(membro.name || membro.nickname)?.charAt(0).toUpperCase() || "?"}
-                          </div>
-                        )}
+                        <div className="suggestion-avatar-placeholder">
+                          {(membro.name || membro.nickname)?.charAt(0).toUpperCase() || "?"}
+                        </div>
                         {membro.name || membro.nickname}
                       </div>
                     ))}
@@ -652,40 +447,25 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
               </div>
             </div>
           </div>
-
           <div className="rdo-row">
             <div className="rdo-col">
               <label>Início da Obra</label>
-              <input
-                type="date"
-                value={data.inicio_obra || ""}
-                onChange={(e) => updateField("inicio_obra", e.target.value)}
-              />
+              <input type="date" value={data.inicio_obra || ""} onChange={(e) => updateField("inicio_obra", e.target.value)} />
             </div>
             <div className="rdo-col">
               <label>Término Previsto</label>
-              <input
-                type="date"
-                value={data.termino_obra || ""}
-                onChange={(e) => updateField("termino_obra", e.target.value)}
-              />
+              <input type="date" value={data.termino_obra || ""} onChange={(e) => updateField("termino_obra", e.target.value)} />
             </div>
             <div className="rdo-col">
               <label>Atraso (dias)</label>
-              <input
-                type="text"
-                value={data.atraso_dias || ""}
-                onChange={(e) => updateField("atraso_dias", e.target.value)}
-                placeholder="0"
-              />
+              <input type="text" value={data.atraso_dias || ""} onChange={(e) => updateField("atraso_dias", e.target.value)} placeholder="0" />
             </div>
           </div>
         </div>
 
+        {/* Clima */}
         <div className="rdo-section">
-          <h3>
-            <FontAwesomeIcon icon={faCloudSun} /> Clima
-          </h3>
+          <h3><FontAwesomeIcon icon={faCloudSun} /> Clima</h3>
           <table>
             <thead>
               <tr>
@@ -726,7 +506,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
                     role="button"
                     tabIndex={0}
                     onKeyPress={(e) => e.key === "Enter" && updateField("obra_op_manha", "sim")}
-                    aria-label="Obra operacional: Sim"
+                    aria-label="Sim"
                   >
                     Sim
                   </div>
@@ -736,7 +516,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
                     role="button"
                     tabIndex={0}
                     onKeyPress={(e) => e.key === "Enter" && updateField("obra_op_manha", "nao")}
-                    aria-label="Obra operacional: Não"
+                    aria-label="Não"
                   >
                     Não
                   </div>
@@ -773,7 +553,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
                     role="button"
                     tabIndex={0}
                     onKeyPress={(e) => e.key === "Enter" && updateField("obra_op_tarde", "sim")}
-                    aria-label="Obra operacional: Sim"
+                    aria-label="Sim"
                   >
                     Sim
                   </div>
@@ -783,7 +563,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
                     role="button"
                     tabIndex={0}
                     onKeyPress={(e) => e.key === "Enter" && updateField("obra_op_tarde", "nao")}
-                    aria-label="Obra operacional: Não"
+                    aria-label="Não"
                   >
                     Não
                   </div>
@@ -793,20 +573,19 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
           </table>
         </div>
 
+        {/* Atividades Executadas */}
         <div className="rdo-section">
-          <h3>Atividades Executadas</h3>
+          <h3><FontAwesomeIcon icon={faPersonDigging} /> Atividades Executadas</h3>
           {pavimentosAtividades.length === 0 ? (
             <p>Nenhum pavimento cadastrado no projeto.</p>
           ) : (
-            pavimentosAtividades.map((item, index) => (
-              <div key={index} className="rdo-pavimento-linha">
+            pavimentosAtividades.map((item, idx) => (
+              <div key={idx} className="rdo-pavimento-linha">
                 <div className="rdo-pavimento-nome">{item.pavimento}</div>
                 <div className="rdo-pavimento-descricao">
                   <textarea
                     value={item.descricao}
-                    onChange={(e) =>
-                      updatePavimentoDescricao(item.pavimento, e.target.value)
-                    }
+                    onChange={(e) => updatePavimentoDescricao(item.pavimento, e.target.value)}
                     placeholder={`Descreva os serviços realizados no ${item.pavimento}...`}
                   />
                 </div>
@@ -823,15 +602,14 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
           )}
         </div>
 
+        {/* Efetivos */}
         <div className="rdo-section rdo-efetivos-container">
           <div className="rdo-efetivo-col">
             <div className="rdo-section-header">
-              <h3>Efetivo Próprio</h3>
+              <h3><FontAwesomeIcon icon={faUserGroup} /> Efetivo Próprio</h3>
               <div className="rdo-add-button-group">
                 <DataTransferIcon onClick={() => copiarDoUltimoRdo("efetivo_proprio")} />
-                <button type="button" onClick={() => addRow("efetivo_proprio")}>
-                  +
-                </button>
+                <button type="button" onClick={() => addRow("efetivo_proprio")}>+</button>
               </div>
             </div>
             <table>
@@ -846,43 +624,11 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
               <tbody>
                 {data.efetivo_proprio.map((item, idx) => (
                   <tr key={idx}>
+                    <td><input type="text" value={item.funcao || ""} onChange={(e) => updateArrayField("efetivo_proprio", idx, "funcao", e.target.value)} /></td>
+                    <td><input type="number" value={item.total || ""} onChange={(e) => updateArrayField("efetivo_proprio", idx, "total", e.target.value)} placeholder="0" /></td>
+                    <td><input type="number" value={item.presentes || ""} onChange={(e) => updateArrayField("efetivo_proprio", idx, "presentes", e.target.value)} placeholder="0" /></td>
                     <td>
-                      <input
-                        type="text"
-                        value={item.funcao || ""}
-                        onChange={(e) =>
-                          updateArrayField("efetivo_proprio", idx, "funcao", e.target.value)
-                        }
-                        placeholder=""
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        value={item.total || ""}
-                        onChange={(e) =>
-                          updateArrayField("efetivo_proprio", idx, "total", e.target.value)
-                        }
-                        placeholder="0"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        value={item.presentes || ""}
-                        onChange={(e) =>
-                          updateArrayField("efetivo_proprio", idx, "presentes", e.target.value)
-                        }
-                        placeholder="0"
-                      />
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        className="rdo-pavimento-remover"
-                        onClick={() => removeRow("efetivo_proprio", idx)}
-                        aria-label={`Remover linha ${idx + 1} de efetivo próprio`}
-                      >
+                      <button type="button" className="rdo-pavimento-remover" onClick={() => removeRow("efetivo_proprio", idx)} aria-label={`Remover linha ${idx + 1}`}>
                         <FaTrash />
                       </button>
                     </td>
@@ -894,12 +640,10 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
 
           <div className="rdo-efetivo-col">
             <div className="rdo-section-header">
-              <h3>Efetivo Terceirizado</h3>
+              <h3><FontAwesomeIcon icon={faUserGroup} /> Efetivo Terceirizado</h3>
               <div className="rdo-add-button-group">
                 <DataTransferIcon onClick={() => copiarDoUltimoRdo("efetivo_terceirizado")} />
-                <button type="button" onClick={() => addRow("efetivo_terceirizado")}>
-                  +
-                </button>
+                <button type="button" onClick={() => addRow("efetivo_terceirizado")}>+</button>
               </div>
             </div>
             <table>
@@ -914,43 +658,11 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
               <tbody>
                 {data.efetivo_terceirizado.map((item, idx) => (
                   <tr key={idx}>
+                    <td><input type="text" value={item.funcao || ""} onChange={(e) => updateArrayField("efetivo_terceirizado", idx, "funcao", e.target.value)} /></td>
+                    <td><input type="number" value={item.total || ""} onChange={(e) => updateArrayField("efetivo_terceirizado", idx, "total", e.target.value)} placeholder="0" /></td>
+                    <td><input type="number" value={item.presentes || ""} onChange={(e) => updateArrayField("efetivo_terceirizado", idx, "presentes", e.target.value)} placeholder="0" /></td>
                     <td>
-                      <input
-                        type="text"
-                        value={item.funcao || ""}
-                        onChange={(e) =>
-                          updateArrayField("efetivo_terceirizado", idx, "funcao", e.target.value)
-                        }
-                        placeholder=""
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        value={item.total || ""}
-                        onChange={(e) =>
-                          updateArrayField("efetivo_terceirizado", idx, "total", e.target.value)
-                        }
-                        placeholder="0"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        value={item.presentes || ""}
-                        onChange={(e) =>
-                          updateArrayField("efetivo_terceirizado", idx, "presentes", e.target.value)
-                        }
-                        placeholder="0"
-                      />
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        className="rdo-pavimento-remover"
-                        onClick={() => removeRow("efetivo_terceirizado", idx)}
-                        aria-label={`Remover linha ${idx + 1} de efetivo terceirizado`}
-                      >
+                      <button type="button" className="rdo-pavimento-remover" onClick={() => removeRow("efetivo_terceirizado", idx)} aria-label={`Remover linha ${idx + 1}`}>
                         <FaTrash />
                       </button>
                     </td>
@@ -961,14 +673,13 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
           </div>
         </div>
 
+        {/* Equipamentos */}
         <div className="rdo-section">
           <div className="rdo-section-header">
-            <h3>Equipamentos</h3>
+            <h3><FontAwesomeIcon icon={faGear} /> Equipamentos</h3>
             <div className="rdo-add-button-group">
               <DataTransferIcon onClick={() => copiarDoUltimoRdo("equipamentos")} />
-              <button type="button" onClick={() => addRow("equipamentos")}>
-                +
-              </button>
+              <button type="button" onClick={() => addRow("equipamentos")}>+</button>
             </div>
           </div>
           <table>
@@ -989,9 +700,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
                       <input
                         type="text"
                         value={item.codigo || ""}
-                        onChange={(e) =>
-                          updateArrayField("equipamentos", idx, "codigo", e.target.value)
-                        }
+                        onChange={(e) => updateArrayField("equipamentos", idx, "codigo", e.target.value)}
                         onBlur={() => buscarItemPorCodigo(idx, item.codigo)}
                         onKeyPress={(e) => e.key === "Enter" && buscarItemPorCodigo(idx, item.codigo)}
                         placeholder="Cód."
@@ -1007,41 +716,16 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
                     </div>
                   </td>
                   <td>
-                    <input
-                      type="text"
-                      value={item.descricao || ""}
-                      readOnly
-                      placeholder="Descrição"
-                      className="rdo-input-readonly"
-                    />
+                    <input type="text" value={item.descricao || ""} readOnly className="rdo-input-readonly" placeholder="Descrição" />
                   </td>
                   <td>
-                    <input
-                      type="number"
-                      value={item.total || ""}
-                      onChange={(e) =>
-                        updateArrayField("equipamentos", idx, "total", e.target.value)
-                      }
-                      placeholder="0"
-                    />
+                    <input type="number" value={item.total || ""} onChange={(e) => updateArrayField("equipamentos", idx, "total", e.target.value)} placeholder="0" />
                   </td>
                   <td>
-                    <input
-                      type="number"
-                      value={item.em_uso || ""}
-                      onChange={(e) =>
-                        updateArrayField("equipamentos", idx, "em_uso", e.target.value)
-                      }
-                      placeholder="0"
-                    />
+                    <input type="number" value={item.em_uso || ""} onChange={(e) => updateArrayField("equipamentos", idx, "em_uso", e.target.value)} placeholder="0" />
                   </td>
                   <td>
-                    <button
-                      type="button"
-                      className="rdo-pavimento-remover"
-                      onClick={() => removeRow("equipamentos", idx)}
-                      aria-label={`Remover linha ${idx + 1} de equipamento`}
-                    >
+                    <button type="button" className="rdo-pavimento-remover" onClick={() => removeRow("equipamentos", idx)} aria-label={`Remover linha ${idx + 1}`}>
                       <FaTrash />
                     </button>
                   </td>
@@ -1051,8 +735,9 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
           </table>
         </div>
 
+        {/* Intercorrências */}
         <div className="rdo-section">
-          <h3>Intercorrências</h3>
+          <h3><FontAwesomeIcon icon={faTriangleExclamation} /> Intercorrências</h3>
           <textarea
             value={data.intercorrencias || ""}
             onChange={(e) => updateField("intercorrencias", e.target.value)}
@@ -1060,41 +745,31 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
           />
         </div>
 
-        {/* ✅ SEÇÃO DE FOTOS - TOTALMENTE FUNCIONAL */}
+        {/* Fotos */}
         <div className="rdo-section">
-          <h3>Espaço para Inclusão de Fotos</h3>
-
-          {/* Pré-visualização */}
+          <h3><FontAwesomeIcon icon={faCamera} /> Fotos</h3>
           {data.fotos.length > 0 && (
-            <div className="rdo-fotos-preview" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', margin: '8px 0' }}>
+            <div className="rdo-fotos-preview">
               {data.fotos.map((foto, idx) => (
-                <div key={idx} style={{ position: 'relative', width: '100px', height: '100px' }}>
+                <div
+                  key={idx}
+                  className="rdo-foto-item"
+                  onClick={() => {
+                    setFotoEmExibicao(idx);
+                    document.body.classList.add("no-scroll");
+                  }}
+                >
                   <img
-                    src={typeof foto === 'string' ? foto : URL.createObjectURL(foto)}
+                    src={typeof foto === "string" ? foto : URL.createObjectURL(foto)}
                     alt={`Foto ${idx + 1}`}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }}
+                    className="rdo-foto-thumb"
                   />
                   <button
                     type="button"
-                    onClick={() => {
-                      const novasFotos = data.fotos.filter((_, i) => i !== idx);
-                      setData(prev => ({ ...prev, fotos: novasFotos }));
-                    }}
-                    style={{
-                      position: 'absolute',
-                      top: '-8px',
-                      right: '-8px',
-                      background: '#ff4d4d',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '50%',
-                      width: '20px',
-                      height: '20px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      padding: 0,
+                    className="rdo-foto-remove"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setData(prev => ({ ...prev, fotos: prev.fotos.filter((_, i) => i !== idx) }));
                     }}
                     aria-label="Remover foto"
                   >
@@ -1105,107 +780,151 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
             </div>
           )}
 
-          {/* Botões */}
-          <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-            {/* Escolher da galeria */}
-            <label
-              style={{
-                padding: '8px 16px',
-                background: '#007bff',
-                color: 'white',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-              }}
-            >
-              📁 Escolher da galeria
-              <input
-                type="file"
-                multiple
-                accept="image/*"
-                style={{ display: 'none' }}
-                onChange={(e) => {
-                  const files = Array.from(e.target.files || []);
-                  setData(prev => ({
-                    ...prev,
-                    fotos: [...prev.fotos, ...files]
-                  }));
+          {data.fotos.length < 4 && (
+            <div className="rdo-fotos-actions">
+              <label className="rdo-btn rdo-btn-primary">
+                📁 Escolher da galeria
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  className="rdo-file-input"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || []);
+                    const espaco = 4 - data.fotos.length;
+                    if (files.length > espaco) {
+                      alert(`Você só pode adicionar até ${espaco} foto(s).`);
+                      return;
+                    }
+                    setData(prev => ({ ...prev, fotos: [...prev.fotos, ...files] }));
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                className="rdo-btn rdo-btn-success"
+                onClick={async () => {
+                  if (data.fotos.length >= 4) {
+                    alert("Limite de 4 fotos atingido.");
+                    return;
+                  }
+                  if (!navigator.mediaDevices?.getUserMedia) {
+                    alert("Câmera não suportada.");
+                    return;
+                  }
+                  try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    const video = document.createElement("video");
+                    video.srcObject = stream;
+                    video.play();
+                    await new Promise(resolve => video.onloadedmetadata = resolve);
+                    const canvas = document.createElement("canvas");
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    const ctx = canvas.getContext("2d");
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    canvas.toBlob(blob => {
+                      if (blob) {
+                        blob.name = `camera-${Date.now()}.jpg`;
+                        setData(prev => ({ ...prev, fotos: [...prev.fotos, blob] }));
+                      }
+                      stream.getTracks().forEach(t => t.stop());
+                    }, "image/jpeg", 0.9);
+                  } catch (err) {
+                    alert("Erro ao acessar câmera.");
+                  }
                 }}
-              />
-            </label>
+              >
+                📷 Tirar foto
+              </button>
+            </div>
+          )}
+        </div>
 
-            {/* Tirar foto */}
+        {/* Ações com botões de exportação à esquerda */}
+        <div className="rdo-actions">
+          <div className="rdo-export-buttons">
             <button
               type="button"
-              onClick={async () => {
-                if (!navigator.mediaDevices?.getUserMedia) {
-                  alert("Câmera não suportada neste dispositivo.");
-                  return;
-                }
-
-                try {
-                  const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                  const video = document.createElement('video');
-                  video.srcObject = stream;
-                  video.play();
-
-                  await new Promise(resolve => {
-                    video.onloadedmetadata = () => resolve(video);
-                  });
-
-                  const canvas = document.createElement('canvas');
-                  canvas.width = video.videoWidth;
-                  canvas.height = video.videoHeight;
-                  const ctx = canvas.getContext('2d');
-                  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-                  canvas.toBlob((blob) => {
-                    if (blob) {
-                      blob.name = `camera-${Date.now()}.jpg`;
-                      setData(prev => ({
-                        ...prev,
-                        fotos: [...prev.fotos, blob]
-                      }));
-                    }
-                    stream.getTracks().forEach(track => track.stop());
-                  }, 'image/jpeg', 0.9);
-                } catch (err) {
-                  console.error("Erro ao acessar câmera:", err);
-                  alert("Não foi possível acessar a câmera. Verifique as permissões.");
-                }
-              }}
-              style={{
-                padding: '8px 16px',
-                background: '#28a745',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-              }}
+              className="rdo-export-btn rdo-print-btn"
+              onClick={() => window.print()}
+              title="Imprimir RDO"
             >
-              📷 Tirar foto
+              <FontAwesomeIcon icon={faPrint} />
+              <span>Impressão</span>
+            </button>
+            <button
+              type="button"
+              className="rdo-export-btn rdo-pdf-btn"
+              onClick={() => {
+                alert("Funcionalidade de exportação para PDF ainda em desenvolvimento.");
+              }}
+              title="Exportar para PDF"
+            >
+              <FontAwesomeIcon icon={faFilePdf} />
+              <span>PDF</span>
+            </button>
+          </div>
+
+          <div className="rdo-main-actions">
+            <button className="btn-cancel" onClick={onClose} disabled={loading}>
+              Cancelar
+            </button>
+            <button className="btn-save" onClick={saveRdo} disabled={loading}>
+              {loading ? "Salvando..." : "Salvar RDO"}
             </button>
           </div>
         </div>
-
-        <div className="rdo-actions">
-          <button className="btn-cancel" onClick={onClose} disabled={loading}>
-            Cancelar
-          </button>
-          <button className="btn-save" onClick={saveRdo} disabled={loading}>
-            {loading ? "Salvando..." : "Salvar RDO"}
-          </button>
-        </div>
       </div>
 
-      {/* Modal de Busca de Insumos */}
+      {/* Lightbox de fotos */}
+      {fotoEmExibicao !== null && (
+        <div
+          className="rdo-lightbox"
+          onClick={() => {
+            setFotoEmExibicao(null);
+            document.body.classList.remove("no-scroll");
+          }}
+        >
+          <div className="rdo-lightbox-content" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={typeof data.fotos[fotoEmExibicao] === "string"
+                ? data.fotos[fotoEmExibicao]
+                : URL.createObjectURL(data.fotos[fotoEmExibicao])
+              }
+              alt={`Foto ${fotoEmExibicao + 1}`}
+              className="rdo-lightbox-img"
+            />
+            {data.fotos.length > 1 && (
+              <>
+                <button
+                  className="rdo-lightbox-nav rdo-lightbox-prev"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFotoEmExibicao(prev => prev === 0 ? data.fotos.length - 1 : prev - 1);
+                  }}
+                >
+                  ❮
+                </button>
+                <button
+                  className="rdo-lightbox-nav rdo-lightbox-next"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFotoEmExibicao(prev => prev === data.fotos.length - 1 ? 0 : prev + 1);
+                  }}
+                >
+                  ❯
+                </button>
+              </>
+            )}
+            <div className="rdo-lightbox-counter">
+              {fotoEmExibicao + 1} / {data.fotos.length}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de busca de insumos */}
       <BuscaInsumo
         isOpen={buscaInsumoAberta}
         onClose={() => {
