@@ -1,5 +1,5 @@
 // src/components/ListagemEspelho.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabaseClient";
 import "./Listagem.css";
 import "./ListagemEspelho.css";
@@ -12,6 +12,24 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusEnvio, setStatusEnvio] = useState(null);
+
+  // ✅ Estado para tooltip de locação
+  const [tooltipAberto, setTooltipAberto] = useState(null); // id da linha
+  const tooltipRef = useRef(null);
+
+  // Fechar tooltip ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (tooltipRef.current && !tooltipRef.current.contains(e.target)) {
+        setTooltipAberto(null);
+      }
+    };
+
+    if (tooltipAberto !== null) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [tooltipAberto]);
 
   const carregarDados = async () => {
     setLoading(true);
@@ -29,25 +47,45 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
 
       if (error) throw error;
 
-      const mapped = (itensSalvos || []).map(item => ({
-        id: item.id,
-        item_original_id: item.item_original_id, // ✅
-        selecionado: Boolean(item.selecionado),
-        codigo: item.codigo || "",
-        descricao: item.descricao || "",
-        unidade: item.unidade || "",
-        quantidade: item.quantidade || "",
-        locacao: item.locacao || "",
-        eap: item.eap || "",
-        observacao: item.observacao || "",
-        comentario: item.comentario || "",
-        criado_em: item.criado_em || null,
-        grupo_envio: item.grupo_envio || "antigo",
-        data_envio: item.data_envio || item.criado_em,
-        enviado_por: item.enviado_por || "Usuário",
-        isCriar: (item.codigo || "").toLowerCase() === "criar",
-        ordem: item.ordem || 0,
-      }));
+      const mapped = (itensSalvos || []).map(item => {
+        let locacaoArray = [];
+        try {
+          if (typeof item.locacao === 'string') {
+            const parsed = JSON.parse(item.locacao);
+            if (Array.isArray(parsed)) {
+              locacaoArray = parsed;
+            } else {
+              locacaoArray = item.locacao ? [item.locacao] : [];
+            }
+          } else if (Array.isArray(item.locacao)) {
+            locacaoArray = item.locacao;
+          } else if (item.locacao != null) {
+            locacaoArray = [String(item.locacao)];
+          }
+        } catch (e) {
+          locacaoArray = item.locacao ? [String(item.locacao)] : [];
+        }
+
+        return {
+          id: item.id,
+          item_original_id: item.item_original_id,
+          selecionado: Boolean(item.selecionado),
+          codigo: item.codigo || "",
+          descricao: item.descricao || "",
+          unidade: item.unidade || "",
+          quantidade: item.quantidade || "",
+          locacao: locacaoArray,
+          eap: item.eap || "",
+          observacao: item.observacao || "",
+          comentario: item.comentario || "",
+          criado_em: item.criado_em || null,
+          grupo_envio: item.grupo_envio || "antigo",
+          data_envio: item.data_envio || item.criado_em,
+          enviado_por: item.enviado_por || "Usuário",
+          isCriar: (item.codigo || "").toLowerCase() === "criar",
+          ordem: item.ordem || 0,
+        };
+      });
 
       setRows(mapped);
     } catch (err) {
@@ -103,14 +141,12 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
 
     try {
       const updateData = { comentario: novoComentario || null };
-      // Atualizar espelho
       const { error: espelhoError } = await supabase
         .from("planilha_itens")
         .update(updateData)
         .eq("id", id);
       if (espelhoError) throw espelhoError;
 
-      // Atualizar original
       await atualizarOriginal(row.item_original_id, updateData);
       setRows(prev => prev.map(r => (r.id === id ? { ...r, comentario: novoComentario } : r)));
     } catch (err) {
@@ -126,7 +162,6 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
     }
 
     try {
-      // Inserir no catálogo global
       const { error: insertError } = await supabase
         .from("itens")
         .insert({
@@ -134,11 +169,10 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
           descricao: row.descricao || "",
           unidade: row.unidade || null,
         });
-      if (insertError && insertError.code !== '23505') { // ignora duplicado
+      if (insertError && insertError.code !== '23505') {
         throw insertError;
       }
 
-      // Atualizar espelho
       const updateData = {
         codigo: row.codigo.trim(),
         descricao: row.descricao || "",
@@ -153,7 +187,6 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
         .eq("id", row.id);
       if (updateEspelhoError) throw updateEspelhoError;
 
-      // Atualizar original
       await atualizarOriginal(row.item_original_id, {
         codigo: row.codigo.trim(),
         descricao: row.descricao || "",
@@ -178,27 +211,21 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
     if (!notaEspelhoId) return;
     setStatusEnvio("enviando");
     try {
-      // Salvar todos os itens no espelho e sincronizar com original
       await Promise.all(
         rows.map(async (row) => {
           const updateData = { selecionado: row.selecionado };
           if (row.isCriar) {
             updateData.codigo = row.codigo?.trim() || null;
             updateData.descricao = row.descricao || null;
-            // Também sincroniza outros campos editáveis no futuro se necessário
           }
 
-          // Atualizar espelho
           await supabase.from("planilha_itens").update(updateData).eq("id", row.id);
-
-          // Atualizar original
           if (row.item_original_id) {
             await supabase.from("planilha_itens").update(updateData).eq("id", row.item_original_id);
           }
         })
       );
 
-      // Atualizar status das notas
       const { data: notaEspelhoData } = await supabase
         .from("notas")
         .select("nota_original_id")
@@ -272,7 +299,7 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
         </div>
       </div>
 
-      <div className="listagem-table-wrapper">
+      <div className="listagem-table-wrapper" style={{ position: 'relative' }}>
         <table className="listagem-table">
           <thead>
             <tr>
@@ -281,7 +308,7 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
               <th>Código</th>
               <th>Descrição</th>
               <th>Unidade</th>
-              <th>Quantidade</th>
+              <th>Qnt/pav</th>
               <th>Locação</th>
               <th>EAP</th>
               <th>Observação</th>
@@ -299,13 +326,11 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
                 <React.Fragment key={row.id ?? visualIdx}>
                   <tr className={row.selecionado ? "linha-selecionada" : ""}>
                     <td>
-                      
-                        <input
-                          type="checkbox"
-                          checked={row.selecionado}
-                          onChange={(e) => toggleSelecionado(row.id, e.target.checked)}
-                        />
-                     
+                      <input
+                        type="checkbox"
+                        checked={row.selecionado}
+                        onChange={(e) => toggleSelecionado(row.id, e.target.checked)}
+                      />
                     </td>
                     <td>{row.ordem}</td>
                     <td>
@@ -335,7 +360,45 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
                     </td>
                     <td><span>{row.unidade || ""}</span></td>
                     <td><span>{row.quantidade || ""}</span></td>
-                    <td><span>{row.locacao || ""}</span></td>
+                    {/* ✅ COLUNA DE LOCAÇÃO COM TOOLTIP AO CLICAR */}
+                    <td>
+                      <div
+                        className="locacao-resumo"
+                        onClick={() => {
+                          if (row.locacao?.length > 1) {
+                            setTooltipAberto(row.id);
+                          }
+                        }}
+                        style={{
+                          cursor: row.locacao?.length > 1 ? 'pointer' : 'default',
+                          padding: '4px 6px',
+                          borderRadius: '3px',
+                          fontSize: '0.9em',
+                          color: '#444',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {row.locacao?.length === 0
+                          ? "–"
+                          : row.locacao.length === 1
+                            ? row.locacao[0]
+                            : `${row.locacao[0]} +`}
+                      </div>
+
+                      {/* ✅ TOOLTIP FLUTUANTE */}
+                      {tooltipAberto === row.id && (
+                        <div
+                          ref={tooltipRef}
+                          className="locacao-tooltip"
+                        >
+                          {row.locacao.map((loc, i) => (
+                            <div key={i} className="inside-tooltip">
+                              • {loc}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </td>
                     <td><span>{row.eap || ""}</span></td>
                     <td>
                       <div className="observacao-rendered">

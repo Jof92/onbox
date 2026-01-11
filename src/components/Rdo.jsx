@@ -20,6 +20,7 @@ import {
   faFilePdf,
 } from "@fortawesome/free-regular-svg-icons";
 import BuscaInsumo from "./BuscaInsumo";
+import RdoCamera from "./RdoCamera"; // ✅ Importação do novo componente
 
 // Ícone de transferência de dados (SVG fornecido)
 const DataTransferIcon = ({ onClick }) => (
@@ -68,6 +69,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
   const [buscaInsumoAberta, setBuscaInsumoAberta] = useState(false);
   const [linhaBuscaAtiva, setLinhaBuscaAtiva] = useState(null);
   const [fotoEmExibicao, setFotoEmExibicao] = useState(null);
+  const [cameraAberta, setCameraAberta] = useState(false); // ✅ Novo estado
 
   // Carregar projeto
   useEffect(() => {
@@ -783,7 +785,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
           {data.fotos.length < 4 && (
             <div className="rdo-fotos-actions">
               <label className="rdo-btn rdo-btn-primary">
-                📁 Escolher da galeria
+                Escolher da galeria
                 <input
                   type="file"
                   multiple
@@ -803,39 +805,15 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
               <button
                 type="button"
                 className="rdo-btn rdo-btn-success"
-                onClick={async () => {
+                onClick={() => {
                   if (data.fotos.length >= 4) {
                     alert("Limite de 4 fotos atingido.");
                     return;
                   }
-                  if (!navigator.mediaDevices?.getUserMedia) {
-                    alert("Câmera não suportada.");
-                    return;
-                  }
-                  try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                    const video = document.createElement("video");
-                    video.srcObject = stream;
-                    video.play();
-                    await new Promise(resolve => video.onloadedmetadata = resolve);
-                    const canvas = document.createElement("canvas");
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    const ctx = canvas.getContext("2d");
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    canvas.toBlob(blob => {
-                      if (blob) {
-                        blob.name = `camera-${Date.now()}.jpg`;
-                        setData(prev => ({ ...prev, fotos: [...prev.fotos, blob] }));
-                      }
-                      stream.getTracks().forEach(t => t.stop());
-                    }, "image/jpeg", 0.9);
-                  } catch (err) {
-                    alert("Erro ao acessar câmera.");
-                  }
+                  setCameraAberta(true);
                 }}
               >
-                📷 Tirar foto
+                Tirar foto
               </button>
             </div>
           )}
@@ -932,6 +910,18 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
           setLinhaBuscaAtiva(null);
         }}
         onSelect={handleSelecionarInsumo}
+      />
+
+      {/* ✅ Modal de câmera */}
+      <RdoCamera
+        isOpen={cameraAberta}
+        onClose={() => setCameraAberta(false)}
+        onCapture={(fotoBlob) => {
+          setData(prev => ({
+            ...prev,
+            fotos: [...prev.fotos, fotoBlob]
+          }));
+        }}
       />
     </div>
   );

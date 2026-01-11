@@ -26,13 +26,49 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
   const [buscaInsumoAberta, setBuscaInsumoAberta] = useState(false);
   const [linhaBuscaAtiva, setLinhaBuscaAtiva] = useState(null);
 
+  // Estado para dropdown de edição
+  const [dropdownAberto, setDropdownAberto] = useState(null); // índice da linha
+  const dropdownRef = useRef(null);
+
+  // ✅ Novo: estado para tooltip de visualização (pós-envio)
+  const [tooltipVisualizacao, setTooltipVisualizacao] = useState(null); // id da linha
+  const tooltipRef = useRef(null);
+
   const cardRef = useRef(null);
   const [forcarAtualizacao, setForcarAtualizacao] = useState(0);
 
   // 🔑 Função auxiliar para chave única de rascunho
   const getRascunhoKey = () => `rascunho_listagem_${projetoAtual?.id}_${notaAtual?.id}`;
 
-  // Fechar ao clicar fora
+  // Fechar dropdown ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setDropdownAberto(null);
+      }
+    };
+
+    if (dropdownAberto !== null) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [dropdownAberto]);
+
+  // ✅ Fechar tooltip de visualização ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (tooltipRef.current && !tooltipRef.current.contains(e.target)) {
+        setTooltipVisualizacao(null);
+      }
+    };
+
+    if (tooltipVisualizacao !== null) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [tooltipVisualizacao]);
+
+  // Fechar modal ao clicar fora
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (onClose && cardRef.current && !cardRef.current.contains(e.target)) {
@@ -144,7 +180,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
           descricao: "",
           unidade: "",
           quantidade: "",
-          locacao: "",
+          locacao: [],
           eap: "",
           observacao: "",
           comentario: "",
@@ -162,22 +198,42 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
       if (itensError) throw itensError;
 
       if (itensRes?.length) {
-        const mapped = itensRes.map(item => ({
-          id: item.id,
-          codigo: item.codigo || "",
-          descricao: item.descricao || "",
-          unidade: item.unidade || "",
-          quantidade: item.quantidade || "",
-          locacao: item.locacao || "",
-          eap: item.eap || "",
-          observacao: item.observacao || "",
-          comentario: item.comentario || "",
-          criado_em: item.criado_em || null,
-          grupo_envio: item.grupo_envio || "antigo",
-          data_envio: item.data_envio || item.criado_em,
-          enviado_por: item.enviado_por || "Usuário",
-          ordem: item.ordem || 0,
-        }));
+        const mapped = itensRes.map(item => {
+          let locacaoArray = [];
+          try {
+            if (typeof item.locacao === 'string') {
+              const parsed = JSON.parse(item.locacao);
+              if (Array.isArray(parsed)) {
+                locacaoArray = parsed;
+              } else {
+                locacaoArray = item.locacao ? [item.locacao] : [];
+              }
+            } else if (Array.isArray(item.locacao)) {
+              locacaoArray = item.locacao;
+            } else if (item.locacao != null) {
+              locacaoArray = [String(item.locacao)];
+            }
+          } catch (e) {
+            locacaoArray = item.locacao ? [String(item.locacao)] : [];
+          }
+
+          return {
+            id: item.id,
+            codigo: item.codigo || "",
+            descricao: item.descricao || "",
+            unidade: item.unidade || "",
+            quantidade: item.quantidade || "",
+            locacao: locacaoArray,
+            eap: item.eap || "",
+            observacao: item.observacao || "",
+            comentario: item.comentario || "",
+            criado_em: item.criado_em || null,
+            grupo_envio: item.grupo_envio || "antigo",
+            data_envio: item.data_envio || item.criado_em,
+            enviado_por: item.enviado_por || "Usuário",
+            ordem: item.ordem || 0,
+          };
+        });
         setRows(mapped);
       } else {
         setRows([{
@@ -185,7 +241,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
           descricao: "",
           unidade: "",
           quantidade: "",
-          locacao: "",
+          locacao: [],
           eap: "",
           observacao: "",
           comentario: "",
@@ -226,7 +282,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
           descricao: "",
           unidade: "",
           quantidade: "",
-          locacao: "",
+          locacao: [],
           eap: "",
           observacao: "",
           comentario: "",
@@ -243,7 +299,11 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         try {
           const parsed = JSON.parse(rascunhoSalvo);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setRows(parsed);
+            const withArrayLocacao = parsed.map(r => ({
+              ...r,
+              locacao: Array.isArray(r.locacao) ? r.locacao : (r.locacao ? [r.locacao] : []),
+            }));
+            setRows(withArrayLocacao);
             registrarAlteracao("Rascunho local");
             setLoading(false);
             return;
@@ -254,7 +314,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         }
       }
 
-      // Só carrega do banco se não há rascunho válido
       await carregarDadosDoBanco();
       setLoading(false);
     };
@@ -278,6 +337,24 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         setRows(prev => prev.map(r => {
           const itemAtualizado = data.find(i => i.id === r.id);
           if (itemAtualizado) {
+            let locacaoArray = [];
+            try {
+              if (typeof itemAtualizado.locacao === 'string') {
+                const parsed = JSON.parse(itemAtualizado.locacao);
+                if (Array.isArray(parsed)) {
+                  locacaoArray = parsed;
+                } else {
+                  locacaoArray = itemAtualizado.locacao ? [itemAtualizado.locacao] : [];
+                }
+              } else if (Array.isArray(itemAtualizado.locacao)) {
+                locacaoArray = itemAtualizado.locacao;
+              } else if (itemAtualizado.locacao != null) {
+                locacaoArray = [String(itemAtualizado.locacao)];
+              }
+            } catch (e) {
+              locacaoArray = itemAtualizado.locacao ? [String(itemAtualizado.locacao)] : [];
+            }
+
             return {
               ...r,
               codigo: itemAtualizado.codigo,
@@ -286,7 +363,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
               observacao: itemAtualizado.observacao,
               quantidade: itemAtualizado.quantidade,
               unidade: itemAtualizado.unidade,
-              locacao: itemAtualizado.locacao,
+              locacao: locacaoArray,
               eap: itemAtualizado.eap,
             };
           }
@@ -346,6 +423,26 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
     registrarAlteracao();
   };
 
+  const handleLocacaoChange = (index, valor, checked) => {
+    const novas = [...rows];
+    const locacoesAtuais = [...novas[index].locacao];
+
+    if (checked) {
+      if (!locacoesAtuais.includes(valor)) {
+        locacoesAtuais.push(valor);
+      }
+    } else {
+      const idx = locacoesAtuais.indexOf(valor);
+      if (idx !== -1) {
+        locacoesAtuais.splice(idx, 1);
+      }
+    }
+
+    novas[index].locacao = locacoesAtuais;
+    setRows(novas);
+    registrarAlteracao();
+  };
+
   const handleObservacaoBlur = (index, valor) => {
     const novas = [...rows];
     novas[index].observacao = valor;
@@ -367,7 +464,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
       descricao: "",
       unidade: "",
       quantidade: "",
-      locacao: "",
+      locacao: [],
       eap: "",
       observacao: "",
       comentario: "",
@@ -424,7 +521,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
             descricao: it.descricao || null,
             unidade: it.unidade || null,
             quantidade: it.quantidade ? Number(it.quantidade) : null,
-            locacao: it.locacao || null,
+            locacao: it.locacao && it.locacao.length > 0 ? JSON.stringify(it.locacao) : null,
             eap: it.eap || null,
             observacao: it.observacao || null,
             comentario: it.comentario || null,
@@ -444,7 +541,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
           descricao: it.descricao || null,
           unidade: it.unidade || null,
           quantidade: it.quantidade ? Number(it.quantidade) : null,
-          locacao: it.locacao || null,
+          locacao: it.locacao && it.locacao.length > 0 ? JSON.stringify(it.locacao) : null,
           eap: it.eap || null,
           observacao: it.observacao || null,
           comentario: it.comentario || null,
@@ -547,26 +644,43 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
       if (itensOriginais?.length > 0) {
         await supabase.from("planilha_itens").delete().eq("nota_id", notaEspelhoId);
 
-        const itensParaInserir = itensOriginais.map(item => ({
-          projeto_id: projetoAtual.id,
-          nota_id: notaEspelhoId,
-          pilha_id: pilhaRecebidosId,
-          codigo: item.codigo,
-          descricao: item.descricao,
-          unidade: item.unidade,
-          quantidade: item.quantidade,
-          locacao: item.locacao,
-          eap: item.eap,
-          observacao: item.observacao,
-          comentario: item.comentario,
-          direcionar_para: item.direcionar_para,
-          criado_em: new Date().toISOString(),
-          grupo_envio: item.grupo_envio,
-          data_envio: item.data_envio,
-          enviado_por: item.enviado_por,
-          item_original_id: item.id,
-          ordem: item.ordem,
-        }));
+        const itensParaInserir = itensOriginais.map(item => {
+          let locacaoArray = [];
+          try {
+            if (typeof item.locacao === 'string') {
+              const parsed = JSON.parse(item.locacao);
+              if (Array.isArray(parsed)) locacaoArray = parsed;
+              else locacaoArray = item.locacao ? [item.locacao] : [];
+            } else if (Array.isArray(item.locacao)) {
+              locacaoArray = item.locacao;
+            } else if (item.locacao != null) {
+              locacaoArray = [String(item.locacao)];
+            }
+          } catch (e) {
+            locacaoArray = item.locacao ? [String(item.locacao)] : [];
+          }
+
+          return {
+            projeto_id: projetoAtual.id,
+            nota_id: notaEspelhoId,
+            pilha_id: pilhaRecebidosId,
+            codigo: item.codigo,
+            descricao: item.descricao,
+            unidade: item.unidade,
+            quantidade: item.quantidade,
+            locacao: locacaoArray.length > 0 ? JSON.stringify(locacaoArray) : null,
+            eap: item.eap,
+            observacao: item.observacao,
+            comentario: item.comentario,
+            direcionar_para: item.direcionar_para,
+            criado_em: new Date().toISOString(),
+            grupo_envio: item.grupo_envio,
+            data_envio: item.data_envio,
+            enviado_por: item.enviado_por,
+            item_original_id: item.id,
+            ordem: item.ordem,
+          };
+        });
 
         const { data: itensInseridos, error: insertItensError } = await supabase
           .from("planilha_itens")
@@ -589,7 +703,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
       setCodigoErro(new Set());
       setSetorSelecionado("");
 
-      // ✅ LIMPAR RASCUNHO APÓS ENVIO BEM-SUCEDIDO
       localStorage.removeItem(getRascunhoKey());
 
       await carregarDadosDoBanco();
@@ -672,7 +785,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
               <th>Código</th>
               <th>Descrição</th>
               <th>Unidade</th>
-              <th>Quantidade</th>
+              <th className="quantidade-pavimento-header">Qnt/pav</th>
               <th>Locação</th>
               <th>EAP</th>
               <th>Observação</th>
@@ -775,19 +888,67 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                         <span>{row.quantidade || ""}</span>
                       )}
                     </td>
+                    {/* ✅ COLUNA DE LOCAÇÃO ATUALIZADA */}
                     <td>
                       {podeEditarDemais ? (
-                        <select
-                          value={row.locacao || ""}
-                          onChange={(e) => handleInputChange(indexOriginal, "locacao", e.target.value)}
-                        >
-                          <option value=""></option>
-                          {locacoes.map((loc, i) => (
-                            <option key={i} value={loc}>{loc}</option>
-                          ))}
-                        </select>
+                        <>
+                          <div
+                            className="locacao-trigger"
+                            onClick={() => setDropdownAberto(indexOriginal)}
+                          >
+                            {row.locacao?.length === 0
+                              ? "Selecionar"
+                              : row.locacao.length === 1
+                                ? row.locacao[0]
+                                : `${row.locacao[0]} +`}
+                          </div>
+
+                          {dropdownAberto === indexOriginal && (
+                            <div ref={dropdownRef} className="locacao-dropdown">
+                              {locacoes.map((loc) => (
+                                <label key={loc} className="locacao-option">
+                                  <input
+                                    type="checkbox"
+                                    checked={row.locacao?.includes(loc) || false}
+                                    onChange={(e) =>
+                                      handleLocacaoChange(indexOriginal, loc, e.target.checked)
+                                    }
+                                  />
+                                  <span>{loc}</span>
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                        </>
                       ) : (
-                        <span>{row.locacao || ""}</span>
+                        <>
+                          <div
+                            className={`locacao-resumo ${
+                              row.locacao?.length > 1 ? 'locacao-resumo-clickable' : ''
+                            }`}
+                            onClick={() => {
+                              if (row.locacao?.length > 1) {
+                                setTooltipVisualizacao(row.id);
+                              }
+                            }}
+                          >
+                            {row.locacao?.length === 0
+                              ? "–"
+                              : row.locacao.length === 1
+                                ? row.locacao[0]
+                                : `${row.locacao[0]} +`}
+                          </div>
+
+                          {tooltipVisualizacao === row.id && (
+                            <div ref={tooltipRef} className="locacao-tooltip">
+                              {row.locacao.map((loc, i) => (
+                                <div key={i} className="locacao-tooltip-item">
+                                  • {loc}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </>
                       )}
                     </td>
                     <td>
