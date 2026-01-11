@@ -1,4 +1,4 @@
-/* src/components/BuscaInsumoModal.css */
+/* src/components/BuscaInsumo.css */
 .busca-insumo-overlay {
   position: fixed;
   top: 0;
@@ -18,7 +18,7 @@
   max-width: 600px;
   max-height: 70vh;
   border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
   display: flex;
   flex-direction: column;
 }
@@ -26,6 +26,14 @@
 .busca-insumo-header {
   padding: 12px;
   border-bottom: 1px solid #eee;
+}
+
+.busca-insumo-title {
+  margin: 0 0 8px 0;
+  font-size: 1.1rem;
+  color: #333;
+  font-weight: 600;
+  text-align: center;
 }
 
 .busca-insumo-input {
@@ -44,14 +52,36 @@
 }
 
 .busca-insumo-item {
+  display: grid;
+  grid-template-columns: 1fr 3fr 1fr;
+  gap: 12px;
   padding: 10px 12px;
   cursor: pointer;
   border-bottom: 1px solid #f0f0f0;
   font-size: 0.95rem;
+  align-items: center;
 }
 
 .busca-insumo-item:hover {
   background: #f9f9f9;
+}
+
+.busca-insumo-item-codigo {
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.busca-insumo-item-descricao {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.busca-insumo-item-unidade {
+  font-style: italic;
+  color: #555;
+  white-space: nowrap;
+  text-align: right;
 }
 
 .busca-insumo-loading,
@@ -59,4 +89,8 @@
   padding: 16px;
   text-align: center;
   color: #666;
+}
+
+.busca-insumo-item.selected {
+  background-color: #e0e0e0; /* ou qualquer cor de destaque */
 }
