@@ -1286,10 +1286,12 @@
 
   .cards-body{
     flex-direction: column;
+    overflow-y: auto;
   }
 
   .cards-list{
     max-width: none !important;
     margin-right: 0 !important;
+    width: 100% !important;
   }
 }
