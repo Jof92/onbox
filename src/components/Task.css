@@ -796,6 +796,7 @@
   background: white;
   transition: background 0.2s;
   gap: 5px;
+  position: relative;
 }
 
 .objetivo-item1 .objetivo-concluido {
@@ -926,7 +927,6 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 160px;
   justify-content: flex-end;
 }
 
@@ -1234,12 +1234,7 @@
 }
 
 .data-entrega-input-custom {
-  width: 100%;
-  padding: 6px 8px;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  font-size: 14px;
-  background: white;
+  padding: 4px 4px !important;
 }
 
 .data-entrega-input-custom:focus {
@@ -1372,6 +1367,82 @@
 .menu-reacoes-flutuante button:hover {
   background-color: #f5f5f5;
 }
+
+.objetivo-acao-direita {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+  position: relative;
+}
+
+.icone-editar,
+.icone-add-resp {
+  cursor: pointer;
+  color: #555;
+  font-size: 14px;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.icone-editar:hover,
+.icone-add-resp:hover {
+  background: #f0f0f0;
+}
+
+.input-responsavel-flutuante {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 10;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  padding: 6px;
+  min-width: 200px;
+}
+
+.input-responsavel-flutuante input {
+  width: 100%;
+  padding: 6px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.sugestoes-list-flutuante {
+  margin-top: 6px;
+  max-height: 150px;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid #eee;
+  border-radius: 4px;
+}
+
+.sugestao-item {
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.sugestao-item:hover {
+  background: #f5f5f5;
+}
+
+.objetivo-responsaveis-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+  min-height: 24px;
+}
+
+.svg-inline--fa {
+  height: 0.8em;
+}
+
+
 
 /* ==============================
    📱 Responsividade

@@ -3,6 +3,8 @@ import React from "react";
 import "./Task.css";
 import { supabase } from "../supabaseClient";
 import { FaTrashAlt } from "react-icons/fa";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faPenToSquare, faUserPlus, faCalendar } from "@fortawesome/free-solid-svg-icons";
 
 const ChipResponsavel = ({ responsavel, onRemove, disabled }) => {
   const nomeExibicao = responsavel.nome_exibicao || "Usuário";
@@ -45,6 +47,9 @@ const TaskAnexos = ({
   containerId,
   setImagemAmpliada
 }) => {
+  const [editingResponsavelId, setEditingResponsavelId] = React.useState(null);
+  const dateInputRefs = React.useRef({});
+
   const handleAddImagens = async (e) => {
     const files = Array.from(e.target.files || []).filter(file => file.type.startsWith('image/'));
     if (!notaAtual?.id || !userId || files.length === 0) return;
@@ -149,9 +154,6 @@ const TaskAnexos = ({
     }
   };
 
-  // ============= Objetivos =============
-
-  // ✅ CORREÇÃO: incluir container_id no INSERT
   const criarChecklistSeNecessario = async () => {
     if (!notaAtual?.id || !containerId) {
       console.warn("Tentativa de criar checklist sem notaId ou containerId");
@@ -168,12 +170,11 @@ const TaskAnexos = ({
       return checklist.id;
     }
 
-    // ✅ Incluir container_id aqui
     const { data: novo, error: insertError } = await supabase
       .from("checklists")
       .insert({ 
         nota_id: notaAtual.id,
-        container_id: containerId // ← ESSENCIAL
+        container_id: containerId
       })
       .select("id")
       .single();
@@ -271,8 +272,6 @@ const TaskAnexos = ({
       console.error("Erro ao excluir objetivo:", err);
     }
   };
-
-  // ============= Responsáveis =============
 
   const handleResponsavelInputChange = (e, objetivoId) => {
     const valor = e.target.value;
@@ -546,7 +545,6 @@ const TaskAnexos = ({
             <span className="progress-percent">{progressoPercent}%</span>
           </div>
 
-          {/* ✅ Só permite adicionar se containerId estiver presente */}
           {notaAtual?.id && containerId ? (
             <div className="objetivos-add-form">
               <input
@@ -599,7 +597,7 @@ const TaskAnexos = ({
                   <strong>{idx + 1}.</strong> {o.texto}
                 </span>
 
-                <div className="objetivo-responsaveis">
+                <div className="objetivo-responsaveis-chips">
                   {o.responsaveis.map(resp => (
                     <ChipResponsavel
                       key={resp.id}
@@ -608,43 +606,138 @@ const TaskAnexos = ({
                       disabled={o.concluido}
                     />
                   ))}
+                </div>
+
+                <div className="objetivo-acao-direita">
                   {!o.concluido && (
-                    <input
-                      type="text"
-                      placeholder={o.responsaveis.length === 0 ? "Nome ou @" : ""}
-                      value={inputResponsavel[o.id] || ""}
-                      onChange={(e) => handleResponsavelInputChange(e, o.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !inputResponsavel[o.id]?.startsWith("@")) {
-                          adicionarResponsavelExterno(inputResponsavel[o.id], o.id);
-                          setInputResponsavel(prev => ({ ...prev, [o.id]: "" }));
+                    <span
+                      className="icone-editar"
+                      title="Editar objetivo"
+                      onClick={() => {
+                        const novoTexto = prompt("Editar objetivo:", o.texto);
+                        if (novoTexto !== null && novoTexto.trim() !== "" && novoTexto.trim() !== o.texto) {
+                          setObjetivos(prev =>
+                            prev.map(item =>
+                              item.id === o.id ? { ...item, texto: novoTexto.trim() } : item
+                            )
+                          );
+                          supabase
+                            .from("checklist_items")
+                            .update({ description: novoTexto.trim() })
+                            .eq("id", o.id)
+                            .then(({ error }) => {
+                              if (error) {
+                                console.error("Erro ao salvar edição:", error);
+                                alert("Erro ao salvar alteração.");
+                                setObjetivos(prev =>
+                                  prev.map(item =>
+                                    item.id === o.id ? { ...item, texto: o.texto } : item
+                                  )
+                                );
+                              }
+                            });
                         }
                       }}
-                      disabled={loading}
-                    />
+                    >
+                      <FontAwesomeIcon icon={faPenToSquare} />
+                    </span>
                   )}
-                  {sugestoesResponsavel[o.id]?.length > 0 && !o.concluido && (
-                    <div className="sugestoes-list">
-                      {sugestoesResponsavel[o.id].map(item => (
-                        <div
-                          key={item.id}
-                          className="sugestao-item"
-                          onClick={() => adicionarResponsavelInterno(item, o.id)}
-                        >
-                          @{item.nickname || item.nome}
+
+                  {!o.concluido && (
+                    <span
+                      className="icone-add-resp"
+                      title="Adicionar responsável"
+                      onClick={() => {
+                        setEditingResponsavelId(o.id);
+                      }}
+                    >
+                      <FontAwesomeIcon icon={faUserPlus} />
+                    </span>
+                  )}
+
+                  {editingResponsavelId === o.id && !o.concluido && (
+                    <div className="input-responsavel-flutuante">
+                      <input
+                        type="text"
+                        autoFocus
+                        placeholder="Nome ou @menção"
+                        value={inputResponsavel[o.id] || ""}
+                        onChange={(e) => handleResponsavelInputChange(e, o.id)}
+                        onBlur={() => {
+                          setTimeout(() => setEditingResponsavelId(null), 200);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            const valor = inputResponsavel[o.id] || "";
+                            if (!valor.startsWith("@")) {
+                              adicionarResponsavelExterno(valor, o.id);
+                              setEditingResponsavelId(null);
+                            }
+                          } else if (e.key === "Escape") {
+                            setEditingResponsavelId(null);
+                          }
+                        }}
+                        disabled={loading}
+                      />
+                      {sugestoesResponsavel[o.id]?.length > 0 && (
+                        <div className="sugestoes-list-flutuante">
+                          {sugestoesResponsavel[o.id].map(item => (
+                            <div
+                              key={item.id}
+                              className="sugestao-item"
+                              onClick={() => {
+                                adicionarResponsavelInterno(item, o.id);
+                                setEditingResponsavelId(null);
+                              }}
+                            >
+                              @{item.nickname || item.nome}
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      )}
                     </div>
                   )}
                 </div>
 
                 <div className="objetivo-acao">
-                  <input
-                    type="date"
-                    value={o.dataEntrega || ""}
-                    onChange={(e) => atualizarDataEntrega(o.id, e.target.value || null)}
-                    disabled={o.concluido || loading}
-                  />
+                  {!o.concluido && (
+                    <label
+                      className="objetivo-data-entrega"
+                      style={{ 
+                        cursor: 'pointer', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '4px',
+                        position: 'relative'
+                      }}
+                    >
+                      {o.dataEntrega ? (
+                        <>
+                          {new Date(o.dataEntrega).toLocaleDateString('pt-BR')}
+                          <FontAwesomeIcon icon={faCalendar} style={{ fontSize: '12px', color: '#555' }} />
+                        </>
+                      ) : (
+                        <FontAwesomeIcon icon={faCalendar} style={{ fontSize: '14px', color: '#555' }} />
+                      )}
+                      <input
+                        type="date"
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          height: '100%',
+                          opacity: 0,
+                          cursor: 'pointer'
+                        }}
+                        value={o.dataEntrega || ''}
+                        onChange={(e) => atualizarDataEntrega(o.id, e.target.value || null)}
+                        disabled={loading}
+                      />
+                    </label>
+                  )}
+
                   {!o.concluido && (
                     <span
                       className="objetivo-excluir"
