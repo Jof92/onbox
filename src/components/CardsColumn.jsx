@@ -16,6 +16,8 @@ export default function Column({
   notaProgresso,
   dataConclusaoEdit,
   dataConclusaoSalva,
+  dataEntregaEdit,
+  dataEntregaSalva,
   showColorPicker,
   menuOpenPilha,
   menuOpenNota,
@@ -31,6 +33,8 @@ export default function Column({
   toggleConclusaoNota,
   setDataConclusaoEdit,
   saveDataConclusao,
+  setDataEntregaEdit,
+  saveDataEntrega,
   handleOpenNota,
   handleEditNota,
   handleDeleteNota,
@@ -50,6 +54,13 @@ export default function Column({
     const dias = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
     const data = new Date(dataString + "T00:00:00");
     return dias[data.getUTCDay()];
+  };
+
+  // ✅ Função para formatar data sem problema de fuso horário
+  const formatarDataLocal = (dataString) => {
+    if (!dataString) return null;
+    const [ano, mes, dia] = dataString.split('-');
+    return new Date(ano, mes - 1, dia).toLocaleDateString("pt-BR");
   };
 
   const isRecebidos = col.title === "Recebidos";
@@ -553,7 +564,6 @@ export default function Column({
                     }
 
                     const isConcluida = notasConcluidas.has(String(nota.id));
-                    const isEditingDate = dataConclusaoEdit.hasOwnProperty(String(nota.id));
 
                     let cardBackgroundColor = "#ffffff";
                     let cardBorderLeft = "none";
@@ -564,6 +574,16 @@ export default function Column({
                       cardBackgroundColor = "#fce8e6";
                       cardBorderLeft = "4px solid #ea4335";
                     }
+
+                    // ✅ ALTERAÇÃO: Usar data_entrega para Tarefas e data_conclusao para outros tipos
+                    const usarDataEntrega = nota.tipo === "Tarefas";
+                    const isEditingDate = usarDataEntrega 
+                      ? dataEntregaEdit?.hasOwnProperty(String(nota.id))
+                      : dataConclusaoEdit?.hasOwnProperty(String(nota.id));
+                    const dataAtual = usarDataEntrega ? dataEntregaSalva : dataConclusaoSalva;
+                    const dataEdit = usarDataEntrega ? dataEntregaEdit : dataConclusaoEdit;
+                    const setDataEdit = usarDataEntrega ? setDataEntregaEdit : setDataConclusaoEdit;
+                    const saveData = usarDataEntrega ? saveDataEntrega : saveDataConclusao;
 
                     return (
                       <Draggable key={String(nota.id)} draggableId={String(nota.id)} index={idx} type="CARD">
@@ -615,6 +635,7 @@ export default function Column({
                                 {nota.tipo === "Atas" && notaProgresso[nota.id] !== undefined && <> - {notaProgresso[nota.id]}%</>}
                               </p>
 
+                              {/* ✅ CAMPO DE DATA COM CORREÇÃO DE FUSO HORÁRIO */}
                               <div
                                 className="data-conclusao-container"
                                 data-nota-id={nota.id}
@@ -624,15 +645,15 @@ export default function Column({
                                   <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "4px" }}>
                                     <input
                                       type="date"
-                                      value={dataConclusaoEdit[nota.id] || ""}
-                                      onChange={(e) => setDataConclusaoEdit(prev => ({ ...prev, [nota.id]: e.target.value }))}
+                                      value={dataEdit?.[nota.id] || ""}
+                                      onChange={(e) => setDataEdit(prev => ({ ...prev, [nota.id]: e.target.value }))}
                                       onClick={(e) => e.stopPropagation()}
                                       style={{ fontSize: "0.85em", padding: "2px 4px" }}
                                     />
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        saveDataConclusao(nota.id, dataConclusaoEdit[nota.id]);
+                                        saveData(nota.id, dataEdit[nota.id]);
                                       }}
                                       style={{ fontSize: "0.8em" }}
                                     >
@@ -641,7 +662,7 @@ export default function Column({
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        setDataConclusaoEdit(prev => {
+                                        setDataEdit(prev => {
                                           const cp = { ...prev };
                                           delete cp[nota.id];
                                           return cp;
@@ -656,18 +677,18 @@ export default function Column({
                                   <div
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setDataConclusaoEdit(prev => ({ ...prev, [nota.id]: dataConclusaoSalva[nota.id] || "" }));
+                                      setDataEdit(prev => ({ ...prev, [nota.id]: dataAtual?.[nota.id] || "" }));
                                     }}
                                     style={{
                                       marginTop: "4px",
                                       fontSize: "0.85em",
-                                      color: dataConclusaoSalva[nota.id] ? "#444" : "#999",
-                                      fontStyle: dataConclusaoSalva[nota.id] ? "normal" : "italic",
+                                      color: dataAtual?.[nota.id] ? "#444" : "#999",
+                                      fontStyle: dataAtual?.[nota.id] ? "normal" : "italic",
                                     }}
                                   >
-                                    {dataConclusaoSalva[nota.id]
-                                      ? new Date(dataConclusaoSalva[nota.id]).toLocaleDateString("pt-BR")
-                                      : "Data da entrega"}
+                                    {dataAtual?.[nota.id]
+                                      ? formatarDataLocal(dataAtual[nota.id])
+                                      : usarDataEntrega ? "Data para entrega" : "Data da entrega"}
                                   </div>
                                 )}
                               </div>

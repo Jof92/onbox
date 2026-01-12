@@ -46,6 +46,8 @@ export default function Cards() {
   const [membros, setMembros] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddColumnMenu, setShowAddColumnMenu] = useState(false);
+  const [dataEntregaEdit, setDataEntregaEdit] = useState({});
+  const [dataEntregaSalva, setDataEntregaSalva] = useState({});
 
   const atualizarStatusNota = (notaId, updates) => {
     const setter = modoArquivadas ? setColumnsArquivadas : setColumnsNormais;
@@ -352,21 +354,26 @@ const updateUrlWithNota = (notaId) => {
           const progresso = {};
           const concluidas = new Set();
           const dataConclusao = {};
+          const dataEntrega = {}; // ✅ ADICIONE ESTA LINHA
+          
           pilhas.forEach(p => {
             p.notas.forEach(n => {
               if (n.progresso != null) progresso[n.id] = n.progresso;
               if (n.concluida) concluidas.add(String(n.id));
               if (n.data_conclusao) dataConclusao[n.id] = n.data_conclusao.split("T")[0];
+              if (n.data_entrega) dataEntrega[n.id] = n.data_entrega.split("T")[0]; // ✅ ADICIONE ESTA LINHA
             });
           });
-          return { progresso, concluidas, dataConclusao };
+          return { progresso, concluidas, dataConclusao, dataEntrega }; // ✅ ADICIONE dataEntrega
         };
 
-        const { progresso: progN, concluidas: concN, dataConclusao: dataN } = initEstado(pilhasNormaisComNotas);
+        // E depois:
+        const { progresso: progN, concluidas: concN, dataConclusao: dataN, dataEntrega: dataE } = initEstado(pilhasNormaisComNotas);
 
         setNotaProgresso(progN);
         setNotasConcluidas(concN);
         setDataConclusaoSalva(dataN);
+        setDataEntregaSalva(dataE);
 
         setColumnsNormais(
           pilhasNormaisComNotas.map(p => ({
@@ -640,6 +647,27 @@ useEffect(() => {
     }
   };
 
+  // Adicione esta função no Cards.jsx, logo após saveDataConclusao:
+const saveDataEntrega = async (notaId, data) => {
+  const { error } = await supabase.from("notas").update({ data_entrega: data || null }).eq("id", notaId);
+  if (!error) {
+    setDataEntregaSalva(prev => ({ ...prev, [notaId]: data || "" }));
+    setDataEntregaEdit(prev => { const cp = { ...prev }; delete cp[notaId]; return cp; });
+    
+    // Atualiza as colunas
+    const updateColumns = (setter) => {
+      setter(prev =>
+        prev.map(col => ({
+          ...col,
+          notas: col.notas.map(n => n.id === notaId ? { ...n, data_entrega: data || null } : n),
+        }))
+      );
+    };
+    updateColumns(setColumnsNormais);
+    updateColumns(setColumnsArquivadas);
+  }
+};
+
   useEffect(() => {
     const handleClickOutsideDate = (e) => {
       Object.keys(dataConclusaoEdit).forEach(id => {
@@ -868,6 +896,10 @@ const handleOpenNota = (nota) => {
                   entity={entity}
                   columnsNormais={columnsNormais}
                   columnsArquivadas={columnsArquivadas}
+                  dataEntregaEdit={dataEntregaEdit}
+                  dataEntregaSalva={dataEntregaSalva}
+                  setDataEntregaEdit={setDataEntregaEdit}
+                  saveDataEntrega={saveDataEntrega}
                 />
               ))}
               {provided.placeholder}
@@ -910,6 +942,8 @@ const handleOpenNota = (nota) => {
           setNotaProgresso={setNotaProgresso}
           donoContainerId={donoContainerId}
           onStatusUpdate={atualizarStatusNota}
+          setColumnsNormais={setColumnsNormais}
+          setColumnsArquivadas={setColumnsArquivadas}
         />
       )}
     </div>

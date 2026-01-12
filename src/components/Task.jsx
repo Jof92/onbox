@@ -8,7 +8,14 @@ import Loading from "./Loading";
 import ComentariosSection from "./TaskComentarios";
 import TaskAnexos from "./TaskAnexos";
 
-export default function Task({ onClose, projetoAtual, notaAtual, containerId: containerIdProp }) {
+export default function Task({
+  onClose,
+  projetoAtual,
+  notaAtual,
+  containerId: containerIdProp,
+  setColumnsNormais,
+  setColumnsArquivadas
+}) {
   const [descricao, setDescricao] = useState("");
   const [anexosSalvos, setAnexosSalvos] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -421,22 +428,43 @@ export default function Task({ onClose, projetoAtual, notaAtual, containerId: co
     }
   };
 
-  const handleSalvarDataEntregaTarefa = async (novaData) => {
-    if (!notaAtual?.id) return;
-    setLoading(true);
-    try {
-      await supabase
-        .from("notas")
-        .update({ data_entrega: novaData || null })
-        .eq("id", notaAtual.id);
-      setDataEntregaTarefa(novaData || "");
-    } catch (err) {
-      console.error("Erro ao salvar data de entrega da tarefa:", err);
-      alert("Erro ao salvar data de entrega.");
-    } finally {
-      setLoading(false);
-    }
-  };
+const handleSalvarDataEntregaTarefa = async (novaData) => {
+  if (!notaAtual?.id) return;
+  setLoading(true);
+  try {
+    await supabase
+      .from("notas")
+      .update({ data_entrega: novaData || null })
+      .eq("id", notaAtual.id);
+    setDataEntregaTarefa(novaData || "");
+
+    // ✅ Atualiza AMBOS os estados de colunas
+    const updateColumns = (setter) => {
+      if (setter) {
+        setter(prev =>
+          prev.map(col => {
+            const notaIndex = col.notas.findIndex(n => n.id === notaAtual.id);
+            if (notaIndex === -1) return col;
+            const updatedNotas = [...col.notas];
+            updatedNotas[notaIndex] = {
+              ...updatedNotas[notaIndex],
+              data_entrega: novaData || null
+            };
+            return { ...col, notas: updatedNotas };
+          })
+        );
+      }
+    };
+
+    updateColumns(setColumnsNormais);
+    updateColumns(setColumnsArquivadas);
+  } catch (err) {
+    console.error("Erro ao salvar data de entrega da tarefa:", err);
+    alert("Erro ao salvar data de entrega.");
+  } finally {
+    setLoading(false);
+  }
+};
 
   const getNomeProjeto = () => projetoAtual?.nome || projetoAtual?.name || "Sem projeto";
   const getNomeNota = () => notaAtual?.nome || notaAtual?.name || "Sem nota";

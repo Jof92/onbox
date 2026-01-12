@@ -32,13 +32,16 @@ export default function ModalNota({
   setNotaEditData,
   saveEditedNota,
   notaSelecionada,
-  project, // ✅ Este deve conter: id, name, type, pavimentos, etc.
+  project,
   usuarioAtual,
   usuarioId,
   notaProgresso,
   setNotaProgresso,
   donoContainerId,
   onStatusUpdate,
+  setColumns,
+  setColumnsNormais,
+  setColumnsArquivadas 
 }) {
   const handleProgressoChange = useCallback(
     (progresso) => {
@@ -157,6 +160,9 @@ export default function ModalNota({
                       usuarioAtual={usuarioAtual}
                       onClose={onCloseVisualizarNota}
                       containerAtual={{ id: donoContainerId }}
+                      setColumns={setColumns}
+                      setColumnsNormais={setColumnsNormais}
+                      setColumnsArquivadas={setColumnsArquivadas}
                     />
                   );
 
