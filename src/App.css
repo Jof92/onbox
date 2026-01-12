@@ -7,6 +7,8 @@
 
 html {
   scroll-behavior: smooth;
+  overflow: hidden;
+  height: 100%;
 }
 
 body {
@@ -14,7 +16,8 @@ body {
   background-color: #e3e4e6;
   color: #333;
   min-height: 100vh;
-  overflow-x: hidden; /* evita scroll horizontal */
+  height: 100%;
+
 }
 
 /* 🌐 ESTILOS GLOBAIS */
@@ -32,7 +35,7 @@ button {
 }
 
 /* 📦 CONTEÚDO PRINCIPAL */
-.app-main {
+.app-main{
   padding-top: 5rem; /* altura do header (ajuste se mudar) */
   width: 100%;
 }

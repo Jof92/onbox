@@ -1,14 +1,16 @@
 .footer {
-      /* fixa no final da tela */
-  left: 0;
+  position: fixed;
   bottom: 0;
-  width: 100%;
-  background-color: #1c243c; /* azul marinho */
-  color: #ffffff;
-  text-align: center;
-  font-size: 0.9rem;
-  z-index: 1000;        /* garante que fique acima do conteúdo */
-   
+  left: 0;
+  right: 0;
+  height: 20px;
+  background: #1a1a1a;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8em;
+  z-index: 1000;
 }
 
 .footer a {

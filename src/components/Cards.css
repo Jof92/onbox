@@ -5,6 +5,8 @@
   min-height: 88vh;
   background: #f4f6fa;
   font-family: 'Inter', Arial, sans-serif;
+  height: calc(100vh - 6rem);
+  overflow: hidden;
 }
 
 /* ====== HEADER ====== */
@@ -200,7 +202,11 @@
   padding: 10px 20px 20px 20px;
   gap: 24px;
   overflow-x: auto;
+  overflow-y: hidden; /* ✅ Previne scroll vertical no body */
   scroll-behavior: smooth;
+  align-items: flex-start; /* ✅ Alinha as colunas no topo */
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
 }
 
 .cards-column {
@@ -229,6 +235,7 @@
   margin-bottom: 14px;
   gap: 6px;
 }
+
 
 .column-header h3 {
   flex: 1;
@@ -289,7 +296,52 @@
   flex: 1;
   min-height: 60px;
   position: relative;
+  max-height: calc(100vh - 300px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  padding: 8px;
+  min-width: 280px;
+  max-width: 280px;
+  margin-right: 16px;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
 }
+.cards-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.cards-list::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 3px;
+}
+
+.cards-list::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+
+.cards-list::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.cards-body::-webkit-scrollbar {
+  width: 3px;
+}
+
+.cards-body::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 3px;
+}
+
+.cards-body::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+
 
 /* ====== CARD ====== */
 .card-item {
@@ -1172,15 +1224,40 @@
 }
 
 
-.diario-obras-list{
+.diario-obras-list {
   background-color: rgb(234, 239, 246);
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    border-radius: 8px;
-    padding: 8px;
-    position: relative;
-    min-width: 280px;
-    max-width: 320px;
-    margin-right: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  padding: 8px;
+  position: relative;
+  min-width: 280px;
+  max-width: 280px;
+  margin-right: 16px;
+  max-height: calc(100vh - 220px); /* ✅ Limita a altura */
+  overflow-y: auto; /* ✅ Scroll vertical */
+  overflow-x: hidden;
+  
+  /* Scrollbar styling */
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.diario-obras-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.diario-obras-list::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 3px;
+}
+
+.diario-obras-list::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.diario-obras-list::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 @media (max-width: 767px) {
