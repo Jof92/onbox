@@ -588,10 +588,14 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
       let pilhaRecebidosId;
       if (!pilhasRecebidos || pilhasRecebidos.length === 0) {
         const { data: novaPilha, error: insertError } = await supabase
-          .from("pilhas")
-          .insert({ title: "Recebidos", setor_id: setorId })
-          .select("id")
-          .single();
+        .from("pilhas")
+        .insert({ 
+          title: "Recebidos", 
+          setor_id: setorId,
+          ordem: 0
+        })
+        .select("id")
+        .single();
         if (insertError) throw insertError;
         pilhaRecebidosId = novaPilha.id;
       } else {
