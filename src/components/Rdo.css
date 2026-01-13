@@ -718,6 +718,8 @@ margin-bottom: -6px;
   margin-top: 4px;
   padding: 6px 0;
   min-width: 160px;
+  overflow: auto;
+  height: 15em;
 }
 
 .rdo-pavimento-select-item {
