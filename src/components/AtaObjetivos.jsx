@@ -1,6 +1,8 @@
 // src/components/AtaObjetivos.jsx
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../supabaseClient";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faUserPlus, faCalendar } from "@fortawesome/free-solid-svg-icons";
 
 const VERBOS = [
   "verificar", "quantificar", "viabilizar", "cobrar", "fechar", "iniciar", "definir", "reduzir", "alcançar", "acompanhar", "implementar", "analisar",
@@ -60,19 +62,18 @@ const ChipResponsavel = ({ responsavel, onRemove, disabled }) => {
   const isExterno = !responsavel.usuario_id;
 
   return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center',
-      background: isExterno ? '#fde68a' : '#e0f2fe',
-      color: isExterno ? '#854d0e' : '#0369a1',
-      padding: '2px 8px', borderRadius: '12px', fontSize: '12px',
-      marginRight: '4px', border: isExterno ? '1px solid #fcd34d' : '1px solid #bae6fd',
-      maxWidth: '120px', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
-    }}>
+    <span className={`chip-responsavel ${isExterno ? 'chip-externo' : ''}`}>
       {nomeExibicao}
       {!disabled && (
-        <span onClick={(e) => { e.stopPropagation(); onRemove(responsavel); }}
-          style={{ marginLeft: '4px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold',
-            color: isExterno ? '#854d0e' : '#0369a1' }}>×</span>
+        <span
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove(responsavel);
+          }}
+          className="chip-remove"
+        >
+          ×
+        </span>
       )}
     </span>
   );
@@ -87,7 +88,7 @@ export default function AtaObjetivos({
   projetoNome,
   autorNome,
   onProgressoChange,
-  containerAtual // ✅ Recebe containerAtual do AtaCard
+  containerAtual
 }) {
   const [criarObjetivos, setCriarObjetivos] = useState(false);
   const [objetivosList, setObjetivosList] = useState([]);
@@ -314,8 +315,6 @@ export default function AtaObjetivos({
     }
   };
 
-  // ============= Funções de responsáveis (CORRIGIDAS COM containerAtual) =============
-
   const handleResponsavelInputChange = (e, i) => {
     const valor = e.target.value;
     setInputResponsavel(prev => ({ ...prev, [i]: valor }));
@@ -377,17 +376,6 @@ export default function AtaObjetivos({
         });
     } else {
       setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
-    }
-  };
-
-  const handleKeyDownResponsavel = (e, i) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const nome = e.target.value.trim();
-      if (nome && !nome.startsWith('@')) {
-        adicionarResponsavelExterno(nome, i);
-        setInputResponsavel(prev => ({ ...prev, [i]: "" }));
-      }
     }
   };
 
@@ -579,7 +567,7 @@ export default function AtaObjetivos({
                   />
                   <span><strong>{numeroObjetivo}</strong> {textoCapitalizado}</span>
 
-                  <div style={{ position: "relative", display: 'flex', flexWrap: 'wrap', gap: '4px', padding: '4px 0'}}>
+                  <div className="objetivo-responsaveis-chips">
                     {o.responsaveis.map(resp => (
                       <ChipResponsavel
                         key={resp.id}
@@ -588,56 +576,119 @@ export default function AtaObjetivos({
                         disabled={isConcluido}
                       />
                     ))}
+                  </div>
+
+                  <div className="objetivo-acao-direita">
                     {!isConcluido && (
-                      <input
-                        type="text"
-                        placeholder={o.responsaveis.length === 0 ? "Digite nome ou @" : ""}
-                        value={inputResponsavel[i] || ""}
-                        onChange={e => handleResponsavelInputChange(e, i)}
-                        onKeyDown={e => handleKeyDownResponsavel(e, i)}
-                      />
+                      <span
+                        className="icone-add-resp"
+                        title="Adicionar responsável"
+                        onClick={() => {
+                          setEditandoComentario(prev => ({ ...prev, [`resp-${i}`]: true }));
+                        }}
+                      >
+                        <FontAwesomeIcon icon={faUserPlus} />
+                      </span>
                     )}
-                    {sugestoesResponsavel[i]?.length > 0 && !isConcluido && (
-                      <div className="sugestoes-list" style={{ position: "absolute", zIndex: 10, top: '100%', left: 0 }}>
-                        {sugestoesResponsavel[i].map(item => (
-                          <div
-                            key={item.id}
-                            className="sugestao-item"
-                            onClick={() => adicionarResponsavelInterno(item, i)}
-                          >
-                            <span>@{item.nickname || item.nome}</span>
+
+                    {editandoComentario[`resp-${i}`] && !isConcluido && (
+                      <div className="input-responsavel-flutuante">
+                        <input
+                          type="text"
+                          autoFocus
+                          placeholder="Nome ou @menção"
+                          value={inputResponsavel[i] || ""}
+                          onChange={(e) => handleResponsavelInputChange(e, i)}
+                          onBlur={() => {
+                            setTimeout(() => setEditandoComentario(prev => ({ ...prev, [`resp-${i}`]: false })), 200);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              const valor = inputResponsavel[i] || "";
+                              if (!valor.startsWith("@")) {
+                                adicionarResponsavelExterno(valor, i);
+                                setEditandoComentario(prev => ({ ...prev, [`resp-${i}`]: false }));
+                              }
+                            } else if (e.key === "Escape") {
+                              setEditandoComentario(prev => ({ ...prev, [`resp-${i}`]: false }));
+                            }
+                          }}
+                        />
+                        {sugestoesResponsavel[i]?.length > 0 && (
+                          <div className="sugestoes-list-flutuante">
+                            {sugestoesResponsavel[i].map(item => (
+                              <div
+                                key={item.id}
+                                className="sugestao-item"
+                                onClick={() => {
+                                  adicionarResponsavelInterno(item, i);
+                                  setEditandoComentario(prev => ({ ...prev, [`resp-${i}`]: false }));
+                                }}
+                              >
+                                @{item.nickname || item.nome}
+                              </div>
+                            ))}
                           </div>
-                        ))}
+                        )}
                       </div>
                     )}
                   </div>
 
-                  <div style={{ display: "flex", alignItems: "center", gap: "4px", justifyContent:'center', }}>
-                    <input
-                      type="date"
-                      value={o.dataEntrega || ""}
-                      onChange={async (e) => {
-                        if (isConcluido) return;
-                        const valorData = e.target.value || null;
-                        const novos = [...objetivosList];
-                        novos[i].dataEntrega = valorData;
-                        setObjetivosList(novos);
-                        if (o.id && !String(o.id).startsWith('temp')) {
-                          try {
-                            const { error } = await supabase
-                              .from("ata_objetivos")
-                              .update({ data_entrega: valorData })
-                              .eq("id", o.id);
-                            if (error) {
-                              console.error("Erro ao salvar data de entrega:", error);
+                  <div className="objetivo-acao">
+                    {!isConcluido && (
+                      <label
+                        className="objetivo-data-entrega"
+                        style={{ 
+                          cursor: 'pointer', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: '4px',
+                          position: 'relative'
+                        }}
+                      >
+                        {o.dataEntrega ? (
+                          <>
+                            {new Date(o.dataEntrega).toLocaleDateString('pt-BR')}
+                            <FontAwesomeIcon icon={faCalendar} style={{ fontSize: '12px', color: '#555' }} />
+                          </>
+                        ) : (
+                          <FontAwesomeIcon icon={faCalendar} style={{ fontSize: '14px', color: '#555' }} />
+                        )}
+                        <input
+                          type="date"
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            width: '100%',
+                            height: '100%',
+                            opacity: 0,
+                            cursor: 'pointer'
+                          }}
+                          value={o.dataEntrega || ''}
+                          onChange={async (e) => {
+                            const valorData = e.target.value || null;
+                            const novos = [...objetivosList];
+                            novos[i].dataEntrega = valorData;
+                            setObjetivosList(novos);
+                            if (o.id && !String(o.id).startsWith('temp')) {
+                              try {
+                                const { error } = await supabase
+                                  .from("ata_objetivos")
+                                  .update({ data_entrega: valorData })
+                                  .eq("id", o.id);
+                                if (error) {
+                                  console.error("Erro ao salvar data de entrega:", error);
+                                }
+                              } catch (err) {
+                                console.error("Erro inesperado ao salvar data de entrega:", err);
+                              }
                             }
-                          } catch (err) {
-                            console.error("Erro inesperado ao salvar data de entrega:", err);
-                          }
-                        }
-                      }}
-                      disabled={isConcluido}
-                    />
+                          }}
+                        />
+                      </label>
+                    )}
 
                     {isConcluido && (
                       <div style={{ position: "relative" }}>

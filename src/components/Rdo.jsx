@@ -1,5 +1,5 @@
 // src/components/Rdo.jsx
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import "./Rdo.css";
 import { supabase } from "../supabaseClient";
 import { FaTimes, FaTrash } from "react-icons/fa";
@@ -20,24 +20,10 @@ import {
   faFilePdf,
 } from "@fortawesome/free-regular-svg-icons";
 import BuscaInsumo from "./BuscaInsumo";
-import RdoCamera from "./RdoCamera"; // ✅ Importação do novo componente
+import RdoCamera from "./RdoCamera";
 
-// Ícone de transferência de dados (SVG fornecido)
-const DataTransferIcon = ({ onClick }) => (
-  <svg
-    id="Layer_1"
-    data-name="Layer 1"
-    xmlns="http://www.w3.org/2000/svg"
-    viewBox="0 0 122.88 85.45"
-    width="24"
-    height="24"
-    className="data-transfer-icon"
-    onClick={onClick}
-  >
-    <title>data-transfer</title>
-    <path d="M74.69,32.21a.72.72,0,0,0-.52.21.72.72,0,0,0-.2.52v17.5a6.65,6.65,0,0,0-4.35,0V32.94a5.12,5.12,0,0,1,5.09-5.1h43.08a5.12,5.12,0,0,1,5.09,5.1V80.36a5.12,5.12,0,0,1-5.09,5.09H78.45c1.14-1,2.84-2.69,4.55-4.36h34.81a.72.72,0,0,0,.73-.73V32.94a.72.72,0,0,0-.73-.73ZM53.16,73V65.87a2.59,2.59,0,0,1,2.58-2.58H69.61V58.74a2.13,2.13,0,0,1,.86-1.82c1.44-1,2.85.35,3.85,1.25,2.81,2.57,8.49,8.39,10,9.66a2.09,2.09,0,0,1,0,3.28c-1.53,1.31-7.51,7.45-10.25,9.89-1,.85-2.26,1.89-3.58,1a2.14,2.14,0,0,1-.86-1.82V75.62H55.74A2.62,2.62,0,0,1,53.16,73ZM40.92,7.89,54.39,20.51H40.92V7.89ZM13.71,33a2,2,0,0,1,1.47-.68H38.79a1.93,1.93,0,0,1,1.47.66,2.31,2.31,0,0,1,0,3.06,2,2,0,0,1-1.47.68H15.18a2,2,0,0,1-1.48-.67,2.33,2.33,0,0,1-.57-1.53A2.26,2.26,0,0,1,13.71,33Zm0,25.58a2,2,0,0,1,1.47-.67H45.57a2,2,0,0,1,1.43.63l0,0a2.28,2.28,0,0,1,.58,1.53,2.24,2.24,0,0,1-.57,1.53,2,2,0,0,1-1.48.67H15.18a2,2,0,0,1-1.44-.62l0-.05a2.32,2.32,0,0,1,0-3.06ZM46.14,45.13a2,2,0,0,1,1.47.68,2.32,2.32,0,0,1,0,3.06,2,2,0,0,1-1.48.67h-31a2,2,0,0,1-1.48-.67,2.32,2.32,0,0,1,0-3.06l0,0a2,2,0,0,1,1.43-.64ZM13.71,20.23a2,2,0,0,1,1.47-.68h9.38a2,2,0,0,1,1.43.63l0,0a2.25,2.25,0,0,1,.58,1.53,2.29,2.29,0,0,1-.54,1.48l0,.05a2,2,0,0,1-1.47.67H15.18a2,2,0,0,1-1.44-.62l0,0a2.33,2.33,0,0,1-.57-1.54,2.27,2.27,0,0,1,.57-1.51ZM61.89,22.6c0-1.05-1.44-2.26-2.12-2.92L40.4.83A2.19,2.19,0,0,0,38.67,0H4A4,4,0,0,0,0,4V73.08a4,4,0,0,0,4,4H46.79v-4.5H4.51V4.49h31.9V22.76A2.26,2.26,0,0,0,38.67,25H57.39V56.56h4.5v-34ZM84.46,48.65a2.1,2.1,0,0,1-2-2.17,2.07,2.07,0,0,1,2-2.17H108a2.07,2.07,0,0,1,2,2.17,2.1,2.1,0,0,1-2,2.17H84.46ZM91,62.79a2.11,2.11,0,0,1-2-2.17,2.07,2.07,0,0,1,2-2.17h17a2.07,2.07,0,0,1,2,2.17,2.1,2.1,0,0,1-2,2.17H91Z" />
-  </svg>
-);
+// ✅ Importação da imagem de transferência de dados
+import dataTransferImage from "../assets/data-transfer.png";
 
 const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
   const responsavelInputRef = useRef(null);
@@ -69,7 +55,20 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
   const [buscaInsumoAberta, setBuscaInsumoAberta] = useState(false);
   const [linhaBuscaAtiva, setLinhaBuscaAtiva] = useState(null);
   const [fotoEmExibicao, setFotoEmExibicao] = useState(null);
-  const [cameraAberta, setCameraAberta] = useState(false); // ✅ Novo estado
+  const [cameraAberta, setCameraAberta] = useState(false);
+
+  // Estados para pavimentos
+  const [todosPavimentosProjeto, setTodosPavimentosProjeto] = useState([]);
+  const [mostrarPavimentosDisponiveis, setMostrarPavimentosDisponiveis] = useState(false);
+
+  // Chave única para rascunho
+  const draftKey = `rdo_draft_${notaId}`;
+
+  // Pavimentos disponíveis para adicionar (não usados)
+  const pavimentosDisponiveis = useMemo(() => {
+    const usados = new Set(pavimentosAtividades.map(item => item.pavimento));
+    return todosPavimentosProjeto.filter(pav => !usados.has(pav));
+  }, [pavimentosAtividades, todosPavimentosProjeto]);
 
   // Carregar projeto
   useEffect(() => {
@@ -139,6 +138,10 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
           .eq("project_id", projetoAtual.id)
           .order("ordem", { ascending: true });
 
+        // ✅ Salvar lista completa de pavimentos do projeto
+        const nomesPavimentos = pavimentosData.map(p => p.name);
+        setTodosPavimentosProjeto(nomesPavimentos);
+
         let pavimentosComDescricao = [];
         if (rdoData?.atividades && Object.keys(rdoData.atividades).length > 0) {
           pavimentosComDescricao = Object.keys(rdoData.atividades).map(p => ({
@@ -146,7 +149,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
             descricao: rdoData.atividades[p] || "",
           }));
         } else {
-          pavimentosComDescricao = pavimentosData.map(p => ({ pavimento: p.name, descricao: "" }));
+          pavimentosComDescricao = nomesPavimentos.map(p => ({ pavimento: p, descricao: "" }));
         }
         setPavimentosAtividades(pavimentosComDescricao);
 
@@ -173,12 +176,37 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
         } else {
           setRdoCarregado(true);
         }
+
+        // Restaurar rascunho após carregar dados iniciais
+        if (rdoCarregado) {
+          const savedDraft = sessionStorage.getItem(draftKey);
+          if (savedDraft) {
+            try {
+              const draft = JSON.parse(savedDraft);
+              if (draft.data) setData(draft.data);
+              if (draft.pavimentosAtividades) setPavimentosAtividades(draft.pavimentosAtividades);
+            } catch (e) {
+              console.warn("Falha ao restaurar rascunho do RDO");
+            }
+          }
+        }
       } catch (err) {
         console.error("Erro ao carregar RDO:", err);
       }
     };
     fetchRdo();
   }, [notaId, projetoAtual]);
+
+  // Salvar rascunho automaticamente
+  useEffect(() => {
+    if (!notaId || !rdoCarregado) return;
+    const draft = {
+      data,
+      pavimentosAtividades,
+      timestamp: Date.now(),
+    };
+    sessionStorage.setItem(draftKey, JSON.stringify(draft));
+  }, [data, pavimentosAtividades, notaId, rdoCarregado, draftKey]);
 
   // Funções auxiliares
   const copiarDoUltimoRdo = async (tipo) => {
@@ -196,6 +224,15 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
       if (tipo === "efetivo_proprio") dados = ultimo.efetivo_proprio || [{ funcao: "", total: "", presentes: "" }];
       if (tipo === "efetivo_terceirizado") dados = ultimo.efetivo_terceirizado || [{ funcao: "", total: "", presentes: "" }];
       if (tipo === "equipamentos") dados = ultimo.equipamentos || [{ codigo: "", descricao: "", total: "", em_uso: "" }];
+      if (tipo === "atividades") {
+        const atividadesAnteriores = ultimo.atividades || {};
+        const novasAtividades = Object.keys(atividadesAnteriores).map(pav => ({
+          pavimento: pav,
+          descricao: atividadesAnteriores[pav] || "",
+        }));
+        setPavimentosAtividades(novasAtividades);
+        return;
+      }
       setData(prev => ({ ...prev, [tipo]: dados }));
     } catch (err) {
       alert("Erro ao copiar dados do último Diário de Obra.");
@@ -365,6 +402,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
         if (res?.[0]?.id) setRdoId(res[0].id);
       }
 
+      sessionStorage.removeItem(draftKey);
       alert("Diário de Obra salvo com sucesso!");
       onClose();
     } catch (error) {
@@ -373,6 +411,11 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCancel = () => {
+    sessionStorage.removeItem(draftKey);
+    onClose();
   };
 
   const formatDate = (dateStr) => {
@@ -575,9 +618,54 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
           </table>
         </div>
 
-        {/* Atividades Executadas */}
+        {/* Atividades Executadas — ✅ COM BOTÃO DE + E TRANSFERÊNCIA */}
         <div className="rdo-section">
-          <h3><FontAwesomeIcon icon={faPersonDigging} /> Atividades Executadas</h3>
+          <div className="rdo-section-header">
+            <h3><FontAwesomeIcon icon={faPersonDigging} /> Atividades Executadas</h3>
+            <div className="rdo-add-button-group">
+              {/* ✅ Botão de transferência para atividades */}
+              <img
+                src={dataTransferImage}
+                alt="Copiar do último RDO"
+                className="data-transfer-icon"
+                onClick={() => copiarDoUltimoRdo("atividades")}
+                width="24"
+                height="24"
+              />
+              {/* ✅ Botão de adicionar pavimento ausente */}
+              <button
+                type="button"
+                className="rdo-add-pavimento-btn"
+                onClick={() => setMostrarPavimentosDisponiveis(prev => !prev)}
+                disabled={pavimentosDisponiveis.length === 0}
+                title={pavimentosDisponiveis.length === 0 ? "Todos os pavimentos já estão incluídos" : "Adicionar pavimento"}
+              >
+                +
+              </button>
+            </div>
+          </div>
+
+          {/* Dropdown de pavimentos disponíveis */}
+          {mostrarPavimentosDisponiveis && pavimentosDisponiveis.length > 0 && (
+            <div className="rdo-pavimento-select-dropdown">
+              {pavimentosDisponiveis.map((pav) => (
+                <div
+                  key={pav}
+                  className="rdo-pavimento-select-item"
+                  onClick={() => {
+                    setPavimentosAtividades(prev => [
+                      ...prev,
+                      { pavimento: pav, descricao: "" }
+                    ]);
+                    setMostrarPavimentosDisponiveis(false);
+                  }}
+                >
+                  {pav}
+                </div>
+              ))}
+            </div>
+          )}
+
           {pavimentosAtividades.length === 0 ? (
             <p>Nenhum pavimento cadastrado no projeto.</p>
           ) : (
@@ -610,7 +698,14 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
             <div className="rdo-section-header">
               <h3><FontAwesomeIcon icon={faUserGroup} /> Efetivo Próprio</h3>
               <div className="rdo-add-button-group">
-                <DataTransferIcon onClick={() => copiarDoUltimoRdo("efetivo_proprio")} />
+                <img
+                  src={dataTransferImage}
+                  alt="Copiar do último RDO"
+                  className="data-transfer-icon"
+                  onClick={() => copiarDoUltimoRdo("efetivo_proprio")}
+                  width="24"
+                  height="24"
+                />
                 <button type="button" onClick={() => addRow("efetivo_proprio")}>+</button>
               </div>
             </div>
@@ -644,7 +739,14 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
             <div className="rdo-section-header">
               <h3><FontAwesomeIcon icon={faUserGroup} /> Efetivo Terceirizado</h3>
               <div className="rdo-add-button-group">
-                <DataTransferIcon onClick={() => copiarDoUltimoRdo("efetivo_terceirizado")} />
+                <img
+                  src={dataTransferImage}
+                  alt="Copiar do último RDO"
+                  className="data-transfer-icon"
+                  onClick={() => copiarDoUltimoRdo("efetivo_terceirizado")}
+                  width="24"
+                  height="24"
+                />
                 <button type="button" onClick={() => addRow("efetivo_terceirizado")}>+</button>
               </div>
             </div>
@@ -680,7 +782,14 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
           <div className="rdo-section-header">
             <h3><FontAwesomeIcon icon={faGear} /> Equipamentos</h3>
             <div className="rdo-add-button-group">
-              <DataTransferIcon onClick={() => copiarDoUltimoRdo("equipamentos")} />
+              <img
+                src={dataTransferImage}
+                alt="Copiar do último RDO"
+                className="data-transfer-icon"
+                onClick={() => copiarDoUltimoRdo("equipamentos")}
+                width="24"
+                height="24"
+              />
               <button type="button" onClick={() => addRow("equipamentos")}>+</button>
             </div>
           </div>
@@ -845,7 +954,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
           </div>
 
           <div className="rdo-main-actions">
-            <button className="btn-cancel" onClick={onClose} disabled={loading}>
+            <button className="btn-cancel" onClick={handleCancel} disabled={loading}>
               Cancelar
             </button>
             <button className="btn-save" onClick={saveRdo} disabled={loading}>
@@ -912,7 +1021,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
         onSelect={handleSelecionarInsumo}
       />
 
-      {/* ✅ Modal de câmera */}
+      {/* Modal de câmera */}
       <RdoCamera
         isOpen={cameraAberta}
         onClose={() => setCameraAberta(false)}

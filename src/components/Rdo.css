@@ -682,6 +682,53 @@ margin-bottom: -6px;
   gap: 12px;
 }
 
+.rdo-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.rdo-add-pavimento-btn {
+  background: #4f46e5;
+  color: white;
+  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rdo-add-pavimento-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.rdo-pavimento-select-dropdown {
+  position: absolute;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  z-index: 1000;
+  margin-top: 4px;
+  padding: 6px 0;
+  min-width: 160px;
+}
+
+.rdo-pavimento-select-item {
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.rdo-pavimento-select-item:hover {
+  background-color: #f3f4f6;
+}
+
 
 
 /* Responsivo */
