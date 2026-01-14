@@ -12,9 +12,7 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusEnvio, setStatusEnvio] = useState(null);
-
-  // ✅ Estado para tooltip de locação
-  const [tooltipAberto, setTooltipAberto] = useState(null); // id da linha
+  const [tooltipAberto, setTooltipAberto] = useState(null);
   const tooltipRef = useRef(null);
 
   // Fechar tooltip ao clicar fora
@@ -30,6 +28,20 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [tooltipAberto]);
+
+  // Função para formatar texto em Title Case
+  const formatarTitleCase = (texto) => {
+    if (!texto || typeof texto !== 'string') return texto;
+    
+    return texto
+      .toLowerCase()
+      .split(' ')
+      .map(palavra => {
+        if (palavra.length === 0) return palavra;
+        return palavra.charAt(0).toUpperCase() + palavra.slice(1);
+      })
+      .join(' ');
+  };
 
   const carregarDados = async () => {
     setLoading(true);
@@ -48,6 +60,7 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
       if (error) throw error;
 
       const mapped = (itensSalvos || []).map(item => {
+        // Processar locação
         let locacaoArray = [];
         try {
           if (typeof item.locacao === 'string') {
@@ -66,12 +79,27 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
           locacaoArray = item.locacao ? [String(item.locacao)] : [];
         }
 
+        // Verificar se é item CRIAR
+        const isCriar = (item.codigo || "").toLowerCase() === "criar";
+        
+        // Formatar descrição se necessário
+        let descricaoFormatada = item.descricao || "";
+        if (isCriar && descricaoFormatada) {
+          // Verificar se está toda em CAIXA ALTA
+          const isUpperCase = descricaoFormatada === descricaoFormatada.toUpperCase() &&
+                              descricaoFormatada !== descricaoFormatada.toLowerCase();
+          
+          if (isUpperCase) {
+            descricaoFormatada = formatarTitleCase(descricaoFormatada);
+          }
+        }
+
         return {
           id: item.id,
           item_original_id: item.item_original_id,
           selecionado: Boolean(item.selecionado),
           codigo: item.codigo || "",
-          descricao: item.descricao || "",
+          descricao: descricaoFormatada,
           unidade: item.unidade || "",
           quantidade: item.quantidade || "",
           locacao: locacaoArray,
@@ -82,7 +110,7 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
           grupo_envio: item.grupo_envio || "antigo",
           data_envio: item.data_envio || item.criado_em,
           enviado_por: item.enviado_por || "Usuário",
-          isCriar: (item.codigo || "").toLowerCase() === "criar",
+          isCriar: isCriar,
           ordem: item.ordem || 0,
         };
       });
@@ -360,7 +388,6 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
                     </td>
                     <td><span>{row.unidade || ""}</span></td>
                     <td><span>{row.quantidade || ""}</span></td>
-                    {/* ✅ COLUNA DE LOCAÇÃO COM TOOLTIP AO CLICAR */}
                     <td>
                       <div
                         className="locacao-resumo"
@@ -385,7 +412,6 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
                             : `${row.locacao[0]} +`}
                       </div>
 
-                      {/* ✅ TOOLTIP FLUTUANTE */}
                       {tooltipAberto === row.id && (
                         <div
                           ref={tooltipRef}
