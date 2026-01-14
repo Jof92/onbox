@@ -1225,7 +1225,11 @@
   background: #e9ecef;
   border: none;
   color: #495057;
+  position: relative;
+  display: inline-block;
 }
+
+
 
 /* Campo de data customizado */
 .data-entrega-custom {
@@ -1260,7 +1264,7 @@
 
 .input-responsavel-flutuante {
   position: absolute;
-  right: 20%;
+  left: 50%;            /* alinhado à esquerda do ícone */
   margin-top: 4px;
   background: white;
   border: 1px solid #ddd;
@@ -1268,7 +1272,8 @@
   padding: 8px;
   z-index: 1000;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-  max-width: 500px;
+  max-width: 200px;
+  min-width: 200px;
 }
 
 .input-responsavel-flutuante input {
@@ -1388,19 +1393,6 @@
 .icone-editar:hover,
 .icone-add-resp:hover {
   background: #f0f0f0;
-}
-
-.input-responsavel-flutuante {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  z-index: 10;
-  background: white;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  padding: 6px;
-  min-width: 200px;
 }
 
 .input-responsavel-flutuante input {

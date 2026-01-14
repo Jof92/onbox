@@ -1147,6 +1147,8 @@
   bottom: 24px;
   right: 24px;
   z-index: 1000;
+  position: relative;
+  display: inline-block;
 }
 
 .floating-add-column-btn {
@@ -1163,6 +1165,7 @@
   justify-content: center;
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
   transition: transform 0.2s;
+  
 }
 
 .floating-add-column-btn:hover {
@@ -1172,13 +1175,13 @@
 
 .add-column-menu {
   position: absolute;
-  bottom: 100%;
-  right: 0;
-  margin-bottom: 8px;
+  top: 100px;    
+  right: 0;       
+  margin-top: 8px; 
   background: white;
   border: 1px solid #ddd;
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   padding: 8px 0;
   min-width: 160px;
   z-index: 1001;

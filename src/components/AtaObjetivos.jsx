@@ -61,9 +61,34 @@ const ChipResponsavel = ({ responsavel, onRemove, disabled }) => {
   const nomeExibicao = responsavel.nome_exibicao || "Usuário";
   const isExterno = !responsavel.usuario_id;
 
+  // Função para gerar abreviação
+  const gerarAbreviacao = (nome) => {
+    if (!nome) return "U";
+    
+    // Se tiver underscore (ex: caio_lamarck)
+    if (nome.includes('_')) {
+      const partes = nome.split('_');
+      return partes.map(p => p.charAt(0).toUpperCase()).join('_');
+    }
+    
+    // Se tiver espaço (ex: Caio Lamarck)
+    if (nome.includes(' ')) {
+      const partes = nome.split(' ').filter(p => p.length > 0);
+      return partes.map(p => p.charAt(0).toUpperCase()).join('');
+    }
+    
+    // Nome simples (ex: Thalis) - pega as duas primeiras letras
+    return nome.substring(0, 2).charAt(0).toUpperCase() + nome.substring(1, 2).toLowerCase();
+  };
+
+  const abreviacao = gerarAbreviacao(nomeExibicao);
+
   return (
-    <span className={`chip-responsavel ${isExterno ? 'chip-externo' : ''}`}>
-      {nomeExibicao}
+    <span 
+      className={`chip-responsavel ${isExterno ? 'chip-externo' : ''}`}
+      title={nomeExibicao}
+    >
+      {abreviacao}
       {!disabled && (
         <span
           onClick={(e) => {
@@ -649,7 +674,7 @@ export default function AtaObjetivos({
                       >
                         {o.dataEntrega ? (
                           <>
-                            {new Date(o.dataEntrega).toLocaleDateString('pt-BR')}
+                            {o.dataEntrega.split('-').reverse().join('/')}
                             <FontAwesomeIcon icon={faCalendar} style={{ fontSize: '12px', color: '#555' }} />
                           </>
                         ) : (

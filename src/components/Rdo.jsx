@@ -5,22 +5,11 @@ import { supabase } from "../supabaseClient";
 import { FaTimes, FaTrash } from "react-icons/fa";
 import { FaMagnifyingGlass } from "react-icons/fa6";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faCloudSun,
-  faCloudShowersHeavy,
-  faPersonDigging,
-  faUserGroup,
-  faGear,
-  faTriangleExclamation,
-  faCamera,
-  faPrint,
-} from "@fortawesome/free-solid-svg-icons";
-import {
-  faSun,
-  faFilePdf,
-} from "@fortawesome/free-regular-svg-icons";
+import {faCloudSun, faCloudShowersHeavy, faPersonDigging, faUserGroup, faGear, faTriangleExclamation, faCamera, faPrint,} from "@fortawesome/free-solid-svg-icons";
+import { faSun, faFilePdf,} from "@fortawesome/free-regular-svg-icons";
 import BuscaInsumo from "./BuscaInsumo";
 import RdoCamera from "./RdoCamera";
+import RdoPdf from './RdoPdf';
 
 // ✅ Importação da imagem de transferência de dados
 import dataTransferImage from "../assets/data-transfer.png";
@@ -943,9 +932,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
             <button
               type="button"
               className="rdo-export-btn rdo-pdf-btn"
-              onClick={() => {
-                alert("Funcionalidade de exportação para PDF ainda em desenvolvimento.");
-              }}
+              onClick={() => RdoPdf.exportar(projetoNome, dataOriginal)}
               title="Exportar para PDF"
             >
               <FontAwesomeIcon icon={faFilePdf} />

@@ -730,7 +730,11 @@ margin-bottom: -6px;
 .rdo-pavimento-select-item:hover {
   background-color: #f3f4f6;
 }
-
+/* Especificamente para inputs dentro de tabelas */
+.rdo-section tbody input {
+  padding: 2px 8px !important;
+  text-align: left !important;
+}
 
 
 /* Responsivo */
