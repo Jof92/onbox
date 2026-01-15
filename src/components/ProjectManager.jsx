@@ -684,6 +684,8 @@ export default function ProjectManager({ containerAtual, user, onSidebarUpdate }
           }}
           menuSetorAberto={menuSetorAberto}
           setMenuSetorAberto={setMenuSetorAberto}
+          containerId={containerAtual}
+          currentUserId={currentUserId}
         />
       )}
 

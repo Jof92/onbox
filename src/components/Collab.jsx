@@ -16,7 +16,11 @@ export default function Collab({ onClose, user, onOpenTask }) {
   const [loadingIntegrantes, setLoadingIntegrantes] = useState(true);
   const [activeTab, setActiveTab] = useState("notificacoes");
 
-  // Função para mapear o tipo da nota para classe de estilo
+  const [allProjects, setAllProjects] = useState([]);
+  const [allSetores, setAllSetores] = useState([]);
+  const [selectedPermissions, setSelectedPermissions] = useState({ projetos: [], setores: [] });
+  const [loadingProjectsSetores, setLoadingProjectsSetores] = useState(true);
+
   const getTipoClasse = (tipoNota) => {
     if (!tipoNota) return "";
     const mapa = {
@@ -29,7 +33,6 @@ export default function Collab({ onClose, user, onOpenTask }) {
     return mapa[tipoNota] || "tipo-lista";
   };
 
-  // ✅ Fechar com ESC ou clique fora
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === "Escape") {
@@ -52,7 +55,6 @@ export default function Collab({ onClose, user, onOpenTask }) {
     };
   }, [onClose]);
 
-  // 🔔 Buscar notificações — COM CAMINHO HIERÁRQUICO E TIPO DA NOTA
   const fetchNotificacoes = useCallback(async () => {
     if (!user?.id || !user?.email) {
       setConvitesRecebidos([]);
@@ -63,7 +65,6 @@ export default function Collab({ onClose, user, onOpenTask }) {
 
     setLoadingNotificacoes(true);
     try {
-      // Convites recebidos
       const { data: convites, error: convitesError } = await supabase
         .from("convites")
         .select("*")
@@ -84,7 +85,6 @@ export default function Collab({ onClose, user, onOpenTask }) {
         );
       }
 
-      // Buscar notificações com tipo da nota incluso
       const { data: notificacoesMencoes, error: mencaoError } = await supabase
         .from("notificacoes")
         .select(`
@@ -109,7 +109,6 @@ export default function Collab({ onClose, user, onOpenTask }) {
       let mencoesFormatadas = [];
 
       if (!mencaoError && notificacoesMencoes?.length) {
-        // Coletar IDs únicos
         const pilhaIds = [...new Set(notificacoesMencoes.map(n => n.pilha_id).filter(Boolean))];
         const containerIds = [...new Set(notificacoesMencoes.map(n => n.container_id).filter(Boolean))];
         const unidadeIds = [...new Set(
@@ -118,7 +117,6 @@ export default function Collab({ onClose, user, onOpenTask }) {
             .filter(Boolean)
         )];
 
-        // Buscar nomes: container vem de PROFILES, pilhas usam "title"
         const [pilhasRes, containersRes, unidadesRes] = await Promise.all([
           pilhaIds.length
             ? supabase.from("pilhas").select("id, title").in("id", pilhaIds)
@@ -168,7 +166,6 @@ export default function Collab({ onClose, user, onOpenTask }) {
     }
   }, [user?.id, user?.email]);
 
-  // 👥 Buscar integrantes
   const fetchIntegrantes = useCallback(async () => {
     if (!user?.id) {
       setIntegrantes([]);
@@ -218,12 +215,41 @@ export default function Collab({ onClose, user, onOpenTask }) {
     }
   }, [user?.id]);
 
+  const fetchProjectsAndSetores = useCallback(async () => {
+    if (!user?.id) {
+      setAllProjects([]);
+      setAllSetores([]);
+      setLoadingProjectsSetores(false);
+      return;
+    }
+    setLoadingProjectsSetores(true);
+    try {
+      const { data: proj, error: projError } = await supabase
+        .from("projects")
+        .select("id, name")
+        .eq("user_id", user.id);
+      if (projError) console.warn("Erro ao carregar projetos:", projError);
+      setAllProjects(proj || []);
+
+      const { data: set, error: setError } = await supabase
+        .from("setores")
+        .select("id, name")
+        .eq("user_id", user.id);
+      if (setError) console.warn("Erro ao carregar setores:", setError);
+      setAllSetores(set || []);
+    } catch (err) {
+      console.error("Erro ao carregar projetos e setores:", err);
+    } finally {
+      setLoadingProjectsSetores(false);
+    }
+  }, [user?.id]);
+
   useEffect(() => {
     fetchNotificacoes();
     fetchIntegrantes();
-  }, [fetchNotificacoes, fetchIntegrantes]);
+    fetchProjectsAndSetores();
+  }, [fetchNotificacoes, fetchIntegrantes, fetchProjectsAndSetores]);
 
-  // ✉️ Enviar convite
   const enviarConvite = async () => {
     if (!emailConvite.trim()) return alert("Digite um e-mail válido.");
     setEnviando(true);
@@ -245,6 +271,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
         .from("convites")
         .select("*")
         .eq("email", profile.email)
+        .eq("remetente_id", user.id)
         .eq("status", "pendente")
         .maybeSingle();
 
@@ -254,7 +281,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
         return;
       }
 
-      const { error } = await supabase.from("convites").insert([
+      const { error: inviteError } = await supabase.from("convites").insert([
         {
           email: profile.email,
           remetente_id: user.id,
@@ -265,10 +292,36 @@ export default function Collab({ onClose, user, onOpenTask }) {
         },
       ]);
 
-      if (error) throw error;
+      if (inviteError) throw inviteError;
+
+      const permissionsToInsert = [];
+      selectedPermissions.projetos.forEach(projectId => {
+        permissionsToInsert.push({
+          colaborador_id: profile.id,
+          container_id: user.id,
+          projeto_id: projectId,
+          setor_id: null,
+        });
+      });
+      selectedPermissions.setores.forEach(setorId => {
+        permissionsToInsert.push({
+          colaborador_id: profile.id,
+          container_id: user.id,
+          projeto_id: null,
+          setor_id: setorId,
+        });
+      });
+
+      if (permissionsToInsert.length > 0) {
+        const { error: permError } = await supabase
+          .from("permissoes_colaboradores")
+          .insert(permissionsToInsert);
+        if (permError) console.error("Erro ao salvar permissões prévias:", permError);
+      }
 
       alert(`Convite enviado para ${profile.nome}`);
       setEmailConvite("");
+      setSelectedPermissions({ projetos: [], setores: [] });
       fetchNotificacoes();
     } catch (err) {
       console.error("Erro ao enviar convite:", err);
@@ -278,7 +331,6 @@ export default function Collab({ onClose, user, onOpenTask }) {
     }
   };
 
-  // ✅ Aceitar convite
   const aceitarConvite = async (convite) => {
     try {
       await supabase.from("convites").update({ status: "aceito" }).eq("id", convite.id);
@@ -290,7 +342,6 @@ export default function Collab({ onClose, user, onOpenTask }) {
     }
   };
 
-  // 🎯 Navegar para parte específica do caminho
   const navegarParaCaminho = async (notificacao, nivel) => {
     try {
       if (!notificacao.lido) {
@@ -323,7 +374,6 @@ export default function Collab({ onClose, user, onOpenTask }) {
     }
   };
 
-  // ❌ Remover integrante
   const removerIntegrante = async (item) => {
     const ok = window.confirm(`Remover ${item.nome} do seu container?`);
     if (!ok) return;
@@ -337,6 +387,16 @@ export default function Collab({ onClose, user, onOpenTask }) {
       console.error("Erro ao remover integrante:", err);
       alert("Erro ao remover integrante.");
     }
+  };
+
+  const togglePermission = (type, id) => {
+    setSelectedPermissions(prev => {
+      const currentList = prev[type];
+      const newList = currentList.includes(id)
+        ? currentList.filter(item => item !== id)
+        : [...currentList, id];
+      return { ...prev, [type]: newList };
+    });
   };
 
   return (
@@ -378,7 +438,6 @@ export default function Collab({ onClose, user, onOpenTask }) {
           </div>
         </div>
 
-        {/* Aba: Convites Recebidos */}
         {activeTab === "convites-recebidos" && (
           <div className="collab-section">
             <h3>Convites Recebidos</h3>
@@ -424,7 +483,6 @@ export default function Collab({ onClose, user, onOpenTask }) {
           </div>
         )}
 
-        {/* Aba: Menções — COM CAMINHO HIERÁRQUICO E BOTÃO ABRIR NO CANTO DIREITO */}
         {activeTab === "notificacoes" && (
           <div className="collab-section">
             <h3>Menções</h3>
@@ -478,7 +536,6 @@ export default function Collab({ onClose, user, onOpenTask }) {
           </div>
         )}
 
-        {/* Aba: Enviar + Integrantes */}
         {activeTab === "enviar" && (
           <>
             <div className="collab-section-convite">
@@ -499,6 +556,57 @@ export default function Collab({ onClose, user, onOpenTask }) {
                   {!enviando && " Enviar"}
                 </button>
               </div>
+
+              {emailConvite.trim() && (
+                <div className="permissoes-previas-section">
+                  <h4>Definir Permissões Prévias</h4>
+                  {loadingProjectsSetores ? (
+                    <div className="loader-container">
+                      <div className="loader"></div>
+                    </div>
+                  ) : (
+                    <>
+                      {allProjects.length > 0 && (
+                        <div className="permissoes-group">
+                          <h5>Projetos</h5>
+                          <div className="checkbox-list">
+                            {allProjects.map(proj => (
+                              <label key={proj.id} className="checkbox-item">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedPermissions.projetos.includes(proj.id)}
+                                  onChange={() => togglePermission('projetos', proj.id)}
+                                />
+                                <span>{proj.name}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {allSetores.length > 0 && (
+                        <div className="permissoes-group">
+                          <h5>Setores</h5>
+                          <div className="checkbox-list">
+                            {allSetores.map(setor => (
+                              <label key={setor.id} className="checkbox-item">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedPermissions.setores.includes(setor.id)}
+                                  onChange={() => togglePermission('setores', setor.id)}
+                                />
+                                <span>{setor.name}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {allProjects.length === 0 && allSetores.length === 0 && (
+                        <p className="empty">Nenhum projeto ou setor disponível para permissões.</p>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
             <hr />

@@ -14,6 +14,8 @@ export default function ContainerSettings({ onClose, containerId, user }) {
   const [loading, setLoading] = useState(true);
   const [emailGerenteContainer, setEmailGerenteContainer] = useState("");
   const [emailsGerentesCaixa, setEmailsGerentesCaixa] = useState({});
+  const [permissoes, setPermissoes] = useState({});
+  const [modalPermissoesAberto, setModalPermissoesAberto] = useState(null);
 
   // ✅ Fechar com ESC ou clique fora
   useEffect(() => {
@@ -103,6 +105,24 @@ export default function ContainerSettings({ onClose, containerId, user }) {
           }
         });
         setEmailsGerentesCaixa(initialEmails);
+
+        // 5. Carregar permissões dos colaboradores
+        const permissoesIniciais = {};
+        for (const colab of perfis) {
+          const { data: permData, error: permError } = await supabase
+            .from("permissoes_colaboradores")
+            .select("projeto_id, setor_id")
+            .eq("colaborador_id", colab.id)
+            .eq("container_id", containerId);
+          
+          if (permError) console.warn("Erro ao carregar permissões:", permError);
+          
+          permissoesIniciais[colab.id] = {
+            projetos: permData?.filter(p => p.projeto_id).map(p => p.projeto_id) || [],
+            setores: permData?.filter(p => p.setor_id).map(p => p.setor_id) || []
+          };
+        }
+        setPermissoes(permissoesIniciais);
       } catch (err) {
         console.error("Erro ao carregar configurações:", err);
         alert("Erro ao carregar configurações do container.");
@@ -166,6 +186,71 @@ export default function ContainerSettings({ onClose, containerId, user }) {
 
     setEmailsGerentesCaixa(prev => ({ ...prev, [id]: email }));
     alert("Gerente salvo!");
+  };
+
+  const salvarPermissoes = async (colaboradorId) => {
+    try {
+      // Remove permissões antigas
+      await supabase
+        .from("permissoes_colaboradores")
+        .delete()
+        .eq("colaborador_id", colaboradorId)
+        .eq("container_id", containerId);
+
+      // Insere novas permissões
+      const novasPermissoes = [];
+      
+      permissoes[colaboradorId]?.projetos?.forEach(projetoId => {
+        novasPermissoes.push({
+          colaborador_id: colaboradorId,
+          container_id: containerId,
+          projeto_id: projetoId,
+          setor_id: null
+        });
+      });
+
+      permissoes[colaboradorId]?.setores?.forEach(setorId => {
+        novasPermissoes.push({
+          colaborador_id: colaboradorId,
+          container_id: containerId,
+          projeto_id: null,
+          setor_id: setorId
+        });
+      });
+
+      if (novasPermissoes.length > 0) {
+        const { error } = await supabase
+          .from("permissoes_colaboradores")
+          .insert(novasPermissoes);
+        
+        if (error) throw error;
+      }
+
+      alert("Permissões salvas com sucesso!");
+      setModalPermissoesAberto(null);
+    } catch (error) {
+      console.error("Erro ao salvar permissões:", error);
+      alert("Erro ao salvar permissões.");
+    }
+  };
+
+  const togglePermissao = (colaboradorId, tipo, id) => {
+    setPermissoes(prev => {
+      const atual = prev[colaboradorId] || { projetos: [], setores: [] };
+      const lista = atual[tipo] || [];
+      
+      const novaLista = lista.includes(id)
+        ? lista.filter(item => item !== id)
+        : [...lista, id];
+      
+      return {
+        ...prev,
+        [colaboradorId]: {
+          ...atual,
+          [tipo]: novaLista
+        }
+      };
+    });
   };
 
   if (loading) {
@@ -299,6 +384,109 @@ export default function ContainerSettings({ onClose, containerId, user }) {
             </div>
           )}
         </div>
+
+        {/* Permissões dos Colaboradores */}
+        <div className="perm-section">
+          <h3>Permissões dos Colaboradores</h3>
+          {colaboradores.length === 0 ? (
+            <p style={{ textAlign: 'center', color: '#666' }}>Nenhum colaborador</p>
+          ) : (
+            <div className="colaboradores-list">
+              {colaboradores.map((colab) => (
+                <div key={colab.id} className="colaborador-item">
+                  <div className="colaborador-info">
+                    <div className="colaborador-avatar">
+                      {colab.nome.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="colaborador-nome">{colab.nome}</span>
+                  </div>
+                  <button
+                    className="permissoes-btn"
+                    onClick={() => setModalPermissoesAberto(colab.id)}
+                  >
+                    Selecionar Permissões
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Modal de Permissões Flutuante */}
+        {modalPermissoesAberto && (
+          <div className="permissoes-modal-overlay" onClick={() => setModalPermissoesAberto(null)}>
+            <div className="permissoes-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="permissoes-modal-header">
+                <h4>Selecionar Permissões</h4>
+                <button
+                  className="modal-close-btn"
+                  onClick={() => setModalPermissoesAberto(null)}
+                >
+                  <FaTimes />
+                </button>
+              </div>
+
+              <div className="permissoes-content">
+                {/* Projetos */}
+                <div className="permissoes-section">
+                  <h5>Projetos</h5>
+                  {projetos.length === 0 ? (
+                    <p className="empty-msg">Nenhum projeto disponível</p>
+                  ) : (
+                    <div className="checkbox-list">
+                      {projetos.map((proj) => (
+                        <label key={proj.id} className="checkbox-item">
+                          <input
+                            type="checkbox"
+                            checked={permissoes[modalPermissoesAberto]?.projetos?.includes(proj.id) || false}
+                            onChange={() => togglePermissao(modalPermissoesAberto, 'projetos', proj.id)}
+                          />
+                          <span>{proj.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Setores */}
+                <div className="permissoes-section">
+                  <h5>Setores</h5>
+                  {setores.length === 0 ? (
+                    <p className="empty-msg">Nenhum setor disponível</p>
+                  ) : (
+                    <div className="checkbox-list">
+                      {setores.map((setor) => (
+                        <label key={setor.id} className="checkbox-item">
+                          <input
+                            type="checkbox"
+                            checked={permissoes[modalPermissoesAberto]?.setores?.includes(setor.id) || false}
+                            onChange={() => togglePermissao(modalPermissoesAberto, 'setores', setor.id)}
+                          />
+                          <span>{setor.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="permissoes-modal-footer">
+                <button
+                  className="cancel-btn"
+                  onClick={() => setModalPermissoesAberto(null)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  className="save-permissions-btn"
+                  onClick={() => salvarPermissoes(modalPermissoesAberto)}
+                >
+                  <FaSave /> Salvar Permissões
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
