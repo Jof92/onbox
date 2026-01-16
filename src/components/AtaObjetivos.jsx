@@ -61,23 +61,19 @@ const ChipResponsavel = ({ responsavel, onRemove, disabled }) => {
   const nomeExibicao = responsavel.nome_exibicao || "Usuário";
   const isExterno = !responsavel.usuario_id;
 
-  // Função para gerar abreviação
   const gerarAbreviacao = (nome) => {
     if (!nome) return "U";
     
-    // Se tiver underscore (ex: caio_lamarck)
     if (nome.includes('_')) {
       const partes = nome.split('_');
       return partes.map(p => p.charAt(0).toUpperCase()).join('_');
     }
     
-    // Se tiver espaço (ex: Caio Lamarck)
     if (nome.includes(' ')) {
       const partes = nome.split(' ').filter(p => p.length > 0);
       return partes.map(p => p.charAt(0).toUpperCase()).join('');
     }
     
-    // Nome simples (ex: Thalis) - pega as duas primeiras letras
     return nome.substring(0, 2).charAt(0).toUpperCase() + nome.substring(1, 2).toLowerCase();
   };
 
@@ -133,6 +129,31 @@ export default function AtaObjetivos({
     };
     fetchMeuNome();
   }, [usuarioId]);
+
+  const sendNotification = useCallback(async (recipientUserId, message, type, objective) => {
+    if (!recipientUserId || !usuarioId) return;
+
+    const notificationData = {
+      user_id: recipientUserId,
+      remetente_id: usuarioId,
+      mensagem: message,
+      tipo: type,
+      lido: false,
+      created_at: new Date().toISOString(),
+      nota_id: notaAtual?.id || null,
+      projeto_id: projetoAtual?.id || null,
+      container_id: containerAtual?.id || null,
+      pilha_id: notaAtual?.pilha_id || null,
+      setor_id: projetoAtual?.setor_id || null,
+    };
+
+    try {
+      const { error } = await supabase.from("notificacoes").insert([notificationData]);
+      if (error) console.error("Erro ao enviar notificação:", error);
+    } catch (err) {
+      console.error("Exceção ao enviar notificação:", err);
+    }
+  }, [usuarioId, notaAtual, projetoAtual, containerAtual]);
 
   const carregarObjetivos = useCallback(async () => {
     if (!ataId) {
@@ -333,6 +354,15 @@ export default function AtaObjetivos({
       if (notaAtual?.id) {
         await supabase.from("notas").update({ progresso: novoProgresso }).eq("id", notaAtual.id);
       }
+
+      if (novoConcluido) {
+        for (const resp of objetivo.responsaveis) {
+          if (resp.usuario_id) {
+            await sendNotification(resp.usuario_id, `Objetivo concluído: ${objetivo.texto}`, "objetivo_concluido", objetivo);
+          }
+        }
+      }
+
     } catch (err) {
       console.error("Erro ao salvar conclusão:", err);
       setObjetivosList([...objetivosList]);
@@ -467,6 +497,7 @@ export default function AtaObjetivos({
           if (idx !== -1) updated[i].responsaveis[idx] = { ...novoResp, id: idReal };
           return updated;
         });
+        await sendNotification(item.id, `Você foi designado responsável por: ${objetivo.texto}`, "objetivo_responsavel", objetivo);
       }
     }
   };
@@ -529,6 +560,13 @@ export default function AtaObjetivos({
       novos[i].comentario = comentarioComAutor;
       setObjetivosList(novos);
       setEditandoComentario(prev => ({ ...prev, [i]: false }));
+
+      for (const resp of objetivo.responsaveis) {
+        if (resp.usuario_id) {
+          await sendNotification(resp.usuario_id, `Novo comentário em objetivo: ${objetivo.texto}`, "objetivo_comentario", objetivo);
+        }
+      }
+
     } catch (err) {
       console.error("Erro ao salvar comentário:", err);
       alert("Erro ao salvar comentário.");

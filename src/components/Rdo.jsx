@@ -5,13 +5,22 @@ import { supabase } from "../supabaseClient";
 import { FaTimes, FaTrash } from "react-icons/fa";
 import { FaMagnifyingGlass } from "react-icons/fa6";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {faCloudSun, faCloudShowersHeavy, faPersonDigging, faUserGroup, faGear, faTriangleExclamation, faCamera, faPrint,} from "@fortawesome/free-solid-svg-icons";
-import { faSun, faFilePdf,} from "@fortawesome/free-regular-svg-icons";
+import {
+  faCloudSun,
+  faCloudShowersHeavy,
+  faPersonDigging,
+  faUserGroup,
+  faGear,
+  faTriangleExclamation,
+  faCamera,
+  faPrint,
+  faTruck,
+} from "@fortawesome/free-solid-svg-icons";
+import { faSun, faFilePdf } from "@fortawesome/free-regular-svg-icons";
 import BuscaInsumo from "./BuscaInsumo";
 import RdoCamera from "./RdoCamera";
 import RdoPdf from './RdoPdf';
 
-// ✅ Importação da imagem de transferência de dados
 import dataTransferImage from "../assets/data-transfer.png";
 
 const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
@@ -26,8 +35,10 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
     obra_op_tarde: "",
     efetivo_proprio: [{ funcao: "", total: "", presentes: "" }],
     efetivo_terceirizado: [{ funcao: "", total: "", presentes: "" }],
+    recebimento_materiais: [{ codigo: "", descricao: "", unidade: "", quantidade: "", empresa: "" }], // ✅ ADICIONADO empresa
     equipamentos: [{ codigo: "", descricao: "", total: "", em_uso: "" }],
     intercorrencias: "",
+    tem_intercorrencias: false, // ✅ NOVO - checkbox para intercorrências
     responsavel_preenchimento: "",
     fotos: [],
   });
@@ -43,23 +54,20 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
   const [mostrarSugestoesMembros, setMostrarSugestoesMembros] = useState(false);
   const [buscaInsumoAberta, setBuscaInsumoAberta] = useState(false);
   const [linhaBuscaAtiva, setLinhaBuscaAtiva] = useState(null);
+  const [tipoInsumoAtivo, setTipoInsumoAtivo] = useState(null);
   const [fotoEmExibicao, setFotoEmExibicao] = useState(null);
   const [cameraAberta, setCameraAberta] = useState(false);
 
-  // Estados para pavimentos
   const [todosPavimentosProjeto, setTodosPavimentosProjeto] = useState([]);
   const [mostrarPavimentosDisponiveis, setMostrarPavimentosDisponiveis] = useState(false);
 
-  // Chave única para rascunho
   const draftKey = `rdo_draft_${notaId}`;
 
-  // Pavimentos disponíveis para adicionar (não usados)
   const pavimentosDisponiveis = useMemo(() => {
     const usados = new Set(pavimentosAtividades.map(item => item.pavimento));
     return todosPavimentosProjeto.filter(pav => !usados.has(pav));
   }, [pavimentosAtividades, todosPavimentosProjeto]);
 
-  // Carregar projeto
   useEffect(() => {
     const fetchProjetoData = async () => {
       if (!projetoAtual?.id) return;
@@ -92,7 +100,6 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
     fetchProjetoData();
   }, [projetoAtual, rdoCarregado]);
 
-  // Carregar RDO
   useEffect(() => {
     const fetchRdo = async () => {
       if (!notaId) return;
@@ -127,7 +134,6 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
           .eq("project_id", projetoAtual.id)
           .order("ordem", { ascending: true });
 
-        // ✅ Salvar lista completa de pavimentos do projeto
         const nomesPavimentos = pavimentosData.map(p => p.name);
         setTodosPavimentosProjeto(nomesPavimentos);
 
@@ -145,6 +151,12 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
         if (rdoData) {
           setRdoId(rdoData.id);
           setRdoCarregado(true);
+          
+          // ✅ Verificar se tem intercorrências
+          const temIntercorrencias = rdoData.tem_intercorrencias !== undefined 
+            ? rdoData.tem_intercorrencias 
+            : (rdoData.intercorrencias && rdoData.intercorrencias.trim() !== "");
+          
           setData({
             inicio_obra: rdoData.inicio_obra || "",
             termino_obra: rdoData.termino_obra || "",
@@ -155,8 +167,10 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
             obra_op_tarde: rdoData.obra_op_tarde || "",
             efetivo_proprio: Array.isArray(rdoData.efetivo_proprio) ? rdoData.efetivo_proprio : [{ funcao: "", total: "", presentes: "" }],
             efetivo_terceirizado: Array.isArray(rdoData.efetivo_terceirizado) ? rdoData.efetivo_terceirizado : [{ funcao: "", total: "", presentes: "" }],
+            recebimento_materiais: Array.isArray(rdoData.recebimento_materiais) ? rdoData.recebimento_materiais : [{ codigo: "", descricao: "", unidade: "", quantidade: "", empresa: "" }],
             equipamentos: Array.isArray(rdoData.equipamentos) ? rdoData.equipamentos : [{ codigo: "", descricao: "", total: "", em_uso: "" }],
             intercorrencias: rdoData.intercorrencias || "",
+            tem_intercorrencias: temIntercorrencias, // ✅ CARREGAR estado do checkbox
             responsavel_preenchimento: rdoData.responsavel_preenchimento || "",
             fotos: Array.isArray(rdoData.fotos) ? rdoData.fotos : [],
           });
@@ -166,7 +180,6 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
           setRdoCarregado(true);
         }
 
-        // Restaurar rascunho após carregar dados iniciais
         if (rdoCarregado) {
           const savedDraft = sessionStorage.getItem(draftKey);
           if (savedDraft) {
@@ -186,7 +199,6 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
     fetchRdo();
   }, [notaId, projetoAtual]);
 
-  // Salvar rascunho automaticamente
   useEffect(() => {
     if (!notaId || !rdoCarregado) return;
     const draft = {
@@ -197,7 +209,6 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
     sessionStorage.setItem(draftKey, JSON.stringify(draft));
   }, [data, pavimentosAtividades, notaId, rdoCarregado, draftKey]);
 
-  // Funções auxiliares
   const copiarDoUltimoRdo = async (tipo) => {
     if (!projetoAtual?.id) return;
     try {
@@ -212,6 +223,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
       let dados = [];
       if (tipo === "efetivo_proprio") dados = ultimo.efetivo_proprio || [{ funcao: "", total: "", presentes: "" }];
       if (tipo === "efetivo_terceirizado") dados = ultimo.efetivo_terceirizado || [{ funcao: "", total: "", presentes: "" }];
+      if (tipo === "recebimento_materiais") dados = ultimo.recebimento_materiais || [{ codigo: "", descricao: "", unidade: "", quantidade: "", empresa: "" }];
       if (tipo === "equipamentos") dados = ultimo.equipamentos || [{ codigo: "", descricao: "", total: "", em_uso: "" }];
       if (tipo === "atividades") {
         const atividadesAnteriores = ultimo.atividades || {};
@@ -268,6 +280,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
   };
 
   const updateField = (field, value) => setData(prev => ({ ...prev, [field]: value }));
+  
   const updateArrayField = (arrayKey, index, field, value) => {
     setData(prev => {
       const arr = [...prev[arrayKey]];
@@ -277,9 +290,14 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
   };
 
   const addRow = (key) => {
-    const row = key === "equipamentos"
-      ? { codigo: "", descricao: "", total: "", em_uso: "" }
-      : { funcao: "", total: "", presentes: "" };
+    let row;
+    if (key === "equipamentos") {
+      row = { codigo: "", descricao: "", total: "", em_uso: "" };
+    } else if (key === "recebimento_materiais") {
+      row = { codigo: "", descricao: "", unidade: "", quantidade: "", empresa: "" }; // ✅ ADICIONADO empresa
+    } else {
+      row = { funcao: "", total: "", presentes: "" };
+    }
     setData(prev => ({ ...prev, [key]: [...prev[key], row] }));
   };
 
@@ -318,18 +336,48 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
     });
   };
 
-  const abrirBuscaInsumo = (idx) => {
+  const buscarMaterialPorCodigo = async (idx, cod) => {
+    if (!cod?.trim()) {
+      setData(prev => {
+        const mat = [...prev.recebimento_materiais];
+        mat[idx].descricao = "";
+        mat[idx].unidade = "";
+        return { ...prev, recebimento_materiais: mat };
+      });
+      return;
+    }
+    const { data: item } = await supabase
+      .from("itens")
+      .select("descricao, unidade")
+      .eq("codigo", cod)
+      .maybeSingle();
+    setData(prev => {
+      const mat = [...prev.recebimento_materiais];
+      mat[idx].descricao = item?.descricao || "";
+      mat[idx].unidade = item?.unidade || "";
+      return { ...prev, recebimento_materiais: mat };
+    });
+  };
+
+  const abrirBuscaInsumo = (idx, tipo) => {
     setLinhaBuscaAtiva(idx);
+    setTipoInsumoAtivo(tipo);
     setBuscaInsumoAberta(true);
   };
 
   const handleSelecionarInsumo = (cod) => {
-    if (linhaBuscaAtiva !== null) {
-      updateArrayField("equipamentos", linhaBuscaAtiva, "codigo", cod);
-      buscarItemPorCodigo(linhaBuscaAtiva, cod);
+    if (linhaBuscaAtiva !== null && tipoInsumoAtivo) {
+      updateArrayField(tipoInsumoAtivo, linhaBuscaAtiva, "codigo", cod);
+      
+      if (tipoInsumoAtivo === "equipamentos") {
+        buscarItemPorCodigo(linhaBuscaAtiva, cod);
+      } else if (tipoInsumoAtivo === "recebimento_materiais") {
+        buscarMaterialPorCodigo(linhaBuscaAtiva, cod);
+      }
     }
     setBuscaInsumoAberta(false);
     setLinhaBuscaAtiva(null);
+    setTipoInsumoAtivo(null);
   };
 
   const saveRdo = async () => {
@@ -375,9 +423,11 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
         obra_op_tarde: data.obra_op_tarde || "",
         efetivo_proprio: data.efetivo_proprio || [],
         efetivo_terceirizado: data.efetivo_terceirizado || [],
+        recebimento_materiais: data.recebimento_materiais || [],
         equipamentos: data.equipamentos || [],
         atividades,
-        intercorrencias: data.intercorrencias || "",
+        intercorrencias: data.tem_intercorrencias ? data.intercorrencias : "", // ✅ Só salva se checkbox marcado
+        tem_intercorrencias: data.tem_intercorrencias, // ✅ SALVAR estado do checkbox
         responsavel_preenchimento: data.responsavel_preenchimento || "",
         fotos: fotosUrls,
         created_by: usuarioId,
@@ -607,12 +657,11 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
           </table>
         </div>
 
-        {/* Atividades Executadas — ✅ COM BOTÃO DE + E TRANSFERÊNCIA */}
+        {/* Atividades Executadas */}
         <div className="rdo-section">
           <div className="rdo-section-header">
             <h3><FontAwesomeIcon icon={faPersonDigging} /> Atividades Executadas</h3>
             <div className="rdo-add-button-group">
-              {/* ✅ Botão de transferência para atividades */}
               <img
                 src={dataTransferImage}
                 alt="Copiar do último RDO"
@@ -621,7 +670,6 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
                 width="24"
                 height="24"
               />
-              {/* ✅ Botão de adicionar pavimento ausente */}
               <button
                 type="button"
                 className="rdo-add-pavimento-btn"
@@ -634,7 +682,6 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
             </div>
           </div>
 
-          {/* Dropdown de pavimentos disponíveis */}
           {mostrarPavimentosDisponiveis && pavimentosDisponiveis.length > 0 && (
             <div className="rdo-pavimento-select-dropdown">
               {pavimentosDisponiveis.map((pav) => (
@@ -681,7 +728,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
           )}
         </div>
 
-        {/* Efetivos */}
+        {/* Efetivos (Próprio e Terceirizado lado a lado) */}
         <div className="rdo-section rdo-efetivos-container">
           <div className="rdo-efetivo-col">
             <div className="rdo-section-header">
@@ -766,6 +813,97 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
           </div>
         </div>
 
+        {/* ✅ RECEBIMENTO DE MATERIAIS COM COLUNA EMPRESA */}
+        <div className="rdo-section">
+          <div className="rdo-section-header">
+            <h3>
+              <FontAwesomeIcon icon={faTruck} /> Recebimento de Materiais
+            </h3>
+            <div className="rdo-add-button-group">
+              <img
+                src={dataTransferImage}
+                alt="Copiar do último RDO"
+                className="data-transfer-icon"
+                onClick={() => copiarDoUltimoRdo("recebimento_materiais")}
+                width="24"
+                height="24"
+              />
+              <button type="button" onClick={() => addRow("recebimento_materiais")}>+</button>
+            </div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Descrição</th>
+                <th>Unidade</th>
+                <th>Quantidade</th>
+                <th>Empresa</th> {/* ✅ NOVA COLUNA */}
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.recebimento_materiais.map((item, idx) => (
+                <tr key={idx}>
+                  <td>
+                    <div className="codigo-com-lupa">
+                      <input
+                        type="text"
+                        value={item.codigo || ""}
+                        onChange={(e) => updateArrayField("recebimento_materiais", idx, "codigo", e.target.value)}
+                        onBlur={() => buscarMaterialPorCodigo(idx, item.codigo)}
+                        onKeyPress={(e) => e.key === "Enter" && buscarMaterialPorCodigo(idx, item.codigo)}
+                        placeholder="Cód."
+                      />
+                      <button
+                        type="button"
+                        className="lupa-busca-btn"
+                        onClick={() => abrirBuscaInsumo(idx, "recebimento_materiais")}
+                        title="Buscar material"
+                      >
+                        <FaMagnifyingGlass />
+                      </button>
+                    </div>
+                  </td>
+                  <td>
+                    <input type="text" value={item.descricao || ""} readOnly className="rdo-input-readonly" placeholder="Descrição" />
+                  </td>
+                  <td>
+                    <input type="text" value={item.unidade || ""} readOnly className="rdo-input-readonly" placeholder="Un." />
+                  </td>
+                  <td>
+                    <input 
+                      type="number" 
+                      value={item.quantidade || ""} 
+                      onChange={(e) => updateArrayField("recebimento_materiais", idx, "quantidade", e.target.value)} 
+                      placeholder="0" 
+                    />
+                  </td>
+                  <td>
+                    {/* ✅ NOVO CAMPO EMPRESA */}
+                    <input 
+                      type="text" 
+                      value={item.empresa || ""} 
+                      onChange={(e) => updateArrayField("recebimento_materiais", idx, "empresa", e.target.value)} 
+                      placeholder="Empresa" 
+                    />
+                  </td>
+                  <td>
+                    <button 
+                      type="button" 
+                      className="rdo-pavimento-remover" 
+                      onClick={() => removeRow("recebimento_materiais", idx)} 
+                      aria-label={`Remover linha ${idx + 1}`}
+                    >
+                      <FaTrash />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
         {/* Equipamentos */}
         <div className="rdo-section">
           <div className="rdo-section-header">
@@ -808,7 +946,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
                       <button
                         type="button"
                         className="lupa-busca-btn"
-                        onClick={() => abrirBuscaInsumo(idx)}
+                        onClick={() => abrirBuscaInsumo(idx, "equipamentos")}
                         title="Buscar insumo"
                       >
                         <FaMagnifyingGlass />
@@ -835,14 +973,34 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
           </table>
         </div>
 
-        {/* Intercorrências */}
+        {/* ✅ INTERCORRÊNCIAS COM CHECKBOX */}
         <div className="rdo-section">
-          <h3><FontAwesomeIcon icon={faTriangleExclamation} /> Intercorrências</h3>
-          <textarea
-            value={data.intercorrencias || ""}
-            onChange={(e) => updateField("intercorrencias", e.target.value)}
-            placeholder="Descreva imprevistos, paralisações, não conformidades, etc."
-          />
+          <div className="rdo-section-header1">
+            <label className="rdo-checkbox-label">
+              <input
+                type="checkbox"
+                checked={data.tem_intercorrencias}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setData(prev => ({ 
+                    ...prev, 
+                    tem_intercorrencias: checked,
+                    intercorrencias: checked ? prev.intercorrencias : "" // Limpa se desmarcar
+                  }));
+                }}
+              />
+            </label>
+            <h3><FontAwesomeIcon icon={faTriangleExclamation} /> Intercorrências</h3>
+            
+          </div>
+          
+          {data.tem_intercorrencias && (
+            <textarea
+              value={data.intercorrencias || ""}
+              onChange={(e) => updateField("intercorrencias", e.target.value)}
+              placeholder="Descreva imprevistos, paralisações, não conformidades, etc."
+            />
+          )}
         </div>
 
         {/* Fotos */}
@@ -1004,6 +1162,7 @@ const Rdo = ({ notaId, onClose, usuarioId, projetoAtual }) => {
         onClose={() => {
           setBuscaInsumoAberta(false);
           setLinhaBuscaAtiva(null);
+          setTipoInsumoAtivo(null);
         }}
         onSelect={handleSelecionarInsumo}
       />

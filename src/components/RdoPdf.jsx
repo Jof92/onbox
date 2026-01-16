@@ -5,6 +5,7 @@ import html2canvas from 'html2canvas';
 class RdoPdf {
   static async exportar(projetoNome, dataOriginal) {
     let loadingMsg = null;
+    let espacoInferior = null;
     try {
       loadingMsg = this.criarMensagemCarregamento();
       document.body.appendChild(loadingMsg);
@@ -16,32 +17,74 @@ class RdoPdf {
         return;
       }
 
+      // ✅ Salvar estilos originais
+      const paddingOriginal = containerRdo.style.padding;
+      const backgroundOriginal = containerRdo.style.background;
+      const boxSizingOriginal = containerRdo.style.boxSizing;
+      const marginBottomOriginal = containerRdo.style.marginBottom;
+      const overflowOriginal = containerRdo.style.overflow;
+
+      // ✅ Aplicar estilos temporários para garantir margens reais
+      containerRdo.style.padding = '20px';
+      containerRdo.style.background = '#ffffff';
+      containerRdo.style.boxSizing = 'border-box';
+      containerRdo.style.marginBottom = '50px'; // força espaço extra na base
+      containerRdo.style.overflow = 'visible'; // evita corte por overflow
+
+      // ✅ Adicionar elemento físico branco no final (não invisível!)
+      espacoInferior = document.createElement('div');
+      espacoInferior.style.height = '30px';
+      espacoInferior.style.backgroundColor = '#ffffff';
+      espacoInferior.style.marginTop = '10px';
+      containerRdo.appendChild(espacoInferior);
+
       const elementosOcultar = this.ocultarElementos();
 
+      // ✅ Capturar canvas com alta fidelidade
       const canvas = await html2canvas(containerRdo, {
-        scale: 1,
+        scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
         width: containerRdo.scrollWidth,
         height: containerRdo.scrollHeight,
+        windowWidth: containerRdo.scrollWidth,
+        windowHeight: containerRdo.scrollHeight,
+        x: 0,
+        y: 0,
+        scrollX: 0,
+        scrollY: 0,
       });
+
+      // ✅ Restaurar estilos originais
+      containerRdo.style.padding = paddingOriginal;
+      containerRdo.style.background = backgroundOriginal;
+      containerRdo.style.boxSizing = boxSizingOriginal;
+      containerRdo.style.marginBottom = marginBottomOriginal;
+      containerRdo.style.overflow = overflowOriginal;
+
+      // ✅ Remover elemento extra
+      if (espacoInferior && espacoInferior.parentNode) {
+        espacoInferior.parentNode.removeChild(espacoInferior);
+      }
 
       this.restaurarElementos(elementosOcultar);
       this.removerMensagemCarregamento(loadingMsg);
 
       const blob = await this.gerarPDF(canvas, projetoNome, dataOriginal);
-      
-      const dataFormatada = this.formatarDataParaNomeArquivo(dataOriginal);
-      const nomeArquivo = `RDO_${this.sanitizarNomeArquivo(projetoNome)}_${dataFormatada}.pdf`;
-      
-      this.baixarArquivo(blob, nomeArquivo);
 
+      // ✅ Nome seguro e formatado
+      const nomeSeguro = this.sanitizarNomeArquivo(projetoNome);
+      const dataFormatada = this.formatarDataParaNomeArquivo(dataOriginal);
+      const nomeArquivo = `RDO - ${nomeSeguro} - ${dataFormatada}.pdf`;
+
+      this.baixarArquivo(blob, nomeArquivo);
       alert('PDF gerado com sucesso!');
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
-      if (loadingMsg) {
-        this.removerMensagemCarregamento(loadingMsg);
+      if (loadingMsg) this.removerMensagemCarregamento(loadingMsg);
+      if (espacoInferior && espacoInferior.parentNode) {
+        espacoInferior.parentNode.removeChild(espacoInferior);
       }
       alert(`Erro ao gerar PDF: ${error.message}`);
     }
@@ -95,14 +138,15 @@ class RdoPdf {
       '.listagem-close-btn',
       '.rdo-lightbox',
       '.suggestions-dropdown',
-      '.rdo-pavimento-select-dropdown'
+      '.rdo-pavimento-select-dropdown',
+      '.rdo-pavimento-camera-btn',
+      '.rdo-pavimento-foto-remover',
+      '.rdo-opcoes-foto-overlay',
     ];
 
     const elementosOcultos = [];
-
     seletores.forEach(seletor => {
-      const elementos = document.querySelectorAll(seletor);
-      elementos.forEach(el => {
+      document.querySelectorAll(seletor).forEach(el => {
         elementosOcultos.push({
           elemento: el,
           displayOriginal: el.style.display
@@ -110,7 +154,6 @@ class RdoPdf {
         el.style.display = 'none';
       });
     });
-
     return elementosOcultos;
   }
 
@@ -121,65 +164,57 @@ class RdoPdf {
   }
 
   static async gerarPDF(canvas, projetoNome, dataOriginal) {
-    const imgData = canvas.toDataURL('image/png', 0.85);
+    const imgData = canvas.toDataURL('image/png', 0.95);
     const pdf = new jsPDF('p', 'mm', 'a4');
 
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = pdf.internal.pageSize.getHeight();
-    
-    const margemHorizontal = 8;
-    const margemSuperior = 8;
-    const margemInferior = 10;
+
+    const margemEsquerda = 15;
+    const margemDireita = 15;
+    const margemSuperior = 15;
+    const margemInferior = 15;
 
     const imgWidth = canvas.width;
     const imgHeight = canvas.height;
 
-    const larguraUtil = pdfWidth - (margemHorizontal * 2);
-    
-    const NUMERO_PAGINAS = 2;
-    const alturaUtil = pdfHeight - margemSuperior - margemInferior;
-    const alturaTotalDisponivel = alturaUtil * NUMERO_PAGINAS;
-    
-    const razaoLargura = larguraUtil / imgWidth;
-    const razaoAltura = alturaTotalDisponivel / imgHeight;
-    const razao = Math.min(razaoLargura, razaoAltura);
-    
-    const imgPdfWidth = imgWidth * razao;
-    const imgPdfHeight = imgHeight * razao;
-    
-    const centralizarX = (pdfWidth - imgPdfWidth) / 2;
+    const larguraUtil = pdfWidth - margemEsquerda - margemDireita;
+    const alturaUtilPorPagina = pdfHeight - margemSuperior - margemInferior;
 
-    for (let pagina = 0; pagina < NUMERO_PAGINAS; pagina++) {
-      if (pagina > 0) {
-        pdf.addPage();
-      }
+    const escalaLargura = larguraUtil / imgWidth;
+    const imgPdfWidth = imgWidth * escalaLargura;
+    const imgPdfHeight = imgHeight * escalaLargura;
 
-      const yOffset = -(alturaUtil * pagina);
-      
+    const numeroPaginas = Math.ceil(imgPdfHeight / alturaUtilPorPagina);
+
+    for (let pagina = 0; pagina < numeroPaginas; pagina++) {
+      if (pagina > 0) pdf.addPage();
+
+      const yPosicao = margemSuperior - pagina * alturaUtilPorPagina;
+
       pdf.addImage(
         imgData,
         'PNG',
-        centralizarX,
-        margemSuperior + yOffset,
+        margemEsquerda,
+        yPosicao,
         imgPdfWidth,
         imgPdfHeight,
         undefined,
         'FAST'
       );
 
-      pdf.setFontSize(7);
+      pdf.setFontSize(8);
       pdf.setTextColor(120, 120, 120);
-      
       pdf.text(
-        `Página ${pagina + 1} de ${NUMERO_PAGINAS}`,
+        `Página ${pagina + 1} de ${numeroPaginas}`,
         pdfWidth / 2,
-        pdfHeight - 5,
+        pdfHeight - (margemInferior / 2),
         { align: 'center' }
       );
     }
 
     pdf.setProperties({
-      title: `RDO - ${projetoNome}`,
+      title: `RDO - ${projetoNome} - ${this.formatarDataLegivel(dataOriginal)}`,
       subject: 'Relatório Diário de Obra',
       author: 'Sistema de Gestão',
       keywords: 'RDO, obra, relatório',
@@ -194,12 +229,9 @@ class RdoPdf {
     const link = document.createElement('a');
     link.href = url;
     link.download = nomeArquivo;
-    
     link.style.display = 'none';
     document.body.appendChild(link);
-    
     link.click();
-    
     setTimeout(() => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
@@ -208,144 +240,173 @@ class RdoPdf {
 
   static formatarDataParaNomeArquivo(data) {
     if (!data) return 'sem_data';
-    
     try {
       const [ano, mes, dia] = data.split('-');
       return `${dia}-${mes}-${ano}`;
-    } catch (error) {
+    } catch {
       return 'sem_data';
     }
   }
 
   static formatarDataLegivel(data) {
     if (!data) return 'Data não informada';
-    
     try {
       const [ano, mes, dia] = data.split('-');
-      const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-      return `${dia}/${meses[parseInt(mes) - 1]}/${ano}`;
-    } catch (error) {
+      return `${dia}/${mes}/${ano}`;
+    } catch {
       return 'Data não informada';
     }
   }
 
   static sanitizarNomeArquivo(nome) {
     if (!nome) return 'projeto';
-    
     return nome
       .replace(/[^a-zA-Z0-9_\-\s]/g, '')
       .replace(/\s+/g, '_')
       .substring(0, 50);
   }
 
+  // === MÉTODO CUSTOMIZADO (mantido para compatibilidade) ===
+
   static async exportarCustomizado(opcoes = {}) {
     const {
       projetoNome = 'projeto',
       dataOriginal = null,
       seletor = '.rdo-modal-container',
-      qualidade = 1,
-      numeroPaginas = 2
+      qualidade = 2,
+      margens = {
+        superior: 15,
+        inferior: 15,
+        esquerda: 15,
+        direita: 15
+      }
     } = opcoes;
 
     let loadingMsg = null;
+    let espacoInferior = null;
     try {
       loadingMsg = this.criarMensagemCarregamento();
       document.body.appendChild(loadingMsg);
 
-      const elemento = document.querySelector(seletor);
-      if (!elemento) {
+      const containerRdo = document.querySelector(seletor);
+      if (!containerRdo) {
         this.removerMensagemCarregamento(loadingMsg);
         alert(`Erro: elemento "${seletor}" não encontrado.`);
         return;
       }
 
+      // ✅ Salvar estilos originais
+      const paddingOriginal = containerRdo.style.padding;
+      const backgroundOriginal = containerRdo.style.background;
+      const boxSizingOriginal = containerRdo.style.boxSizing;
+      const marginBottomOriginal = containerRdo.style.marginBottom;
+      const overflowOriginal = containerRdo.style.overflow;
+
+      // ✅ Aplicar estilos temporários
+      containerRdo.style.padding = '10px';
+      containerRdo.style.background = '#ffffff';
+      containerRdo.style.boxSizing = 'border-box';
+      containerRdo.style.marginBottom = '40px';
+      containerRdo.style.overflow = 'visible';
+
+      // ✅ Espaço físico no final
+      espacoInferior = document.createElement('div');
+      espacoInferior.style.height = '25px';
+      espacoInferior.style.backgroundColor = '#ffffff';
+      espacoInferior.style.marginTop = '8px';
+      containerRdo.appendChild(espacoInferior);
+
       const elementosOcultar = this.ocultarElementos();
 
-      const canvas = await html2canvas(elemento, {
+      const canvas = await html2canvas(containerRdo, {
         scale: qualidade,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
+        width: containerRdo.scrollWidth,
+        height: containerRdo.scrollHeight,
       });
+
+      // ✅ Restaurar
+      containerRdo.style.padding = paddingOriginal;
+      containerRdo.style.background = backgroundOriginal;
+      containerRdo.style.boxSizing = boxSizingOriginal;
+      containerRdo.style.marginBottom = marginBottomOriginal;
+      containerRdo.style.overflow = overflowOriginal;
+
+      if (espacoInferior && espacoInferior.parentNode) {
+        espacoInferior.parentNode.removeChild(espacoInferior);
+      }
 
       this.restaurarElementos(elementosOcultar);
       this.removerMensagemCarregamento(loadingMsg);
 
-      const blob = await this.gerarPDFCustomizado(canvas, projetoNome, dataOriginal, numeroPaginas);
-      
-      const dataFormatada = this.formatarDataParaNomeArquivo(dataOriginal);
-      const nomeArquivo = `RDO_${this.sanitizarNomeArquivo(projetoNome)}_${dataFormatada}.pdf`;
-      
-      this.baixarArquivo(blob, nomeArquivo);
+      const blob = await this.gerarPDFComMargens(canvas, projetoNome, dataOriginal, margens);
 
+      const nomeSeguro = this.sanitizarNomeArquivo(projetoNome);
+      const dataFormatada = this.formatarDataParaNomeArquivo(dataOriginal);
+      const nomeArquivo = `RDO - ${nomeSeguro} - ${dataFormatada}.pdf`;
+
+      this.baixarArquivo(blob, nomeArquivo);
       alert('PDF gerado com sucesso!');
     } catch (error) {
-      console.error('Erro ao gerar PDF:', error);
-      if (loadingMsg) {
-        this.removerMensagemCarregamento(loadingMsg);
+      console.error('Erro ao gerar PDF customizado:', error);
+      if (loadingMsg) this.removerMensagemCarregamento(loadingMsg);
+      if (espacoInferior && espacoInferior.parentNode) {
+        espacoInferior.parentNode.removeChild(espacoInferior);
       }
       alert(`Erro ao gerar PDF: ${error.message}`);
     }
   }
 
-  static async gerarPDFCustomizado(canvas, projetoNome, dataOriginal, numeroPaginas) {
-    const imgData = canvas.toDataURL('image/png', 0.85);
+  static async gerarPDFComMargens(canvas, projetoNome, dataOriginal, margens) {
+    const imgData = canvas.toDataURL('image/png', 0.95);
     const pdf = new jsPDF('p', 'mm', 'a4');
 
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = pdf.internal.pageSize.getHeight();
-    
-    const margemHorizontal = 8;
-    const margemSuperior = 8;
-    const margemInferior = 10;
+    const { superior, inferior, esquerda, direita } = margens;
 
     const imgWidth = canvas.width;
     const imgHeight = canvas.height;
 
-    const larguraUtil = pdfWidth - (margemHorizontal * 2);
-    const alturaUtil = pdfHeight - margemSuperior - margemInferior;
-    const alturaTotalDisponivel = alturaUtil * numeroPaginas;
-    
-    const razaoLargura = larguraUtil / imgWidth;
-    const razaoAltura = alturaTotalDisponivel / imgHeight;
-    const razao = Math.min(razaoLargura, razaoAltura);
-    
-    const imgPdfWidth = imgWidth * razao;
-    const imgPdfHeight = imgHeight * razao;
-    
-    const centralizarX = (pdfWidth - imgPdfWidth) / 2;
+    const larguraUtil = pdfWidth - esquerda - direita;
+    const alturaUtilPorPagina = pdfHeight - superior - inferior;
+
+    const escalaLargura = larguraUtil / imgWidth;
+    const imgPdfWidth = imgWidth * escalaLargura;
+    const imgPdfHeight = imgHeight * escalaLargura;
+
+    const numeroPaginas = Math.ceil(imgPdfHeight / alturaUtilPorPagina);
 
     for (let pagina = 0; pagina < numeroPaginas; pagina++) {
-      if (pagina > 0) {
-        pdf.addPage();
-      }
+      if (pagina > 0) pdf.addPage();
 
-      const yOffset = -(alturaUtil * pagina);
-      
+      const yPosicao = superior - pagina * alturaUtilPorPagina;
+
       pdf.addImage(
         imgData,
         'PNG',
-        centralizarX,
-        margemSuperior + yOffset,
+        esquerda,
+        yPosicao,
         imgPdfWidth,
         imgPdfHeight,
         undefined,
         'FAST'
       );
 
-      pdf.setFontSize(7);
+      pdf.setFontSize(8);
       pdf.setTextColor(120, 120, 120);
-      
       pdf.text(
         `Página ${pagina + 1} de ${numeroPaginas}`,
         pdfWidth / 2,
-        pdfHeight - 5,
+        pdfHeight - (inferior / 2),
         { align: 'center' }
       );
     }
 
     pdf.setProperties({
-      title: `RDO - ${projetoNome}`,
+      title: `RDO - ${projetoNome} - ${this.formatarDataLegivel(dataOriginal)}`,
       subject: 'Relatório Diário de Obra',
       author: 'Sistema de Gestão',
       keywords: 'RDO, obra, relatório',

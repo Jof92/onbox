@@ -2,19 +2,92 @@
 import React, { useState, useRef, useEffect } from "react";
 import "./RdoCamera.css";
 
+// Modal de seleção: Tirar foto ou Carregar da galeria
+const RdoCamera = ({ isOpen, onClose, onCapture }) => {
+  const [mostrarCamera, setMostrarCamera] = useState(false);
+  const fileInputRef = useRef(null);
+
+  if (!isOpen) return null;
+
+  const handleEscolherGaleria = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      onCapture(file);
+      onClose();
+    }
+  };
+
+  const handleTirarFoto = () => {
+    setMostrarCamera(true);
+  };
+
+  const handleCapturaCamera = (fotoBlob) => {
+    onCapture(fotoBlob);
+    setMostrarCamera(false);
+    onClose();
+  };
+
+  if (mostrarCamera) {
+    return (
+      <CameraCaptureModal
+        isOpen={true}
+        onClose={() => {
+          setMostrarCamera(false);
+          onClose();
+        }}
+        onCapture={handleCapturaCamera}
+      />
+    );
+  }
+
+  return (
+    <div className="camera-modal-overlay" onClick={onClose}>
+      <div className="camera-modal-content camera-choice-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="camera-header">
+          <h3>Adicionar Foto ao Pavimento</h3>
+          <button className="camera-close-btn" onClick={onClose}>&times;</button>
+        </div>
+
+        <div className="camera-choice-buttons">
+          <button className="camera-choice-btn" onClick={handleEscolherGaleria}>
+            🖼️ Escolher da Galeria
+          </button>
+          <button className="camera-choice-btn" onClick={handleTirarFoto}>
+            📸 Tirar Foto
+          </button>
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: "none" }}
+          onChange={handleFileChange}
+        />
+      </div>
+    </div>
+  );
+};
+
+// Modal de captura de câmera
 const CameraCaptureModal = ({ isOpen, onClose, onCapture }) => {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const [error, setError] = useState(null);
   const [isCapturing, setIsCapturing] = useState(false);
 
-  // Iniciar câmera
   useEffect(() => {
     if (!isOpen) return;
 
     const startCamera = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: "environment" } // Preferir câmera traseira
+        });
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
@@ -51,7 +124,6 @@ const CameraCaptureModal = ({ isOpen, onClose, onCapture }) => {
       if (blob) {
         blob.name = `camera-${Date.now()}.jpg`;
         onCapture(blob);
-        onClose();
       }
       setIsCapturing(false);
     }, "image/jpeg", 0.92);
@@ -99,4 +171,4 @@ const CameraCaptureModal = ({ isOpen, onClose, onCapture }) => {
   );
 };
 
-export default CameraCaptureModal;
+export default RdoCamera;
