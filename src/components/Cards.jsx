@@ -565,6 +565,37 @@ useEffect(() => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [menuOpenPilha]);
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ignora se estiver digitando em input/textarea ou modal aberto
+      if (
+        e.target.tagName === 'INPUT' || 
+        e.target.tagName === 'TEXTAREA' || 
+        notaSelecionada ||
+        activeColumnId ||
+        notaEditData.id
+      ) {
+        return;
+      }
+
+      const cardsBody = document.querySelector('.cards-body');
+      if (!cardsBody) return;
+
+      const scrollAmount = 300; // pixels para rolar
+
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        cardsBody.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        cardsBody.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [notaSelecionada, activeColumnId, notaEditData.id]);  
+
   const toggleConclusaoNota = async (notaId, concluida) => {
     const newConcluida = !concluida;
     const { error } = await supabase.from("notas").update({ concluida: newConcluida }).eq("id", notaId);
