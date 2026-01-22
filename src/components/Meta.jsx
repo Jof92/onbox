@@ -1,6 +1,7 @@
 // src/components/Metas.jsx
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../supabaseClient";
+import { FaTimes } from "react-icons/fa";
 import "./Meta.css";
 
 const ChipResponsavel = ({ responsavel, onRemove, disabled }) => {
@@ -37,7 +38,14 @@ const podeDesmarcarConclusao = (concluidoEm) => {
   return diffHoras < 24;
 };
 
-export default function Metas({ notaId, projectId, usuarioId }) {
+export default function Metas({ 
+  notaId, 
+  projectId, 
+  usuarioId, 
+  projetoNome, 
+  notaNome, 
+  onClose 
+}) {
   const [metas, setMetas] = useState([]);
   const [sugestoesResponsavel, setSugestoesResponsavel] = useState({});
   const [inputResponsavel, setInputResponsavel] = useState({});
@@ -46,7 +54,23 @@ export default function Metas({ notaId, projectId, usuarioId }) {
   const [meuNome, setMeuNome] = useState("Você");
   const [salvando, setSalvando] = useState(false);
 
-  // Carrega seu nome
+  const cardRef = useRef(null);
+
+  // Fechar ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (onClose && cardRef.current && !cardRef.current.contains(e.target)) {
+        onClose();
+      }
+    };
+
+    if (onClose) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [onClose]);
+
+  // Carrega nome do usuário
   useEffect(() => {
     if (!usuarioId) return;
     const fetchMeuNome = async () => {
@@ -62,7 +86,7 @@ export default function Metas({ notaId, projectId, usuarioId }) {
 
     const { data: metasData, error } = await supabase
       .from("metas")
-      .select(`*, metas_responsaveis!inner(id, usuario_id, nome_externo)`)
+      .select(`*, metas_responsaveis(id, usuario_id, nome_externo)`)
       .eq("nota_id", notaId)
       .order("criado_em", { ascending: true });
 
@@ -72,7 +96,7 @@ export default function Metas({ notaId, projectId, usuarioId }) {
     }
 
     const metasEnriquecidas = metasData.map(m => {
-      const responsaveis = m.metas_responsaveis.map(r => ({
+      const responsaveis = (m.metas_responsaveis || []).map(r => ({
         id: r.id,
         usuario_id: r.usuario_id,
         nome_externo: r.nome_externo,
@@ -132,22 +156,21 @@ export default function Metas({ notaId, projectId, usuarioId }) {
     });
   };
 
-  // === Responsáveis ===
+  // Buscar responsáveis com @
   const handleResponsavelInputChange = (e, index) => {
     const valor = e.target.value;
     setInputResponsavel(prev => ({ ...prev, [index]: valor }));
 
-    if (valor.startsWith("@") && valor.length > 1) {
+    if (valor.startsWith("@") && valor.length > 1 && projectId) {
       const termo = valor.slice(1).toLowerCase();
       supabase
-        .from("convites")
+        .from("project_members")
         .select("user_id")
-        .eq("container_id", null) // ❌ REMOVIDO: não usamos mais containerId
-        .eq("status", "aceito")
-        .then(async ({ data: convites, error }) => {
-          if (error || !convites?.length) return setSugestoesResponsavel(prev => ({ ...prev, [index]: [] }));
+        .eq("project_id", projectId)
+        .then(async ({ data: membros, error }) => {
+          if (error || !membros?.length) return setSugestoesResponsavel(prev => ({ ...prev, [index]: [] }));
 
-          const userIds = convites.map(c => c.user_id);
+          const userIds = membros.map(m => m.user_id);
           const { data: profiles } = await supabase
             .from("profiles")
             .select("id, nome")
@@ -219,7 +242,7 @@ export default function Metas({ notaId, projectId, usuarioId }) {
     }
   };
 
-  // === Comentário ===
+  // Comentário
   const iniciarEdicaoComentario = (index, comentarioAtual) => {
     let puro = comentarioAtual || "";
     if (puro.includes(" — Comentário por ")) {
@@ -234,18 +257,16 @@ export default function Metas({ notaId, projectId, usuarioId }) {
     setEditandoComentario(prev => ({ ...prev, [index]: false }));
   };
 
-  // === SALVAR TUDO EM LOTE ===
+  // Salvar todas as metas
   const handleSalvarTudo = async () => {
     if (salvando) return;
     setSalvando(true);
 
     try {
-      // Separar metas temporárias e existentes
-      const metasParaInserir = [];
       const metasParaAtualizar = [];
-      const metasTempIds = new Map(); // tempId -> id real
+      const metasTempIds = new Map();
 
-      // 1. Inserir metas novas
+      // Inserir metas novas
       for (const meta of metas) {
         if (String(meta.id).startsWith("temp")) {
           const { error, data } = await supabase
@@ -269,7 +290,7 @@ export default function Metas({ notaId, projectId, usuarioId }) {
         }
       }
 
-      // 2. Atualizar metas existentes
+      // Atualizar metas existentes
       for (const meta of metasParaAtualizar) {
         if (!String(meta.id).startsWith("temp")) {
           await supabase
@@ -285,7 +306,7 @@ export default function Metas({ notaId, projectId, usuarioId }) {
         }
       }
 
-      // 3. Lidar com responsáveis (deletar todos e recriar — simples e seguro)
+      // Deletar e recriar responsáveis
       const todosIds = metasParaAtualizar.map(m => m.id);
       if (todosIds.length > 0) {
         await supabase.from("metas_responsaveis").delete().in("meta_id", todosIds);
@@ -306,7 +327,6 @@ export default function Metas({ notaId, projectId, usuarioId }) {
         await supabase.from("metas_responsaveis").insert(responsaveisParaInserir);
       }
 
-      // Recarregar para garantir consistência
       await carregarMetas();
       alert("Metas salvas com sucesso!");
     } catch (err) {
@@ -318,153 +338,162 @@ export default function Metas({ notaId, projectId, usuarioId }) {
   };
 
   return (
-    <div className="metas-container-completo">
-      <div className="metas-header">
-        <h4>Metas</h4>
-        <button className="btn-adicionar-meta" onClick={adicionarMeta}>
-          +
-        </button>
-      </div>
-
-      <div className="metas-grid">
-        <div className="metas-grid-header">
-          <span>Status</span>
-          <span>Descrição</span>
-          <span>Responsável</span>
-          <span>Link</span>
-          <span>Data de entrega</span>
-          <span>Ações</span>
+    <div className="metas-modal-overlay">
+      <div className="metas-card" ref={cardRef}>
+        {/* HEADER */}
+        <div className="listagem-card">
+          <div className="listagem-header-container">
+            <div className="listagem-header-titles">
+              <span className="project-name">{projetoNome || "Projeto"}</span>
+              <div className="sub-info">
+                <span className="nota-name">{notaNome || "Metas"}</span>
+              </div>
+            </div>
+            {onClose && (
+              <button className="listagem-close-btn" onClick={onClose} aria-label="Fechar">
+                <FaTimes />
+              </button>
+            )}
+          </div>
         </div>
 
-        {metas.map((meta, i) => {
-          const isConcluido = meta.concluido;
-          const podeDesmarcar = podeDesmarcarConclusao(meta.concluido_em);
-          const isEditingComentario = editandoComentario[i];
+        {/* BODY */}
+        <div className="metas-container-completo">
+          <div className="metas-header">
+            <h4>Metas</h4>
+            <button className="btn-adicionar-meta" onClick={adicionarMeta}>+</button>
+          </div>
 
-          return (
-            <div key={meta.id} className={`meta-item ${isConcluido ? "concluido" : ""}`}>
-              <div className="meta-checkbox">
-                <input
-                  type="checkbox"
-                  checked={isConcluido}
-                  onChange={() => atualizarMeta(i, "concluido", !isConcluido)}
-                  disabled={isConcluido && !podeDesmarcar}
-                />
-              </div>
+          <div className="metas-grid">
+            <div className="metas-grid-header">
+              <span>Status</span>
+              <span>Descrição</span>
+              <span>Responsável</span>
+              <span>Link</span>
+              <span>Data de entrega</span>
+              <span>Ações</span>
+            </div>
 
-              <div className="meta-descricao">
-                <input
-                  type="text"
-                  value={meta.descricao}
-                  onChange={e => atualizarMeta(i, "descricao", e.target.value)}
-                  placeholder="Descreva a meta..."
-                  disabled={isConcluido}
-                />
-              </div>
+            {metas.map((meta, i) => {
+              const isConcluido = meta.concluido;
+              const podeDesmarcar = podeDesmarcarConclusao(meta.concluido_em);
+              const isEditingComentario = editandoComentario[i];
 
-              <div className="meta-responsaveis">
-                <div className="responsaveis-list">
-                  {meta.responsaveis.map(resp => (
-                    <ChipResponsavel
-                      key={resp.id}
-                      responsavel={resp}
-                      onRemove={r => removerResponsavel(r, i)}
+              return (
+                <div key={meta.id} className={`meta-item ${isConcluido ? "concluido" : ""}`}>
+                  <div className="meta-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={isConcluido}
+                      onChange={() => atualizarMeta(i, "concluido", !isConcluido)}
+                      disabled={isConcluido && !podeDesmarcar}
+                    />
+                  </div>
+
+                  <div className="meta-descricao">
+                    <input
+                      type="text"
+                      value={meta.descricao}
+                      onChange={e => atualizarMeta(i, "descricao", e.target.value)}
+                      placeholder="Descreva a meta..."
                       disabled={isConcluido}
                     />
-                  ))}
-                </div>
-                {!isConcluido && (
-                  <input
-                    type="text"
-                    value={inputResponsavel[i] || ""}
-                    onChange={e => handleResponsavelInputChange(e, i)}
-                    onKeyDown={e => handleKeyDownResponsavel(e, i)}
-                    placeholder={meta.responsaveis.length === 0 ? "@nome ou digite..." : ""}
-                    className="input-responsavel"
-                  />
-                )}
-                {sugestoesResponsavel[i]?.length > 0 && !isConcluido && (
-                  <div className="sugestoes-responsavel">
-                    {sugestoesResponsavel[i].map(u => (
-                      <div
-                        key={u.id}
-                        className="sugestao-item"
-                        onClick={() => adicionarResponsavelInterno(u, i)}
-                      >
-                        @{u.nome}
+                  </div>
+
+                  <div className="meta-responsaveis">
+                    <div className="responsaveis-list">
+                      {meta.responsaveis.map(resp => (
+                        <ChipResponsavel
+                          key={resp.id}
+                          responsavel={resp}
+                          onRemove={r => removerResponsavel(r, i)}
+                          disabled={isConcluido}
+                        />
+                      ))}
+                    </div>
+                    {!isConcluido && (
+                      <input
+                        type="text"
+                        value={inputResponsavel[i] || ""}
+                        onChange={e => handleResponsavelInputChange(e, i)}
+                        onKeyDown={e => handleKeyDownResponsavel(e, i)}
+                        placeholder={meta.responsaveis.length === 0 ? "@nome ou digite..." : ""}
+                        className="input-responsavel"
+                      />
+                    )}
+                    {sugestoesResponsavel[i]?.length > 0 && !isConcluido && (
+                      <div className="sugestoes-responsavel">
+                        {sugestoesResponsavel[i].map(u => (
+                          <div key={u.id} className="sugestao-item" onClick={() => adicionarResponsavelInterno(u, i)}>
+                            @{u.nome}
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
-                )}
-              </div>
 
-              <div className="meta-link">
-                <span>{projectId ? "Projeto" : "–"}</span>
-              </div>
-
-              <div className="meta-data">
-                <input
-                  type="date"
-                  value={meta.data_entrega || ""}
-                  onChange={e => atualizarMeta(i, "data_entrega", e.target.value || null)}
-                  disabled={isConcluido}
-                />
-              </div>
-
-              <div className="meta-acoes">
-                {isConcluido ? (
-                  <ComentarioIcon
-                    onClick={() => iniciarEdicaoComentario(i, meta.comentario)}
-                    title={meta.comentario ? "Editar comentário" : "Adicionar comentário"}
-                  />
-                ) : (
-                  <button
-                    className="btn-excluir-meta"
-                    onClick={() => setMetas(prev => prev.filter((_, idx) => idx !== i))}
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-
-              {isEditingComentario && (
-                <div className="comentario-editor">
-                  <textarea
-                    value={comentarioTemp[i] || ""}
-                    onChange={e => setComentarioTemp(prev => ({ ...prev, [i]: e.target.value }))}
-                    placeholder="Descreva como a meta foi concluída..."
-                    rows={2}
-                  />
-                  <div className="comentario-botoes">
-                    <button
-                      className="btn-comentario-salvar"
-                      onClick={() => {
-                        const comentario = `${comentarioTemp[i] || ""} — Comentário por ${meuNome}`;
-                        atualizarMeta(i, "comentario", comentario);
-                        cancelarComentario(i);
-                      }}
-                    >
-                      Salvar
-                    </button>
-                    <button className="btn-comentario-cancelar" onClick={() => cancelarComentario(i)}>
-                      Cancelar
-                    </button>
+                  <div className="meta-link">
+                    <span>{projectId ? "Projeto" : "–"}</span>
                   </div>
+
+                  <div className="meta-data">
+                    <input
+                      type="date"
+                      value={meta.data_entrega || ""}
+                      onChange={e => atualizarMeta(i, "data_entrega", e.target.value || null)}
+                      disabled={isConcluido}
+                    />
+                  </div>
+
+                  <div className="meta-acoes">
+                    {isConcluido ? (
+                      <ComentarioIcon
+                        onClick={() => iniciarEdicaoComentario(i, meta.comentario)}
+                        title={meta.comentario ? "Editar comentário" : "Adicionar comentário"}
+                      />
+                    ) : (
+                      <button className="btn-excluir-meta" onClick={() => setMetas(prev => prev.filter((_, idx) => idx !== i))}>
+                        ×
+                      </button>
+                    )}
+                  </div>
+
+                  {isEditingComentario && (
+                    <div className="comentario-editor">
+                      <textarea
+                        value={comentarioTemp[i] || ""}
+                        onChange={e => setComentarioTemp(prev => ({ ...prev, [i]: e.target.value }))}
+                        placeholder="Descreva como a meta foi concluída..."
+                        rows={2}
+                      />
+                      <div className="comentario-botoes">
+                        <button
+                          className="btn-comentario-salvar"
+                          onClick={() => {
+                            const comentario = `${comentarioTemp[i] || ""} — Comentário por ${meuNome}`;
+                            atualizarMeta(i, "comentario", comentario);
+                            cancelarComentario(i);
+                          }}
+                        >
+                          Salvar
+                        </button>
+                        <button className="btn-comentario-cancelar" onClick={() => cancelarComentario(i)}>
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+              );
+            })}
+          </div>
 
-      <div className="metas-footer">
-        <button
-          className="btn-salvar-metas"
-          onClick={handleSalvarTudo}
-          disabled={salvando}
-        >
-          {salvando ? "Salvando..." : "Salvar Metas"}
-        </button>
+          <div className="metas-footer">
+            <button className="btn-salvar-metas" onClick={handleSalvarTudo} disabled={salvando}>
+              {salvando ? "Salvando..." : "Salvar Metas"}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
