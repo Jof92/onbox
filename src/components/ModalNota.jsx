@@ -1,22 +1,29 @@
 // src/components/ModalNota.jsx
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import { FaTimes } from "react-icons/fa";
 import Listagem from "./Listagem";
 import AtaCard from "./AtaCard";
 import Task from "./Task";
 import Metas from "./Meta";
-import Rdo from "./Rdo"; // ✅ Importação do RDO
+import Rdo from "./Rdo";
 import "./Cards.css";
 
-const TIPOS_NOTA = [
+const TIPOS_NOTA_CRIACAO = [
   { key: "Atas", label: "Atas" },
-  { key: "Diário de Obra", label: "Diário de Obra" },
-  { key: "Lista", label: "Lista" },
-  { key: "Medição", label: "Medição" },
+  { key: "Lista", label: "Listagem" },
   { key: "Metas", label: "Metas" },
-  { key: "Tarefas", label: "Tarefas" },
   { key: "Nota Rápida", label: "Nota Rápida" },
+  { key: "Tarefas", label: "Tarefas" },
 ];
+
+// ✅ Cores exatas fornecidas por você
+const CORES_TIPO = {
+  "Atas": "#10b981",   // verde médio
+  "Lista": "#3b82f6",  // azul (já bom)
+  "Metas": "#06b6d4",  // turquesa médio
+  "Nota Rápida": "#ec4899", // rosa médio
+  "Tarefas": "#fbbf24", // amarelo dourado médio
+};
 
 export default function ModalNota({
   showNovaNota,
@@ -43,6 +50,8 @@ export default function ModalNota({
   setColumnsNormais,
   setColumnsArquivadas 
 }) {
+  const [hoveredTipo, setHoveredTipo] = useState(null);
+
   const handleProgressoChange = useCallback(
     (progresso) => {
       if (notaSelecionada?.id) {
@@ -96,28 +105,50 @@ export default function ModalNota({
                 value={showNovaNota ? formData.nome : notaEditData.nome}
                 onChange={(e) => handleFieldChange("nome", e.target.value)}
                 placeholder="Digite o nome da nota"
+                // ✅ NENHUM ESTILO DINÂMICO AQUI — só o padrão do CSS
               />
 
               {showNovaNota && (
                 <>
                   <label>Tipo de Nota</label>
                   <div className="tipo-nota-buttons">
-                    {TIPOS_NOTA.map(({ key, label }) => (
-                      <button
-                        key={key}
-                        type="button"
-                        className={`tipo-btn ${formData.tipo === key ? "ativo" : ""}`}
-                        onClick={() => setFormData((prev) => ({ ...prev, tipo: key }))}
-                      >
-                        {label}
-                      </button>
-                    ))}
+                    {TIPOS_NOTA_CRIACAO.map(({ key, label }) => {
+                      const isSelected = formData.tipo === key;
+                      const isHovered = hoveredTipo === key;
+
+                      // ✅ APENAS O BACKGROUND MUDA NO HOVER — NADA MAIS
+                      const bgColor = isHovered
+                        ? CORES_TIPO[key]     // cor sólida no hover
+                        : isSelected
+                        ? CORES_TIPO[key]     // cor sólida quando selecionado
+                        : "";                 // branco/default
+
+                      const color = isSelected || isHovered ? "#fff" : "#000";
+
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          className={`tipo-btn ${isSelected ? "ativo" : ""}`}
+                          onClick={() => setFormData((prev) => ({ ...prev, tipo: key }))}
+                          onMouseEnter={() => setHoveredTipo(key)}
+                          onMouseLeave={() => setHoveredTipo(null)}
+                          style={{
+                            backgroundColor: bgColor,
+                            color: color,
+                            // ✅ NENHUMA BORDA, NENHUM OUTRO EFEITO ADICIONADO
+                          }}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </>
               )}
             </div>
 
-            <div className="modal-actions">
+            <div className="modal-actions1">
               <button
                 className="btn-salvar"
                 onClick={showNovaNota ? handleSaveTask : saveEditedNota}
@@ -134,7 +165,7 @@ export default function ModalNota({
           </div>
         )}
 
-        {/* Modal de Visualização */}
+        {/* Modal de Visualização — mantém todos os tipos */}
         {showVisualizarNota && notaSelecionada && (
           <>
             {(() => {
@@ -150,7 +181,6 @@ export default function ModalNota({
                       containerAtual={{ id: donoContainerId }}
                     />
                   );
-
                 case "Tarefas":
                   return (
                     <Task
@@ -165,7 +195,6 @@ export default function ModalNota({
                       setColumnsArquivadas={setColumnsArquivadas}
                     />
                   );
-
                 case "Metas":
                   return (
                     <Metas
@@ -174,20 +203,16 @@ export default function ModalNota({
                       usuarioId={usuarioId}
                     />
                   );
-
                 case "Diário de Obra":
-                  // ✅ Passa 'project' como 'projetoAtual' para o Rdo
                   return (
                     <Rdo
                       notaId={notaSelecionada.id}
                       onClose={onCloseVisualizarNota}
                       usuarioId={usuarioId}
-                      projetoAtual={project} // 👈 AQUI ESTÁ A CORREÇÃO!
+                      projetoAtual={project}
                     />
                   );
-
                 default:
-                  // "Lista", "Medição", etc.
                   return (
                     <Listagem
                       projetoAtual={project}

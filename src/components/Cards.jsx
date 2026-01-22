@@ -26,7 +26,7 @@ export default function Cards() {
   const [editingColumnId, setEditingColumnId] = useState(null);
   const [columnTitleDraft, setColumnTitleDraft] = useState("");
 
-  const [formData, setFormData] = useState({ nome: "", responsavel: "", tipo: "Lista" });
+  const [formData, setFormData] = useState({ nome: "", responsavel: "", tipo: "" });
   const [notaEditData, setNotaEditData] = useState({ id: null, nome: "", responsavel: "", pilhaId: null });
   const [notaSelecionada, setNotaSelecionada] = useState(null);
   const [usuarioAtual, setUsuarioAtual] = useState("Usuário Atual");
