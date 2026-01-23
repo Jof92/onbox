@@ -59,29 +59,18 @@ export default function Cards() {
     );
   };
 
- // Substitua a função updateUrlWithNota no Cards.jsx por esta versão:
-
-const updateUrlWithNota = (notaId) => {
-  console.log("🔗 updateUrlWithNota chamado com:", notaId);
-  
-  const urlParams = new URLSearchParams(location.search);
-  
-  if (notaId) {
-    urlParams.set('nota', notaId);
-    console.log("✅ Adicionando nota à URL:", notaId);
-  } else {
-    urlParams.delete('nota');
-    console.log("❌ Removendo nota da URL");
-  }
-  
-  const newUrl = `${location.pathname}?${urlParams.toString()}`;
-  console.log("🔗 Nova URL será:", newUrl);
-  
-  // IMPORTANTE: replace: false para manter no histórico
-  navigate(newUrl, { replace: false });
-  
-  console.log("✅ URL atualizada");
-};
+  const updateUrlWithNota = (notaId) => {
+    const urlParams = new URLSearchParams(location.search);
+    
+    if (notaId) {
+      urlParams.set('nota', notaId);
+    } else {
+      urlParams.delete('nota');
+    }
+    
+    const newUrl = `${location.pathname}?${urlParams.toString()}`;
+    navigate(newUrl, { replace: false });
+  };
 
   const handleSaveNomeRapida = async (notaId, novoNome) => {
     if (!novoNome.trim()) return;
@@ -89,9 +78,8 @@ const updateUrlWithNota = (notaId) => {
     if (!error) atualizarStatusNota(notaId, { nome: novoNome.trim() });
   };
 
-  const handleSaveResponsavelRapida = async (notaId, userId, nomeExterno) => {
+  const handleSaveResponsavelRapida = async (notaId, userId) => {
     if (!userId) {
-      console.warn("Tentativa de salvar responsável sem ID");
       return;
     }
 
@@ -102,7 +90,6 @@ const updateUrlWithNota = (notaId) => {
       .single();
 
     if (fetchError) {
-      console.error("Erro ao buscar nota:", fetchError);
       alert("Erro ao atualizar responsável.");
       return;
     }
@@ -121,7 +108,6 @@ const updateUrlWithNota = (notaId) => {
     if (!error) {
       atualizarStatusNota(notaId, { responsaveis_ids: novosIds });
     } else {
-      console.error("Erro ao salvar responsáveis:", error);
       alert("Erro ao salvar responsável.");
     }
   };
@@ -157,17 +143,14 @@ const updateUrlWithNota = (notaId) => {
     }
   };
 
-  // ✅ Verifica se já existe pilha "Diário de Obra"
   const jaExisteDiario = [...columnsNormais, ...columnsArquivadas].some(
     col => col.tipo_pilha === "diario_obras"
   );
 
-  // ✅ Função para criar coluna com tipo
   const handleCreateColumn = async (tipo) => {
     if (!entity) return;
     setShowAddColumnMenu(false);
 
-    // ✅ Impede criar segunda pilha (embora já esteja escondida)
     if (tipo === "diario_obras" && jaExisteDiario) {
       alert("Já existe uma pilha 'Diário de Obra' neste projeto/setor.");
       return;
@@ -248,7 +231,9 @@ const updateUrlWithNota = (notaId) => {
         newUrl.set('type', type);
         if (containerId) newUrl.set('containerId', containerId);
         if (notaIdFromUrl) newUrl.set('nota', notaIdFromUrl);
-        navigate(`${location.pathname}?${newUrl.toString()}`, { replace: true });
+        
+        const newPath = `${location.pathname}?${newUrl.toString()}`;
+        navigate(newPath, { replace: true, state: location.state });
       }
 
       setEntityType(type);
@@ -275,7 +260,9 @@ const updateUrlWithNota = (notaId) => {
             .select("*")
             .eq("id", entityId)
             .single();
-          if (projError) throw new Error("Projeto não encontrado");
+          if (projError) {
+            throw new Error("Projeto não encontrado");
+          }
           entityData = projData;
         } else {
           const { data: setData, error: setError } = await supabase
@@ -283,7 +270,9 @@ const updateUrlWithNota = (notaId) => {
             .select("*")
             .eq("id", entityId)
             .single();
-          if (setError) throw new Error("Setor não encontrado");
+          if (setError) {
+            throw new Error("Setor não encontrado");
+          }
           entityData = setData;
         }
 
@@ -354,20 +343,19 @@ const updateUrlWithNota = (notaId) => {
           const progresso = {};
           const concluidas = new Set();
           const dataConclusao = {};
-          const dataEntrega = {}; // ✅ ADICIONE ESTA LINHA
+          const dataEntrega = {};
           
           pilhas.forEach(p => {
             p.notas.forEach(n => {
               if (n.progresso != null) progresso[n.id] = n.progresso;
               if (n.concluida) concluidas.add(String(n.id));
               if (n.data_conclusao) dataConclusao[n.id] = n.data_conclusao.split("T")[0];
-              if (n.data_entrega) dataEntrega[n.id] = n.data_entrega.split("T")[0]; // ✅ ADICIONE ESTA LINHA
+              if (n.data_entrega) dataEntrega[n.id] = n.data_entrega.split("T")[0];
             });
           });
-          return { progresso, concluidas, dataConclusao, dataEntrega }; // ✅ ADICIONE dataEntrega
+          return { progresso, concluidas, dataConclusao, dataEntrega };
         };
 
-        // E depois:
         const { progresso: progN, concluidas: concN, dataConclusao: dataN, dataEntrega: dataE } = initEstado(pilhasNormaisComNotas);
 
         setNotaProgresso(progN);
@@ -399,7 +387,6 @@ const updateUrlWithNota = (notaId) => {
           }))
         );
 
-        // ✅ CORREÇÃO: preserva todos os campos de entityData, incluindo 'pavimentos'
         setEntity({
           ...entityData,
           type,
@@ -440,79 +427,59 @@ const updateUrlWithNota = (notaId) => {
 
   const columnsAtivas = modoArquivadas ? columnsArquivadas : columnsNormais;
 
-  // Substitua o useEffect que monitora a URL no Cards.jsx (linha ~469) por este:
-
-// Substitua o useEffect que monitora a URL no Cards.jsx (linha ~469) por este:
-
-useEffect(() => {
-  const urlParams = new URLSearchParams(location.search);
-  const notaId = urlParams.get("nota");
-  
-  console.log("🔄 useEffect URL - notaId:", notaId, "| columnsAtivas:", columnsAtivas.length, "| notaSelecionada:", notaSelecionada?.id);
-  
-  // IMPORTANTE: Se já temos a nota selecionada com o mesmo ID, não faz nada
-  if (notaSelecionada && notaId && String(notaSelecionada.id) === notaId) {
-    console.log("✅ Nota já selecionada corretamente, mantendo:", notaId);
-    return;
-  }
-  
-  // Se não há notaId na URL mas há notaSelecionada, limpa APENAS se passou tempo suficiente
-  if (!notaId && notaSelecionada) {
-    console.log("⚠️ Sem notaId na URL mas há notaSelecionada - aguardando...");
-    // Aguarda um pouco para ver se a URL será atualizada
-    const timer = setTimeout(() => {
-      const urlParamsCheck = new URLSearchParams(window.location.search);
-      const notaIdCheck = urlParamsCheck.get("nota");
-      if (!notaIdCheck && notaSelecionada) {
-        console.log("❌ Confirmado: sem notaId na URL após delay, limpando");
-        setNotaSelecionada(null);
-        setIsNotaRecebidos(false);
-        setProjetoOrigem(null);
-        setNotaOrigem(null);
-      }
-    }, 200); // Aguarda 200ms
-    return () => clearTimeout(timer);
-  }
-  
-  // Se há notaId na URL e colunas carregadas
-  if (notaId && columnsAtivas.length > 0) {
-    // Tenta encontrar a nota nas colunas
-    let found = false;
-    for (const col of columnsAtivas) {
-      const nota = col.notas.find(n => String(n.id) === notaId && n.tipo !== "Nota Rápida");
-      if (nota) {
-        console.log("✅ Nota encontrada nas colunas, atualizando estado");
-        setNotaSelecionada(nota);
-        const isRecebidos = col.title === "Recebidos";
-        setIsNotaRecebidos(isRecebidos);
-        if (isRecebidos) loadOrigemData(nota.id);
-        found = true;
-        break;
-      }
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.search);
+    const notaId = urlParams.get("nota");
+    
+    if (notaSelecionada && notaId && String(notaSelecionada.id) === notaId) {
+      return;
     }
     
-    // Se não encontrou mas há notaId na URL, busca no banco
-    if (!found && (!notaSelecionada || String(notaSelecionada.id) !== notaId)) {
-      console.log("⚠️ Nota não encontrada nas colunas, buscando no banco...");
-      const buscarNota = async () => {
-        const { data: nota, error } = await supabase
-          .from("notas")
-          .select("*")
-          .eq("id", notaId)
-          .single();
-          
-        if (!error && nota && nota.tipo !== "Nota Rápida") {
-          console.log("✅ Nota encontrada no banco, setando");
-          setNotaSelecionada(nota);
+    if (!notaId && notaSelecionada) {
+      const timer = setTimeout(() => {
+        const urlParamsCheck = new URLSearchParams(window.location.search);
+        const notaIdCheck = urlParamsCheck.get("nota");
+        if (!notaIdCheck && notaSelecionada) {
+          setNotaSelecionada(null);
           setIsNotaRecebidos(false);
-        } else {
-          console.log("❌ Nota não encontrada ou é Nota Rápida");
+          setProjetoOrigem(null);
+          setNotaOrigem(null);
         }
-      };
-      buscarNota();
+      }, 200);
+      return () => clearTimeout(timer);
     }
-  }
-}, [columnsAtivas, location.search]);
+    
+    if (notaId && columnsAtivas.length > 0) {
+      let found = false;
+      for (const col of columnsAtivas) {
+        const nota = col.notas.find(n => String(n.id) === notaId && n.tipo !== "Nota Rápida");
+        if (nota) {
+          setNotaSelecionada(nota);
+          const isRecebidos = col.title === "Recebidos";
+          setIsNotaRecebidos(isRecebidos);
+          if (isRecebidos) loadOrigemData(nota.id);
+          found = true;
+          break;
+        }
+      }
+      
+      if (!found && (!notaSelecionada || String(notaSelecionada.id) !== notaId)) {
+        const buscarNota = async () => {
+          const { data: nota, error } = await supabase
+            .from("notas")
+            .select("*")
+            .eq("id", notaId)
+            .single();
+            
+          if (!error && nota && nota.tipo !== "Nota Rápida") {
+            setNotaSelecionada(nota);
+            setIsNotaRecebidos(false);
+          }
+        };
+        buscarNota();
+      }
+    }
+  }, [columnsAtivas, location.search]);
 
   const loadOrigemData = async (notaEspelhoId) => {
     try {
@@ -567,7 +534,6 @@ useEffect(() => {
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Ignora se estiver digitando em input/textarea ou modal aberto
       if (
         e.target.tagName === 'INPUT' || 
         e.target.tagName === 'TEXTAREA' || 
@@ -581,7 +547,7 @@ useEffect(() => {
       const cardsBody = document.querySelector('.cards-body');
       if (!cardsBody) return;
 
-      const scrollAmount = 300; // pixels para rolar
+      const scrollAmount = 300;
 
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
@@ -678,26 +644,24 @@ useEffect(() => {
     }
   };
 
-  // Adicione esta função no Cards.jsx, logo após saveDataConclusao:
-const saveDataEntrega = async (notaId, data) => {
-  const { error } = await supabase.from("notas").update({ data_entrega: data || null }).eq("id", notaId);
-  if (!error) {
-    setDataEntregaSalva(prev => ({ ...prev, [notaId]: data || "" }));
-    setDataEntregaEdit(prev => { const cp = { ...prev }; delete cp[notaId]; return cp; });
-    
-    // Atualiza as colunas
-    const updateColumns = (setter) => {
-      setter(prev =>
-        prev.map(col => ({
-          ...col,
-          notas: col.notas.map(n => n.id === notaId ? { ...n, data_entrega: data || null } : n),
-        }))
-      );
-    };
-    updateColumns(setColumnsNormais);
-    updateColumns(setColumnsArquivadas);
-  }
-};
+  const saveDataEntrega = async (notaId, data) => {
+    const { error } = await supabase.from("notas").update({ data_entrega: data || null }).eq("id", notaId);
+    if (!error) {
+      setDataEntregaSalva(prev => ({ ...prev, [notaId]: data || "" }));
+      setDataEntregaEdit(prev => { const cp = { ...prev }; delete cp[notaId]; return cp; });
+      
+      const updateColumns = (setter) => {
+        setter(prev =>
+          prev.map(col => ({
+            ...col,
+            notas: col.notas.map(n => n.id === notaId ? { ...n, data_entrega: data || null } : n),
+          }))
+        );
+      };
+      updateColumns(setColumnsNormais);
+      updateColumns(setColumnsArquivadas);
+    }
+  };
 
   useEffect(() => {
     const handleClickOutsideDate = (e) => {
@@ -732,7 +696,6 @@ const saveDataEntrega = async (notaId, data) => {
         return updated ? { ...col, ordem: updated.ordem } : col;
       }));
     } catch (error) {
-      console.error("Erro ao salvar posição das pilhas:", error);
       alert("Erro ao salvar posição das pilhas.");
     }
   };
@@ -789,46 +752,31 @@ const saveDataEntrega = async (notaId, data) => {
     }
   }, [columnsNormais, columnsArquivadas, modoArquivadas, notaSelecionada]);
 
-// Substitua a função handleOpenNota no Cards.jsx por esta versão melhorada:
-
-// Substitua a função handleOpenNota no Cards.jsx por esta versão melhorada:
-
-const handleOpenNota = (nota) => {
-  console.log("📖 handleOpenNota chamado com:", nota);
-  
-  if (nota.tipo === "Nota Rápida") {
-    console.log("⚠️ Nota Rápida - modal não será aberto");
-    return;
-  }
-
-  console.log("✅ Tipo aceito:", nota.tipo);
-
-  let isRecebidos = false;
-  for (const col of columnsAtivas) {
-    if (col.notas.some(n => n.id === nota.id)) {
-      isRecebidos = col.title === "Recebidos";
-      break;
+  const handleOpenNota = (nota) => {
+    if (nota.tipo === "Nota Rápida") {
+      return;
     }
-  }
 
-  console.log("📋 isRecebidos:", isRecebidos);
-  console.log("🎯 Setando notaSelecionada...");
+    let isRecebidos = false;
+    for (const col of columnsAtivas) {
+      if (col.notas.some(n => n.id === nota.id)) {
+        isRecebidos = col.title === "Recebidos";
+        break;
+      }
+    }
 
-  // IMPORTANTE: Atualizar URL ANTES de setar o estado
-  updateUrlWithNota(nota.id);
-  
-  setNotaSelecionada(nota);
-  setIsNotaRecebidos(isRecebidos);
-  
-  if (isRecebidos) {
-    loadOrigemData(nota.id);
-  } else {
-    setProjetoOrigem(null);
-    setNotaOrigem(null);
-  }
-  
-  console.log("✅ Modal deve abrir agora com nota ID:", nota.id);
-};
+    updateUrlWithNota(nota.id);
+    
+    setNotaSelecionada(nota);
+    setIsNotaRecebidos(isRecebidos);
+    
+    if (isRecebidos) {
+      loadOrigemData(nota.id);
+    } else {
+      setProjetoOrigem(null);
+      setNotaOrigem(null);
+    }
+  };
 
   const handleCloseNota = () => {
     setNotaSelecionada(null);
@@ -861,7 +809,6 @@ const handleOpenNota = (nota) => {
         modoArquivadas={modoArquivadas}
       />
 
-      {/* ✅ BOTÃO COM MENU CONDICIONAL */}
       <div className="floating-add-column-container">
         <button
           className="floating-add-column-btn"

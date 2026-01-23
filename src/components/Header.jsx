@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import "./Header.css";
 import "./loader.css";
 import { supabase } from "../supabaseClient";
-import ob2 from "../assets/ob2.png";
+import { images } from "../config/images";
 import { FaSignOutAlt, FaUserCircle, FaUserEdit } from "react-icons/fa";
 
 export default function Header({
@@ -200,7 +200,7 @@ export default function Header({
     <>
       <header className="header">
         <div className="header-left" onClick={() => navigate("/")}>
-          <img src={ob2} alt="Logo" />
+          <img src={images.ob2} alt="Logo" />
         </div>
 
         <div className="header-right">

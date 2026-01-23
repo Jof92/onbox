@@ -1,0 +1,58 @@
+{
+  "1.png": {
+    "original": "https://res.cloudinary.com/dmecovtmm/image/upload/v1768829061/onbox/1.jpg",
+    "optimized": "https://res.cloudinary.com/dmecovtmm/image/upload/q_auto,f_auto/v1768829061/onbox/1.jpg"
+  },
+  "2.png": {
+    "original": "https://res.cloudinary.com/dmecovtmm/image/upload/v1768829062/onbox/2.jpg",
+    "optimized": "https://res.cloudinary.com/dmecovtmm/image/upload/q_auto,f_auto/v1768829062/onbox/2.jpg"
+  },
+  "back.png": {
+    "original": "https://res.cloudinary.com/dmecovtmm/image/upload/v1768829063/onbox/back.jpg",
+    "optimized": "https://res.cloudinary.com/dmecovtmm/image/upload/q_auto,f_auto/v1768829063/onbox/back.jpg"
+  },
+  "back1.png": {
+    "original": "https://res.cloudinary.com/dmecovtmm/image/upload/v1768829064/onbox/back1.jpg",
+    "optimized": "https://res.cloudinary.com/dmecovtmm/image/upload/q_auto,f_auto/v1768829064/onbox/back1.jpg"
+  },
+  "back2.png": {
+    "original": "https://res.cloudinary.com/dmecovtmm/image/upload/v1768829065/onbox/back2.jpg",
+    "optimized": "https://res.cloudinary.com/dmecovtmm/image/upload/q_auto,f_auto/v1768829065/onbox/back2.jpg"
+  },
+  "back3.png": {
+    "original": "https://res.cloudinary.com/dmecovtmm/image/upload/v1768829067/onbox/back3.jpg",
+    "optimized": "https://res.cloudinary.com/dmecovtmm/image/upload/q_auto,f_auto/v1768829067/onbox/back3.jpg"
+  },
+  "data-transfer.png": {
+    "original": "https://res.cloudinary.com/dmecovtmm/image/upload/v1768829068/onbox/data-transfer.png",
+    "optimized": "https://res.cloudinary.com/dmecovtmm/image/upload/q_auto,f_auto/v1768829068/onbox/data-transfer.png"
+  },
+  "file.png": {
+    "original": "https://res.cloudinary.com/dmecovtmm/image/upload/v1768829069/onbox/file.jpg",
+    "optimized": "https://res.cloudinary.com/dmecovtmm/image/upload/q_auto,f_auto/v1768829069/onbox/file.jpg"
+  },
+  "material.png": {
+    "original": "https://res.cloudinary.com/dmecovtmm/image/upload/v1768829070/onbox/material.jpg",
+    "optimized": "https://res.cloudinary.com/dmecovtmm/image/upload/q_auto,f_auto/v1768829070/onbox/material.jpg"
+  },
+  "ob1.png": {
+    "original": "https://res.cloudinary.com/dmecovtmm/image/upload/v1768829072/onbox/ob1.png",
+    "optimized": "https://res.cloudinary.com/dmecovtmm/image/upload/q_auto,f_auto/v1768829072/onbox/ob1.png"
+  },
+  "ob2.png": {
+    "original": "https://res.cloudinary.com/dmecovtmm/image/upload/v1768829073/onbox/ob2.png",
+    "optimized": "https://res.cloudinary.com/dmecovtmm/image/upload/q_auto,f_auto/v1768829073/onbox/ob2.png"
+  },
+  "ob3.png": {
+    "original": "https://res.cloudinary.com/dmecovtmm/image/upload/v1768829074/onbox/ob3.jpg",
+    "optimized": "https://res.cloudinary.com/dmecovtmm/image/upload/q_auto,f_auto/v1768829074/onbox/ob3.jpg"
+  },
+  "ob4.png": {
+    "original": "https://res.cloudinary.com/dmecovtmm/image/upload/v1768829075/onbox/ob4.jpg",
+    "optimized": "https://res.cloudinary.com/dmecovtmm/image/upload/q_auto,f_auto/v1768829075/onbox/ob4.jpg"
+  },
+  "ob5.png": {
+    "original": "https://res.cloudinary.com/dmecovtmm/image/upload/v1768829076/onbox/ob5.jpg",
+    "optimized": "https://res.cloudinary.com/dmecovtmm/image/upload/q_auto,f_auto/v1768829076/onbox/ob5.jpg"
+  }
+}

@@ -1,5 +1,5 @@
 // src/pages/ProjectManager.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import Loading from "../components/Loading";
@@ -373,7 +373,8 @@ export default function ProjectManager({ containerAtual, user, onSidebarUpdate }
     }
   };
 
-  const handleDeleteProject = async (projectId) => {
+  // ✅ MEMORIZADA com useCallback
+  const handleDeleteProject = useCallback(async (projectId) => {
     if (!window.confirm("Deseja realmente apagar este projeto?")) return;
     setLoading(true);
 
@@ -401,7 +402,7 @@ export default function ProjectManager({ containerAtual, user, onSidebarUpdate }
     } finally {
       setLoading(false);
     }
-  };
+  }, [containerAtual, selectedProject]);
 
   const handleEditProject = async (project) => {
     // Carregar membros
@@ -452,13 +453,14 @@ export default function ProjectManager({ containerAtual, user, onSidebarUpdate }
   };
 
   // === Setores ===
-  const handleOpenSetoresManager = () => {
+  // ✅ MEMORIZADA com useCallback
+  const handleOpenSetoresManager = useCallback(() => {
     if (!containerAtual) {
       alert("Usuário não identificado.");
       return;
     }
     setShowSetoresModal(true);
-  };
+  }, [containerAtual]);
 
   const handleDeleteSetor = async (setorId) => {
     if (!window.confirm("Excluir setor?")) return;
@@ -488,7 +490,6 @@ export default function ProjectManager({ containerAtual, user, onSidebarUpdate }
     }
   };
 
-  // === Navegação - CORRIGIDO ===
   const openCardsPage = (proj) => {
     const params = new URLSearchParams({
       entityId: proj.id,
@@ -496,15 +497,17 @@ export default function ProjectManager({ containerAtual, user, onSidebarUpdate }
       containerId: containerAtual
     });
     
-    navigate(`/cards/${encodeURIComponent(proj.name || "Projeto")}?${params.toString()}`, {
-      state: {
-        projectId: proj.id,
-        projectName: proj.name,
-        projectPhoto: proj.photo_url,
-        from: location.pathname,
-        containerId: containerAtual,
-      },
-    });
+    const urlFinal = `/cards/${encodeURIComponent(proj.name || "Projeto")}?${params.toString()}`;
+    
+    const stateData = {
+      projectId: proj.id,
+      projectName: proj.name,
+      projectPhoto: proj.photo_url,
+      from: location.pathname,
+      containerId: containerAtual,
+    };
+    
+    navigate(urlFinal, { state: stateData });
   };
 
   const openSetorCardsPage = (setor) => {
@@ -514,17 +517,30 @@ export default function ProjectManager({ containerAtual, user, onSidebarUpdate }
       containerId: containerAtual
     });
     
-    navigate(`/cards/${encodeURIComponent(setor.name || "Setor")}?${params.toString()}`, {
-      state: {
-        setorId: setor.id,
-        setorName: setor.name,
-        setorPhoto: setor.photo_url,
-        entityType: "setor",
-        from: location.pathname,
-        containerId: containerAtual,
-      },
-    });
+    const urlFinal = `/cards/${encodeURIComponent(setor.name || "Setor")}?${params.toString()}`;
+    
+    const stateData = {
+      setorId: setor.id,
+      setorName: setor.name,
+      setorPhoto: setor.photo_url,
+      entityType: "setor",
+      from: location.pathname,
+      containerId: containerAtual,
+    };
+    
+    navigate(urlFinal, { state: stateData });
   };
+
+  // ✅ Funções de callback memorizadas
+  const onCreateProject = useCallback(() => {
+    setIsEditing(false);
+    setInitialFormData(null);
+    setShowForm(true);
+  }, []);
+
+  const onProjectSelect = useCallback((proj) => {
+    setSelectedProject(proj);
+  }, []);
 
   // ✅ Expor dados para o Sidebar (via callback obrigatório)
   useEffect(() => {
@@ -532,12 +548,8 @@ export default function ProjectManager({ containerAtual, user, onSidebarUpdate }
       onSidebarUpdate({
         projects,
         selectedProject,
-        onCreateProject: () => {
-          setIsEditing(false);
-          setInitialFormData(null);
-          setShowForm(true);
-        },
-        onProjectSelect: (proj) => setSelectedProject(proj),
+        onCreateProject,
+        onProjectSelect,
         onDeleteProject: handleDeleteProject,
         onOpenSetoresManager: handleOpenSetoresManager,
         currentUserId,
@@ -548,12 +560,14 @@ export default function ProjectManager({ containerAtual, user, onSidebarUpdate }
   }, [
     projects,
     selectedProject,
+    onCreateProject,
+    onProjectSelect,
+    handleDeleteProject,
+    handleOpenSetoresManager,
     currentUserId,
     containerAtual,
     gerenteContainerId,
     onSidebarUpdate,
-    handleDeleteProject,       // ← adicionado
-    handleOpenSetoresManager   // ← adicionado
   ]);
 
   // === Renderização ===

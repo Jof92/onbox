@@ -1,6 +1,6 @@
-// src/App.jsx - CORREÇÃO DE ROTAS
+// src/App.jsx
 import React, { useState, useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from "react-router-dom";
+import { Routes, Route, Navigate, useParams } from "react-router-dom";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import LoginPanel from "./components/Login";
@@ -30,10 +30,10 @@ export default function App() {
 
   useEffect(() => {
     const fetchSession = async () => {
-      setLoadingSession(true); // ✅ Inicia loading
+      setLoadingSession(true);
       const { data } = await supabase.auth.getSession();
       setSession(data?.session || null);
-      setLoadingSession(false); // ✅ Finaliza loading
+      setLoadingSession(false);
     };
     fetchSession();
 
@@ -168,80 +168,78 @@ export default function App() {
   }
 
   return (
-    <Router>
-      <div className="App">
-        <Header
-          session={session}
-          profile={profile}
-          onLoginClick={handleLoginClick}
-          onLogout={handleLogout}
-          onProfileUpdate={setProfile}
-          hasOverdueToday={hasOverdueToday}
-          showGlow={showGlow}
-          onGlowDismiss={() => setGlowDismissed(true)}
-        />
+    <div className="App">
+      <Header
+        session={session}
+        profile={profile}
+        onLoginClick={handleLoginClick}
+        onLogout={handleLogout}
+        onProfileUpdate={setProfile}
+        hasOverdueToday={hasOverdueToday}
+        showGlow={showGlow}
+        onGlowDismiss={() => setGlowDismissed(true)}
+      />
 
-        {showLoginPanel && !session && (
-          <div className="login-panel-container show">
-            <LoginPanel
-              onLogin={() => setShowLoginPanel(false)}
-              onClose={() => setShowLoginPanel(false)}
-            />
-          </div>
-        )}
+      {showLoginPanel && !session && (
+        <div className="login-panel-container show">
+          <LoginPanel
+            onLogin={() => setShowLoginPanel(false)}
+            onClose={() => setShowLoginPanel(false)}
+          />
+        </div>
+      )}
 
-        <main className="app-main">
-          <Routes>
-            {/* ✅ Rota Home - Apenas se NÃO estiver logado */}
-            <Route
-              path="/"
-              element={
-                !session ? (
-                  <Home onOpenLogin={handleLoginClick} />
-                ) : (
-                  <Navigate to="/containers" replace />
-                )
-              }
-            />
+      <main className="app-main">
+        <Routes>
+          {/* ✅ Rota Home - Apenas se NÃO estiver logado */}
+          <Route
+            path="/"
+            element={
+              !session ? (
+                <Home onOpenLogin={handleLoginClick} />
+              ) : (
+                <Navigate to="/containers" replace />
+              )
+            }
+          />
 
-            {/* ✅ Rota Containers - Protegida e EXCLUSIVA */}
-            <Route
-              path="/containers"
-              element={
-                session ? <ContainersWrapper /> : <Navigate to="/" replace />
-              }
-            />
-            <Route
-              path="/containers/:containerId"
-              element={
-                session ? <ContainersWrapper /> : <Navigate to="/" replace />
-              }
-            />
+          {/* ✅ Rota Containers - Protegida e EXCLUSIVA */}
+          <Route
+            path="/containers"
+            element={
+              session ? <ContainersWrapper /> : <Navigate to="/" replace />
+            }
+          />
+          <Route
+            path="/containers/:containerId"
+            element={
+              session ? <ContainersWrapper /> : <Navigate to="/" replace />
+            }
+          />
 
-            {/* ✅ Rota Cards - Protegida e INDEPENDENTE */}
-            <Route
-              path="/cards/:projectName"
-              element={
-                session ? <Cards /> : <Navigate to="/" replace />
-              }
-            />
+          {/* ✅ Rota Cards - Protegida e INDEPENDENTE */}
+          <Route
+            path="/cards/:projectName"
+            element={
+              session ? <Cards /> : <Navigate to="/" replace />
+            }
+          />
 
-            {/* ✅ Rota Reset Senha - Pública */}
-            <Route
-              path="/ResetSenha"
-              element={<ResetSenha />}
-            />
+          {/* ✅ Rota Reset Senha - Pública */}
+          <Route
+            path="/ResetSenha"
+            element={<ResetSenha />}
+          />
 
-            {/* ✅ Fallback - Redireciona para home/containers */}
-            <Route
-              path="*"
-              element={<Navigate to={session ? "/containers" : "/"} replace />}
-            />
-          </Routes>
-        </main>
+          {/* ✅ Fallback - Redireciona para home/containers */}
+          <Route
+            path="*"
+            element={<Navigate to={session ? "/containers" : "/"} replace />}
+          />
+        </Routes>
+      </main>
 
-        <Footer />
-      </div>
-    </Router>
+      <Footer />
+    </div>
   );
 }
