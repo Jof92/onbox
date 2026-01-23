@@ -51,9 +51,7 @@
   },
   "engines": {
     "node": "24.x"
-  }git add package.json
-git commit -m "chore: define Node.js 24.x engine for Vercel compatibility"
-git push
+  }
   
   
 }
