@@ -4,25 +4,8 @@
   margin-left: auto;
 }
 
-.tab-btn {
-  background: none;
-  border: 1px solid #ccc;
-  padding: 6px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  color: #555;
-  transition: 0.2s;
-}
-
 .tab-btn:hover {
   background: #f0f0f0;
-}
-
-.tab-btn.active {
-  background: #bf9010;
-  color: white;
-  border-color: #bf9010;
 }
 
 .tab-btn .icon {
@@ -60,7 +43,6 @@
   padding: 25px 30px;
   animation: slideDown 0.3s ease;
   max-height: 70vh;
-  overflow-y: auto;
   height: 500px;
 }
 
@@ -94,12 +76,16 @@
   border: 1px solid #dedede;
   padding: 10px;
   border-radius: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
 }
 
 .collab-section1 {
   margin-bottom: 20px;
   height: 18em;
   overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
 }
 
 .collab-section-convite {
@@ -511,6 +497,11 @@
   background-color: #f9f9f9;
   border-radius: 8px;
   border: 1px solid #e0e0e0;
+  overflow: auto;
+  max-height: 300px;
+  position: absolute;
+  scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
 }
 
 .permissoes-previas-section h4 {
@@ -564,4 +555,60 @@
   font-size: 13px;
   color: #333;
   user-select: none;
+}
+
+/* Adicione isso ao seu Collab.css existente */
+
+.tab-btn {
+  position: relative;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #666;
+  transition: all 0.2s;
+  border-bottom: 2px solid transparent;
+}
+
+.tab-btn:hover {
+  color: #333;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.tab-btn.active {
+  color: #007bff;
+  border-bottom-color: #007bff;
+}
+
+.tab-btn .icon {
+  font-size: 18px;
+}
+
+/* 🆕 Badge nas abas */
+.tab-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: #ff4444;
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 5px;
+  border-radius: 10px;
+  min-width: 16px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  animation: badge-pulse 2s ease-in-out infinite;
+}
+
+@keyframes badge-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
 }

@@ -21,6 +21,12 @@ export default function Collab({ onClose, user, onOpenTask }) {
   const [selectedPermissions, setSelectedPermissions] = useState({ projetos: [], setores: [] });
   const [loadingProjectsSetores, setLoadingProjectsSetores] = useState(true);
 
+  // 🆕 Contador de notificações por aba
+  const [notifCounts, setNotifCounts] = useState({
+    mencoes: 0,
+    convitesRecebidos: 0
+  });
+
   const getTipoClasse = (tipoNota) => {
     if (!tipoNota) return "";
     const mapa = {
@@ -157,6 +163,13 @@ export default function Collab({ onClose, user, onOpenTask }) {
 
       setConvitesRecebidos(convitesFormatados);
       setMencoes(mencoesFormatadas);
+
+      // 🆕 Atualizar contadores
+      setNotifCounts({
+        mencoes: mencoesFormatadas.filter(m => !m.lido).length,
+        convitesRecebidos: convitesFormatados.filter(c => c.status === "pendente").length
+      });
+
     } catch (err) {
       console.error("Erro ao buscar notificações:", err);
       setConvitesRecebidos([]);
@@ -249,6 +262,31 @@ export default function Collab({ onClose, user, onOpenTask }) {
     fetchIntegrantes();
     fetchProjectsAndSetores();
   }, [fetchNotificacoes, fetchIntegrantes, fetchProjectsAndSetores]);
+
+  // 🆕 Marcar todas as menções como lidas quando abrir a aba
+  const handleTabChange = async (tabName) => {
+    setActiveTab(tabName);
+
+    if (tabName === "notificacoes") {
+      // Marcar todas as menções não lidas como lidas
+      const mencoesNaoLidas = mencoes.filter(m => !m.lido);
+      if (mencoesNaoLidas.length > 0) {
+        const ids = mencoesNaoLidas.map(m => m.id);
+        try {
+          await supabase
+            .from("notificacoes")
+            .update({ lido: true })
+            .in("id", ids);
+          
+          // Atualizar estado local
+          setMencoes(prev => prev.map(m => ({ ...m, lido: true })));
+          setNotifCounts(prev => ({ ...prev, mencoes: 0 }));
+        } catch (err) {
+          console.error("Erro ao marcar menções como lidas:", err);
+        }
+      }
+    }
+  };
 
   const enviarConvite = async () => {
     if (!emailConvite.trim()) return alert("Digite um e-mail válido.");
@@ -408,24 +446,34 @@ export default function Collab({ onClose, user, onOpenTask }) {
             <div className="collab-tabs">
               <button
                 className={`tab-btn ${activeTab === "notificacoes" ? "active" : ""}`}
-                onClick={() => setActiveTab("notificacoes")}
+                onClick={() => handleTabChange("notificacoes")}
                 aria-label="Menções"
               >
                 <FaBell className="icon" />
+                {notifCounts.mencoes > 0 && (
+                  <span className="tab-badge">
+                    {notifCounts.mencoes > 9 ? "9+" : notifCounts.mencoes}
+                  </span>
+                )}
               </button>
               <button
                 className={`tab-btn ${activeTab === "enviar" ? "active" : ""}`}
-                onClick={() => setActiveTab("enviar")}
+                onClick={() => handleTabChange("enviar")}
                 aria-label="Enviar convite"
               >
                 <FaUserPlus className="icon" />
               </button>
               <button
                 className={`tab-btn ${activeTab === "convites-recebidos" ? "active" : ""}`}
-                onClick={() => setActiveTab("convites-recebidos")}
+                onClick={() => handleTabChange("convites-recebidos")}
                 aria-label="Convites recebidos"
               >
                 <FaArchive className="icon" />
+                {notifCounts.convitesRecebidos > 0 && (
+                  <span className="tab-badge">
+                    {notifCounts.convitesRecebidos > 9 ? "9+" : notifCounts.convitesRecebidos}
+                  </span>
+                )}
               </button>
             </div>
             <button

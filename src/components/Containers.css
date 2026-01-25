@@ -28,6 +28,8 @@
   border-right: 2px solid #f6e1a7;
   min-width: 200px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
 }
 
 .sidebar-btn {
@@ -109,6 +111,8 @@
   padding: 20px;
   background-image: url(../assets/back.png);
   background-attachment: fixed;  /* opcional: fixa ao scroll */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
 }
 
 
@@ -127,6 +131,13 @@
   flex-wrap: wrap;
   gap: 25px;
   justify-content: left;
+}
+
+.box-icon {
+  width: 30px;
+  height: 26px;
+  vertical-align: middle;
+  display: inline-block;
 }
 
 .project-box {
@@ -254,7 +265,7 @@
 .project-sections {
   display: flex;
   gap: 20px;
-  margin-bottom: 20px;
+  margin: 10px 0;
   justify-content: center;
 }
 
@@ -271,6 +282,8 @@
   max-height: 25em; /* Ajuste conforme necessário */
   overflow-y: auto;
   padding: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
 
 }
 

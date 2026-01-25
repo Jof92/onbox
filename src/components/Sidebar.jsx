@@ -146,11 +146,16 @@ const BoxMenu = ({
   return (
     <div className="box-menu-container" ref={boxMenuRef}>
       <button
-        className="sidebar-btn box-btn"
-        onClick={() => setShowBoxMenu(!showBoxMenu)}
-      >
-        <TfiDropbox className="icon" /> Box
-      </button>
+          className="sidebar-btn box-btn"
+          onClick={() => setShowBoxMenu(!showBoxMenu)}
+        >
+          <img
+            src="https://res.cloudinary.com/dmecovtmm/image/upload/v1769375015/launch3_eunebg.png"
+            alt="Box"
+            className="box-icon"
+          />
+          Box
+        </button>
 
       {showBoxMenu && (
         <div className="box-dropdown">

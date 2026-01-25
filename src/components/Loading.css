@@ -4,8 +4,8 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(89, 88, 92, 0.493); /* fundo translúcido */
-  backdrop-filter: blur(4px); /* efeito de desfoque suave */
+  background: rgba(47, 47, 47, 0.493); /* fundo translúcido */
+  backdrop-filter: blur(10px); /* efeito de desfoque suave */
   display: flex;
   justify-content: center;
   align-items: center;
