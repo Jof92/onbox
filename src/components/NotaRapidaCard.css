@@ -12,17 +12,23 @@
   transform: translateY(-2px);
 }
 
-/* Imagem no topo */
+/* Imagem no topo - ALTURA PADRONIZADA */
 .quick-note-image-wrapper {
+  width: 100%;
+  height: 200px; /* ✅ Altura fixa para todas as imagens */
   margin-bottom: 8px;
   border-radius: 6px;
   overflow: hidden;
+  background: #f5f5f5; /* Fundo para caso a imagem não carregue */
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .quick-note-image {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: cover; /* ✅ Mantém proporção e preenche todo o espaço */
   display: block;
 }
 
@@ -341,4 +347,17 @@
   object-fit: cover;
   border: 2px solid #e2e8f0;
   background-color: #f1f5f9;
+}
+
+/* === RESPONSIVIDADE === */
+@media (max-width: 768px) {
+  .quick-note-image-wrapper {
+    height: 180px; /* Altura um pouco menor em tablets */
+  }
+}
+
+@media (max-width: 480px) {
+  .quick-note-image-wrapper {
+    height: 160px; /* Altura ainda menor em mobile */
+  }
 }
