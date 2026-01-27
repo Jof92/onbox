@@ -5,6 +5,7 @@ import { FaPlus, FaEllipsisV, FaEdit, FaTrash, FaTimes, FaMapPin, FaFileExport }
 import { supabase } from "../supabaseClient";
 import NotaRapidaCard from "./NotaRapidaCard";
 import CalendarioDiarioObra from "./RdoCalendario";
+import NotaCalendarioCard from "./NotaCalendario";
 
 export default function Column({
   col,
@@ -46,6 +47,7 @@ export default function Column({
   usuarioId,
   entityType,
   entity,
+  membros,
 }) {
   const colorTrackRefs = useRef({});
 
@@ -56,7 +58,6 @@ export default function Column({
     return dias[data.getUTCDay()];
   };
 
-  // ✅ Função para formatar data sem problema de fuso horário
   const formatarDataLocal = (dataString) => {
     if (!dataString) return null;
     const [ano, mes, dia] = dataString.split('-');
@@ -164,7 +165,6 @@ export default function Column({
     }
   };
 
-  // ✅ Effect para color picker
   useEffect(() => {
     if (!showColorPicker[col.id]) return;
     const track = colorTrackRefs.current[col.id];
@@ -182,11 +182,9 @@ export default function Column({
     return () => track.removeEventListener("click", handleClick);
   }, [showColorPicker, col.id]);
 
-  // ✅ Effect para atualização em tempo real dos RDOs
   useEffect(() => {
     if (!isDiarioObra) return;
 
-    // Listener para nova nota RDO (atualização instantânea)
     const handleNovaNotaRDO = (event) => {
       const { nota, pilhaId: eventPilhaId } = event.detail;
       if (eventPilhaId === col.id) {
@@ -201,7 +199,6 @@ export default function Column({
       }
     };
 
-    // Listener para RDO atualizado
     const handleRdoAtualizado = (event) => {
       const { notaId, data: updatedData } = event.detail;
       console.log("⚡ RDO atualizado, sincronizando lista");
@@ -222,13 +219,12 @@ export default function Column({
     window.addEventListener('novaNotaRDO', handleNovaNotaRDO);
     window.addEventListener('rdoAtualizado', handleRdoAtualizado);
 
-    // Listener para mudanças no banco (backup/sincronização)
     const subscription = supabase
       .channel(`rdo-${col.id}`)
       .on(
         'postgres_changes',
         {
-          event: '*', // INSERT, UPDATE, DELETE
+          event: '*',
           schema: 'public',
           table: 'notas',
           filter: `pilha_id=eq.${col.id}`
@@ -265,7 +261,6 @@ export default function Column({
   const openNotaById = async (notaId) => {
     console.log("🔍 Tentando abrir nota ID:", notaId);
     
-    // Primeiro tenta buscar nas colunas carregadas
     const allColumns = [...columnsNormais, ...columnsArquivadas];
     for (const c of allColumns) {
       const nota = c.notas.find(n => n.id === notaId);
@@ -276,7 +271,6 @@ export default function Column({
       }
     }
 
-    // Se não encontrou, busca diretamente no banco (para notas recém-criadas)
     console.log("⚠️ Nota não encontrada nas colunas, buscando no banco...");
     const { data: nota, error } = await supabase
       .from("notas")
@@ -522,6 +516,35 @@ export default function Column({
                   }}
                 >
                   {col.notas.map((nota, idx) => {
+                    // ✅ CALENDÁRIO - ARRASTÁVEL
+                    if (nota.tipo === "Calendário") {
+                      return (
+                        <Draggable key={String(nota.id)} draggableId={String(nota.id)} index={idx} type="CARD">
+                          {(prov, snapshot) => (
+                            <div
+                              ref={prov.innerRef}
+                              {...prov.draggableProps}
+                              {...prov.dragHandleProps}
+                              style={{
+                                ...prov.draggableProps.style,
+                                marginBottom: "8px",
+                                opacity: snapshot.isDragging ? 0.85 : 1,
+                              }}
+                            >
+                              <NotaCalendarioCard
+                                nota={nota}
+                                pilhaId={col.id}
+                                usuarioId={usuarioId}
+                                membros={membros || []}
+                                onDelete={() => handleDeleteNota(nota.id, col.id)}
+                              />
+                            </div>
+                          )}
+                        </Draggable>
+                      );
+                    }
+
+                    // ✅ NOTA RÁPIDA
                     if (nota.tipo === "Nota Rápida") {
                       const isConcluida = notasConcluidas.has(String(nota.id));
                       const isEditingDate = dataConclusaoEdit.hasOwnProperty(String(nota.id));
@@ -563,6 +586,7 @@ export default function Column({
                       );
                     }
 
+                    // ✅ DEMAIS CARDS
                     const isConcluida = notasConcluidas.has(String(nota.id));
 
                     let cardBackgroundColor = "#ffffff";
@@ -575,7 +599,6 @@ export default function Column({
                       cardBorderLeft = "4px solid #ea4335";
                     }
 
-                    // ✅ ALTERAÇÃO: Usar data_entrega para Tarefas e data_conclusao para outros tipos
                     const usarDataEntrega = nota.tipo === "Tarefas";
                     const isEditingDate = usarDataEntrega 
                       ? dataEntregaEdit?.hasOwnProperty(String(nota.id))
@@ -635,7 +658,6 @@ export default function Column({
                                 {nota.tipo === "Atas" && notaProgresso[nota.id] !== undefined && <> - {notaProgresso[nota.id]}%</>}
                               </p>
 
-                              {/* ✅ CAMPO DE DATA COM CORREÇÃO DE FUSO HORÁRIO */}
                               <div
                                 className="data-conclusao-container"
                                 data-nota-id={nota.id}

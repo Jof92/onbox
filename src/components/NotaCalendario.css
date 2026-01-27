@@ -1,0 +1,295 @@
+/* ========================================
+   HEADER SIMPLES DO CALENDÁRIO
+   ======================================== */
+
+.calendario-header-simples {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px;
+  border-bottom: 1px solid #e0e0e0;
+  background: #fff;
+}
+
+.calendario-titulo {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+/* Container do menu */
+.calendario-menu-container {
+  position: relative;
+}
+
+/* Botão de três pontos - SIMPLES */
+.calendario-menu-btn-simples {
+  background: transparent;
+  border: none;
+  color: #666;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.calendario-menu-btn-simples:hover {
+  background: #e5e7eb;
+  color: #333;
+}
+
+/* Dropdown do menu */
+.calendario-menu-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 180px;
+  z-index: 1000;
+  overflow: hidden;
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.calendario-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: none;
+  background: white;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+  color: #333;
+  transition: background 0.2s;
+}
+
+.calendario-menu-item:hover {
+  background: #f5f5f5;
+}
+
+.calendario-menu-item.delete {
+  color: #ef4444;
+}
+
+.calendario-menu-item.delete:hover {
+  background: #fee;
+}
+
+/* ========================================
+   CALENDÁRIO
+   ======================================== */
+
+.nota-calendario-card {
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-right: 6px solid #ff9908;
+}
+
+/* Header de navegação do mês */
+.cal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  background: #fff;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.cal-month-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #333;
+}
+
+.cal-nav-btn {
+  color: #ff9908;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.cal-nav-btn:hover {
+ color: #ffd69d;
+}
+
+/* Dias da semana */
+.cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  padding: 10px 12px;
+  background: #fff;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.cal-weekdays > div {
+  text-align: center;
+  font-weight: 600;
+  color: #666;
+  font-size: 12px;
+}
+
+/* Grid do calendário */
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  padding: 12px;
+  background: #f8f9fa;
+}
+
+.cal-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  background: white;
+}
+
+.cal-day.empty {
+  background: transparent;
+  border: none;
+  cursor: default;
+}
+
+.cal-day:not(.empty):hover {
+  background: #f7e7cb;
+  border-color: #f59e0b;
+  transform: scale(1.05);
+}
+
+.cal-day.today {
+  background: #f7e7cb;
+  border-color: #f59e0b;
+  font-weight: 700;
+}
+
+.cal-day.has-events {
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
+
+.day-num {
+  font-size: 13px;
+  color: #333;
+}
+
+.event-dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  background: #f59e0b;
+  color: white;
+  font-size: 9px;
+  font-weight: 700;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cal-loading {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 40px;
+  color: #999;
+  font-size: 14px;
+}
+
+/* Eventos resumo */
+.cal-eventos-resumo {
+  padding: 14px 16px;
+  border-top: 1px solid #e0e0e0;
+  background: #fafafa;
+}
+
+.cal-eventos-resumo h4 {
+  margin: 0 0 10px 0;
+  font-size: 13px;
+  color: #666;
+  font-weight: 600;
+}
+
+.eventos-lista-resumo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.evento-resumo-item {
+  display: flex;
+  gap: 10px;
+  padding: 8px 10px;
+  background: white;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-left: 3px solid #8b5cf6;
+}
+
+.evento-resumo-item:hover {
+  background: #f3f4f6;
+  transform: translateX(3px);
+}
+
+.evento-resumo-date {
+  font-size: 11px;
+  font-weight: 600;
+  color: #8b5cf6;
+  min-width: 45px;
+}
+
+.evento-resumo-info {
+  flex: 1;
+}
+
+.evento-resumo-nome {
+  font-weight: 600;
+  color: #333;
+  font-size: 12px;
+}
+
+.evento-resumo-horario {
+  font-size: 11px;
+  color: #666;
+  margin-top: 2px;
+}
+
+.ver-mais-eventos {
+  text-align: center;
+  padding: 6px;
+  color: #8b5cf6;
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 6px;
+}
