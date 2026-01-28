@@ -28,6 +28,16 @@ const ChipResponsavel = ({ responsavel, onRemove, disabled }) => {
   );
 };
 
+// Função para formatar data sem problemas de fuso horário
+const formatarDataParaExibicao = (dataString) => {
+  if (!dataString) return '';
+  
+  // Extrai apenas a parte da data (YYYY-MM-DD) e formata para DD/MM/YYYY
+  const dataParte = dataString.split('T')[0];
+  const [ano, mes, dia] = dataParte.split('-');
+  return `${dia}/${mes}/${ano}`;
+};
+
 const TaskAnexos = ({
   notaAtual,
   userId,
@@ -714,7 +724,7 @@ const TaskAnexos = ({
                     >
                       {o.dataEntrega ? (
                         <>
-                          {new Date(o.dataEntrega).toLocaleDateString('pt-BR')}
+                          {formatarDataParaExibicao(o.dataEntrega)}
                           <FontAwesomeIcon icon={faCalendar} style={{ fontSize: '12px', color: '#555' }} />
                         </>
                       ) : (
