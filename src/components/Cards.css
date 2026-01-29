@@ -804,7 +804,7 @@
 .tipo-btn.ativo {
   background: #3b82f6;
   color: white;
-  border-color: #3b82f6;
+
 }
 
 /* === ESTILO DO SELETOR DE COR (via "Estilo") === */
@@ -1271,6 +1271,123 @@
 
 .diario-obras-list::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
+}
+
+/* Header do Modal */
+.modal-header {
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #dee2e6;
+  border-radius: 8px 8px 0 0;
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #212529;
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  color: #6c757d;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.modal-close-btn:hover {
+  color: #dc3545;
+  background: rgba(220, 53, 69, 0.1);
+}
+
+.modal-close-btn:active {
+  transform: scale(0.95);
+}
+
+/* Wrapper dos botões - mantendo ordem original */
+.modal-send-action-wrapper {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding: 20px;
+  border-top: 1px solid #dee2e6;
+  border-radius: 0 0 8px 8px;
+}
+
+/* Botão Criar/Salvar */
+.modal-send-btn {
+  padding: 10px 24px;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  min-width: 100px;
+}
+
+.modal-send-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.modal-send-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+/* Botão Cancelar */
+.modal-btn-cancelar-evento {
+  padding: 10px 24px;
+  background: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  min-width: 100px;
+}
+
+.modal-btn-cancelar-evento:hover {
+  background: #5a6268;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.modal-btn-cancelar-evento:active {
+  transform: translateY(0);
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+  .modal-header {
+    padding: 16px 20px;
+  }
+
+  .modal-title {
+    font-size: 18px;
+  }
+
+  .modal-send-action-wrapper {
+    flex-direction: column;
+    padding: 15px;
+    gap: 10px;
+  }
+  
+  .modal-send-btn,
+  .modal-btn-cancelar-evento {
+    width: 100%;
+  }
 }
 
 @media (max-width: 767px) {

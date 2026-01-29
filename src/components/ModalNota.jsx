@@ -104,7 +104,9 @@ export default function ModalNota({
     : (notaSelecionada?.nome || notaEditData?.nome || "Editar Nota");
   
   const corHeader = tipoAtual ? CORES_TIPO[tipoAtual] : "#6c757d";
-  const iconeTipo = tipoAtual ? ICONES_TIPO[tipoAtual] : "📄";
+
+  // Determinar título do modal
+  const tituloModal = showNovaNota ? "Nova Nota" : "Editar Nota";
 
   return (
     <div className="modal-overlay">
@@ -112,6 +114,19 @@ export default function ModalNota({
         {/* Modal de Criação/Edição */}
         {(showNovaNota || showEditarNota) && (
           <div className="nota-modal-container">
+            {/* Header com título - apenas texto, sem ícone */}
+            <div className="modal-header">
+              <h2 className="modal-title">
+                {tituloModal}
+              </h2>
+              <button 
+                className="modal-close-btn" 
+                onClick={showNovaNota ? onCloseNovaNota : onCloseEditarNota}
+              >
+                <FaTimes />
+              </button>
+            </div>
+
             <div className="modal-body">
               <label>Nome da nota</label>
               <input
@@ -159,8 +174,9 @@ export default function ModalNota({
               )}
             </div>
 
+            {/* Botões - ordem original mantida */}
             <div className="modal-nota-actions-container">
-              <div className="modal-action-buttons" style={{ justifyContent: 'flex-end' }}>
+              <div className="modal-action-buttons">
                 <div className="modal-send-action-wrapper">
                   <button
                     className="modal-send-btn"
@@ -208,8 +224,8 @@ export default function ModalNota({
                       onClose={onCloseVisualizarNota}
                       usuarioId={usuarioId}
                       projetoAtual={project}
-                      projetoNome={projetoAtual?.nome || "Projeto"}  // ← Adicione isso
-                      notaNome={notaDados?.nome || "Calendário"}  
+                      projetoNome={project?.name || "Projeto"}
+                      notaNome={notaSelecionada?.nome || "Calendário"}  
                     />
                   );
                 case "Tarefas":
