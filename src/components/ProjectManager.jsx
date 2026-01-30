@@ -87,6 +87,7 @@ export default function ProjectManager({ containerAtual, user, onSidebarUpdate }
         .from("projects")
         .select(`*, pavimentos(*), eap(*)`)
         .eq("user_id", userId)
+        .order("ordem_display", { ascending: true, nullsFirst: false })
         .order("created_at", { ascending: false });
 
       if (projectsError) throw projectsError;
@@ -159,6 +160,7 @@ export default function ProjectManager({ containerAtual, user, onSidebarUpdate }
         .from("setores")
         .select("*")
         .eq("user_id", userId)
+        .order("ordem_display", { ascending: true, nullsFirst: false })
         .order("created_at", { ascending: true });
 
       const setoresComFoto = await Promise.all(
@@ -490,6 +492,52 @@ export default function ProjectManager({ containerAtual, user, onSidebarUpdate }
     }
   };
 
+  // ✅ Salvar ordem dos projetos
+  const handleReorderProjects = async (reorderedProjects) => {
+    try {
+      // Atualiza a ordem no estado local
+      setProjects(reorderedProjects);
+
+      // Salva a ordem no banco de dados
+      const updates = reorderedProjects.map((proj, index) => ({
+        id: proj.id,
+        ordem_display: index,
+      }));
+
+      for (const update of updates) {
+        await supabase
+          .from("projects")
+          .update({ ordem_display: update.ordem_display })
+          .eq("id", update.id);
+      }
+    } catch (err) {
+      console.error("Erro ao salvar ordem dos projetos:", err);
+    }
+  };
+
+  // ✅ Salvar ordem dos setores
+  const handleReorderSetores = async (reorderedSetores) => {
+    try {
+      // Atualiza a ordem no estado local
+      setSetores(reorderedSetores);
+
+      // Salva a ordem no banco de dados
+      const updates = reorderedSetores.map((setor, index) => ({
+        id: setor.id,
+        ordem_display: index,
+      }));
+
+      for (const update of updates) {
+        await supabase
+          .from("setores")
+          .update({ ordem_display: update.ordem_display })
+          .eq("id", update.id);
+      }
+    } catch (err) {
+      console.error("Erro ao salvar ordem dos setores:", err);
+    }
+  };
+
   const openCardsPage = (proj) => {
     const params = new URLSearchParams({
       entityId: proj.id,
@@ -701,6 +749,8 @@ export default function ProjectManager({ containerAtual, user, onSidebarUpdate }
           setMenuSetorAberto={setMenuSetorAberto}
           containerId={containerAtual}
           currentUserId={currentUserId}
+          onReorderProjects={handleReorderProjects}
+          onReorderSetores={handleReorderSetores}
         />
       )}
 

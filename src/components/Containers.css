@@ -167,7 +167,7 @@
   justify-content: center;
   align-items: center;
   overflow: hidden;
-  margin-bottom: 12px;
+  margin: 0 auto 0 auto;
   border: 2px solid #ddd;
 }
 
@@ -1159,6 +1159,22 @@
 .edit-btn:hover {
   background: linear-gradient(90deg, #0062cc, #00a2b8);
   transform: translateY(-1px);
+}
+
+/* Efeito de arrasto suave */
+.project-box {
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+/* Card sendo arrastado */
+.project-box[data-dragging="true"] {
+  cursor: grabbing !important;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+}
+
+/* Área de drop */
+.projects-grid {
+  transition: background-color 0.2s ease;
 }
 
 @media (max-width: 767px) {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import "./Collab.css";
 import "./loader.css";
-import { FaPaperPlane, FaUserPlus, FaEllipsisV, FaBell, FaArchive, FaTimes } from "react-icons/fa";
+import { FaPaperPlane, FaUserPlus, FaEllipsisV, FaBell, FaArchive, FaTimes, FaTrash } from "react-icons/fa";
 import { supabase } from "../supabaseClient";
 
 export default function Collab({ onClose, user, onOpenTask }) {
@@ -26,6 +26,39 @@ export default function Collab({ onClose, user, onOpenTask }) {
     mencoes: 0,
     convitesRecebidos: 0
   });
+
+  // 🆕 Função para formatar data de forma relativa
+  const formatarDataRelativa = (dataString) => {
+    if (!dataString) return "";
+    
+    const data = new Date(dataString);
+    const agora = new Date();
+    const diferencaMs = agora - data;
+    const diferencaMinutos = Math.floor(diferencaMs / (1000 * 60));
+    const diferencaHoras = Math.floor(diferencaMs / (1000 * 60 * 60));
+    const diferencaDias = Math.floor(diferencaMs / (1000 * 60 * 60 * 24));
+
+    if (diferencaMinutos < 1) {
+      return "Agora mesmo";
+    } else if (diferencaMinutos < 60) {
+      return `${diferencaMinutos} min atrás`;
+    } else if (diferencaHoras < 24) {
+      return `${diferencaHoras}h atrás`;
+    } else if (diferencaDias === 1) {
+      return "Ontem";
+    } else if (diferencaDias < 7) {
+      return `${diferencaDias} dias atrás`;
+    } else {
+      // Formato: DD/MM/YYYY HH:MM
+      return data.toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+  };
 
   const getTipoClasse = (tipoNota) => {
     if (!tipoNota) return "";
@@ -412,6 +445,30 @@ export default function Collab({ onClose, user, onOpenTask }) {
     }
   };
 
+  // 🆕 Função para excluir notificação
+  const excluirNotificacao = async (notificacaoId) => {
+    const ok = window.confirm("Deseja excluir esta notificação?");
+    if (!ok) return;
+    
+    try {
+      await supabase
+        .from("notificacoes")
+        .delete()
+        .eq("id", notificacaoId);
+      
+      // Atualizar estado local
+      setMencoes(prev => prev.filter(n => n.id !== notificacaoId));
+      
+      // Atualizar contador se necessário
+      const mencoesRestantes = mencoes.filter(n => n.id !== notificacaoId && !n.lido);
+      setNotifCounts(prev => ({ ...prev, mencoes: mencoesRestantes.length }));
+      
+    } catch (err) {
+      console.error("Erro ao excluir notificação:", err);
+      alert("Erro ao excluir notificação.");
+    }
+  };
+
   const removerIntegrante = async (item) => {
     const ok = window.confirm(`Remover ${item.nome} do seu container?`);
     if (!ok) return;
@@ -515,10 +572,17 @@ export default function Collab({ onClose, user, onOpenTask }) {
                           : "?"}
                       </div>
                     )}
-                    <span>
-                      <strong>{convite.remetente?.nome || "Alguém"}</strong> te convidou
-                      {convite.status === "aceito" && " (aceito)"}
-                    </span>
+                    <div className="convite-text-info">
+                      <span>
+                        <strong>{convite.remetente?.nome || "Alguém"}</strong> te convidou
+                        {convite.status === "aceito" && " (aceito)"}
+                      </span>
+                      {convite.created_at && (
+                        <span className="notificacao-data">
+                          {formatarDataRelativa(convite.created_at)}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   {convite.status === "pendente" && (
                     <button className="btn-aceitar" onClick={() => aceitarConvite(convite)}>
@@ -550,33 +614,51 @@ export default function Collab({ onClose, user, onOpenTask }) {
                     key={n.id}
                     className={`notificacao-item ${n.lido ? "lida" : "nao-lida"} ${tipoClasse}`}
                   >
-                    <div className="notificacao-mensagem">
-                      {n.mensagem || "Você foi mencionado em uma tarefa."}
-                    
-                      <div className="notificacao-caminho">
-                        {partesCaminho.map((parte, index) => (
-                          <React.Fragment key={index}>
-                            <span
-                              className="caminho-parte"
-                              onClick={() => navegarParaCaminho(n, index)}
-                              title={`Ir para ${parte}`}
-                            >
-                              {parte}
-                            </span>
-                            {index < partesCaminho.length - 1 && (
-                              <span className="caminho-separador"> / </span>
-                            )}
-                          </React.Fragment>
-                        ))}
+                    <div className="notificacao-conteudo-wrapper">
+                      <div className="notificacao-mensagem">
+                        {n.mensagem || "Você foi mencionado em uma tarefa."}
+                      
+                        <div className="notificacao-caminho">
+                          {partesCaminho.map((parte, index) => (
+                            <React.Fragment key={index}>
+                              <span
+                                className="caminho-parte"
+                                onClick={() => navegarParaCaminho(n, index)}
+                                title={`Ir para ${parte}`}
+                              >
+                                {parte}
+                              </span>
+                              {index < partesCaminho.length - 1 && (
+                                <span className="caminho-separador"> / </span>
+                              )}
+                            </React.Fragment>
+                          ))}
+                        </div>
+
+                        {/* 🆕 Data da notificação */}
+                        {n.created_at && (
+                          <span className="notificacao-data">
+                            {formatarDataRelativa(n.created_at)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="notificacao-actions">
+                        <button
+                          className="btn-abrir-notificacao"
+                          onClick={() => navegarParaCaminho(n, partesCaminho.length - 1)}
+                          title="Abrir tarefa"
+                        >
+                          Abrir
+                        </button>
+                        <button
+                          className="delete-icon"
+                          onClick={() => excluirNotificacao(n.id)}
+                          title="Excluir notificação"
+                        >
+                          <FaTrash className="icon" />
+                        </button>
                       </div>
                     </div>
-                    <button
-                      className="btn-abrir-notificacao"
-                      onClick={() => navegarParaCaminho(n, partesCaminho.length - 1)}
-                      title="Abrir tarefa"
-                    >
-                      Abrir
-                    </button>
                   </div>
                 );
               })

@@ -43,7 +43,7 @@
   padding: 25px 30px;
   animation: slideDown 0.3s ease;
   max-height: 70vh;
-  height: 500px;
+  height: 450px;
 }
 
 @keyframes slideDown {
@@ -71,7 +71,7 @@
 }
 
 .collab-section {
-  height: 28em;
+  max-height: 24em;
   overflow: auto;
   border: 1px solid #dedede;
   padding: 10px;
@@ -404,10 +404,28 @@
   background-color: #f0f0f0;
 }
 
+.notificacao-conteudo-wrapper {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex: 1;
+}
+
 .notificacao-mensagem {
   font-weight: 500;
   margin-bottom: 4px;
   line-height: 1.4;
+  width: 35em;
+}
+
+.notificacao-data {
+  display: inline-block;
+  font-size: 11px;
+  color: #999;
+  font-weight: 400;
+  margin-top: 4px;
+  font-style: italic;
 }
 
 .notificacao-caminho {
@@ -476,7 +494,7 @@
 
 /* Botão "Abrir" nas notificações */
 .btn-abrir-notificacao {
-  margin-left: 12px;
+  
   padding: 4px 10px;
   font-size: 0.85rem;
   background-color: #4f46e5;
