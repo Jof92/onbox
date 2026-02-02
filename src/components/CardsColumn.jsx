@@ -48,6 +48,9 @@ export default function Column({
   entityType,
   entity,
   membros,
+  // Props de expansão mantidos na assinatura para não quebrar o pai, mas não usados
+  expandedColumns,
+  setExpandedColumns,
 }) {
   const colorTrackRefs = useRef({});
 
@@ -96,7 +99,6 @@ export default function Column({
 
   const toggleColorPicker = (pilhaId, show) => {
     setShowColorPicker(prev => ({ ...prev, [pilhaId]: show }));
-    if (show) setMenuOpenPilha(null);
   };
 
   const saveColumnTitle = async (id) => {
@@ -315,7 +317,6 @@ export default function Column({
               {...colProvided.dragHandleProps}
               style={{
                 cursor: "grab",
-                padding: "6px 0",
                 textAlign: "center",
                 fontSize: "0.85em",
                 color: "#666",
@@ -350,7 +351,9 @@ export default function Column({
             </div>
           )}
 
+          {/* NOVO LAYOUT DO COLUMN HEADER - APENAS VISUAL */}
           <div className={`column-header ${isArquivo ? 'arquivo-header' : ''}`}>
+            {/* Título da Pilha */}
             {editingColumnId === col.id && !isRecebidos ? (
               <input
                 type="text"
@@ -359,9 +362,11 @@ export default function Column({
                 onChange={(e) => setColumnTitleDraft(e.target.value)}
                 onBlur={() => saveColumnTitle(col.id)}
                 onKeyDown={(e) => e.key === "Enter" && saveColumnTitle(col.id)}
+                className="column-title-input"
               />
             ) : (
               <h3
+                className="column-title"
                 style={{ cursor: isRecebidos ? "default" : "pointer" }}
                 onDoubleClick={() => {
                   if (!isRecebidos) {
@@ -374,56 +379,63 @@ export default function Column({
               </h3>
             )}
 
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              {!isRecebidos && !isDiarioObra && (
-                <button className="btn-add" onClick={() => setActiveColumnId(col.id)}>
-                  <FaPlus />
-                </button>
-              )}
-
-              {!isRecebidos && (
-                <div style={{ position: "relative", display: "inline-block" }}>
-                  <button
-                    className="column-menu-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setMenuOpenPilha(menuOpenPilha === col.id ? null : col.id);
-                    }}
+            {/* Barra de Ações - apenas para pilhas não-Recebidos */}
+            {!isRecebidos && (
+              <div className="column-actions-bar">
+                {/* Botão Adicionar Nota */}
+                {!isDiarioObra && (
+                  <button 
+                    className="column-action-btn"
+                    title="Adicionar nota"
+                    onClick={() => setActiveColumnId(col.id)}
                   >
-                    <FaEllipsisV />
+                    <span className="material-symbols-outlined">add_chart</span>
                   </button>
-                  {menuOpenPilha === col.id && (
-                    <div className="card-menu-dropdown" style={{ top: "104%", right: 0 }}>
-                      <button
-                        onClick={() => {
-                          setMenuOpenPilha(null);
-                          toggleColorPicker(col.id, true);
-                        }}
-                      >
-                        🎨 Estilo
-                      </button>
-                      {col.notas.length === 0 ? (
-                        <button
-                          onClick={async () => {
-                            setMenuOpenPilha(null);
-                            await handleDeletePilha(col.id);
-                          }}
-                          style={{ color: "#e53e3e" }}
-                        >
-                          <FaTrash /> Excluir pilha
-                        </button>
-                      ) : (
-                        <button disabled style={{ color: "#aaa" }}>
-                          <FaTrash /> Pilha não vazia
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+                )}
+
+                {/* Botão Mudar Cor */}
+                <button 
+                  className="column-action-btn"
+                  title="Mudar cor"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleColorPicker(col.id, true);
+                  }}
+                >
+                  <span className="material-symbols-outlined">palette</span>
+                </button>
+
+                {/* Botão Expandir/Recolher - APENAS VISUAL, SEM FUNCIONALIDADE */}
+                <button 
+                  className="column-action-btn"
+                  title="Expandir/Recolher pilha (em breve)"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    console.log("Funcionalidade de expansão ainda não implementada");
+                  }}
+                >
+                  <span className="material-symbols-outlined">expand_content</span>
+                </button>
+
+                {/* Botão Excluir Pilha */}
+                <button 
+                  className={`column-action-btn ${col.notas.length > 0 ? 'disabled' : ''}`}
+                  title={col.notas.length > 0 ? "Pilha não vazia" : "Excluir pilha"}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    if (col.notas.length === 0) {
+                      await handleDeletePilha(col.id);
+                    }
+                  }}
+                  disabled={col.notas.length > 0}
+                >
+                  <span className="material-symbols-outlined">delete</span>
+                </button>
+              </div>
+            )}
           </div>
 
+          {/* Conteúdo da Coluna - SEM ALTERAÇÕES NO COMPORTAMENTO */}
           {isDiarioObra ? (
             <div
               className="cards-list diario-obras-list"
@@ -506,13 +518,7 @@ export default function Column({
                   {...innerProvided.droppableProps}
                   style={{
                     backgroundColor: bgColor,
-                    border: isRecebidos ? "1px solid rgba(46, 125, 50, 0.2)" : "1px solid rgba(0, 0, 0, 0.08)",
-                    borderRadius: "8px",
-                    padding: "8px",
-                    position: "relative",
-                    minWidth: "280px",
-                    maxWidth: "280px",
-                    marginRight: "16px",
+                    border: isRecebidos ? "1px solid rgba(46, 125, 50, 0.2)" : "1px solid rgba(0, 0, 0, 0.08)"
                   }}
                 >
                   {col.notas.map((nota, idx) => {
@@ -741,6 +747,7 @@ export default function Column({
                       </Draggable>
                     );
                   })}
+                  
                   {innerProvided.placeholder}
                 </div>
               )}

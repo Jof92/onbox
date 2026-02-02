@@ -229,10 +229,8 @@
 /* ====== CABEÇALHO DAS COLUNAS ====== */
 .column-header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  margin-bottom: 14px;
-  gap: 6px;
+  margin-bottom: 5px;
 }
 
 
@@ -303,7 +301,6 @@
   padding: 8px;
   min-width: 280px;
   max-width: 280px;
-  margin-right: 16px;
   scrollbar-width: thin;
   scrollbar-color: #cbd5e1 transparent;
 }
@@ -1366,6 +1363,118 @@
 .modal-btn-cancelar-evento:active {
   transform: translateY(0);
 }
+
+/* ========================================
+   COLUMN HEADER - NOVO LAYOUT (VISUAL APENAS)
+   ======================================== */
+
+.column-header {
+  flex-direction: column;
+
+}
+
+.column-title {
+  margin: 0;
+  font-size: 1.1em;
+  font-weight: 600;
+  text-align: center;
+  padding: 4px 0;
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+.column-title-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 2px solid white;
+  border-radius: 4px;
+  font-size: 1.1em;
+  font-weight: 600;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.9);
+  color: #333;
+  margin-bottom: 8px;
+}
+
+/* Nova barra de ações da coluna */
+.column-actions-bar {
+  display: flex;
+  gap: 6px;
+  padding: 2px 0 2px 0;
+  justify-content: center;
+  align-items: center;
+  background-color: #76b2f27d;
+  width: 70%;
+  margin: auto;
+  border-radius: 0 0 12px 12px;
+}
+
+.column-action-btn {
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  padding: 0;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.column-action-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(1.05);
+  color: #007bff;
+}
+
+.column-action-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.column-action-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.column-action-btn.disabled:hover {
+  transform: none;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.column-action-btn .material-symbols-outlined {
+  font-size: 18px;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+  display: block;
+}
+
+/* Estilo para pilhas arquivadas */
+.arquivo-header {
+  background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+  .column-actions-bar {
+    gap: 4px;
+  }
+  
+  .column-action-btn {
+    width: 30px;
+    height: 30px;
+  }
+  
+  .column-action-btn .material-symbols-outlined {
+    font-size: 16px;
+  }
+  
+  .column-title {
+    font-size: 1em;
+  }
+}
+
+/* Importação dos ícones Material Symbols */
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
 
 /* Responsividade */
 @media (max-width: 768px) {
