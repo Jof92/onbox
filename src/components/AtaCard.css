@@ -15,7 +15,7 @@
   padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
   width: 100%;
 }
 
@@ -113,13 +113,16 @@
   padding: 8px;
   font-size: 14px;
   outline: none;
-  resize: none;
+  resize: vertical; /* Permite redimensionar verticalmente */
   box-sizing: border-box;
 }
 
 .ata-section textarea {
-  height: 15em !important;
-  overflow-y: auto
+  min-height: 15em; /* Altura mínima inicial */
+  height: auto; /* Permite expansão automática */
+  overflow-y: auto; /* Barra de rolagem quando necessário */
+  line-height: 1.5; /* Melhor espaçamento entre linhas */
+  transition: min-height 0.2s ease; /* Transição suave */
 }
 
 /* CHECKBOX OBJETIVOS */
@@ -328,11 +331,11 @@
 }
 
 .proxima-data-input {
-  width: 160px;
-  padding: 6px 10px;
+  width: 160px !important;
+  padding: 6px 10px !important;
   border-radius: 6px;
   border: 1px solid #ccc;
-  font-size: 14px;
+  font-size: 14px !important;
   outline: none;
 }
 
@@ -360,10 +363,12 @@
 
 /* Linha 3: Autor centralizado */
 .ata-autor {
-  font-size: 13px;
+  font-size: 10px;
   color: #555;
   text-align: center;
   width: 100%;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 10px;
 }
 
 .item-number {
@@ -416,6 +421,136 @@
   color: #555;
   margin-top: 4px;
   font-size: 0.9em;
+}
+
+/* Container para os botões de ação no final */
+.ata-actions-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+  padding: 10px 0;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+  border-radius: 0 0 16px 16px;
+}
+
+/* Estilos para botão PDF e dropdown */
+.ata-pdf-container {
+  position: relative;
+  display: inline-block;
+}
+
+.btn-pdf-ata {
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 7.5px 20px;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+  position: relative;
+  z-index: 2;
+}
+
+.btn-pdf-ata:hover {
+  background: #059669;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
+}
+
+.btn-pdf-ata:active {
+  transform: translateY(0);
+}
+
+/* ✅ REMOVIDO: .pdf-dropdown:hover .pdf-dropdown-content */
+
+.pdf-dropdown-content {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  background-color: white;
+  min-width: 180px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+  border-radius: 10px;
+  padding: 8px;
+  z-index: 1000;
+  margin-top: 8px;
+  animation: slideDown 0.2s ease;
+  /* ✅ REMOVIDO: display: none; */
+}
+
+/* ✅ REMOVIDO: regra de hover que mostrava o dropdown */
+
+.pdf-option {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  text-align: left;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #374151;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pdf-option:hover {
+  background-color: #f3f4f6;
+  color: #1e3a8a;
+}
+
+.pdf-option-highlight {
+  background-color: #dbeafe !important;
+  font-weight: 600;
+  color: #1e40af !important;
+}
+
+.pdf-option-highlight:hover {
+  background-color: #bfdbfe !important;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsividade para telas menores */
+@media (max-width: 768px) {
+  .ata-actions-container {
+    flex-direction: column;
+    gap: 12px;
+    padding: 15px 0;
+  }
+  
+  .ata-pdf-container {
+    width: 100%;
+  }
+  
+  .btn-pdf-ata {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .pdf-dropdown-content {
+    min-width: 100%;
+  }
 }
 
 @media (max-width: 767px) {

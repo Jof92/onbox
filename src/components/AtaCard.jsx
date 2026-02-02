@@ -4,8 +4,9 @@ import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
 import "./loader.css";
 import "./AtaCard.css";
-import AtaObjetivos from "./AtaObjetivos"; // ✅ Novo componente
-import { FaTimes } from "react-icons/fa"; // ✅ Ícone de fechar
+import AtaObjetivos from "./AtaObjetivos";
+import AtaPdf from "./AtaPdf";
+import { FaTimes } from "react-icons/fa";
 
 export default function AtaCard({ 
   projetoAtual, 
@@ -13,7 +14,7 @@ export default function AtaCard({
   ultimaAlteracao, 
   onProgressoChange,
   containerAtual,
-  onClose // ✅ Nova prop obrigatória
+  onClose
 }) {
   const [projetoNome, setProjetoNome] = useState("");
   const [pauta, setPauta] = useState("");
@@ -35,37 +36,37 @@ export default function AtaCard({
   const [alteradoEm, setAlteradoEm] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [salvoComSucesso, setSalvoComSucesso] = useState(false);
+  const [pdfDropdownOpen, setPdfDropdownOpen] = useState(false);
 
-  const cardRef = useRef(null); // ✅ para detectar clique fora
+  const cardRef = useRef(null);
+  const pdfDropdownRef = useRef(null);
 
-  // ✅ Fechar ao clicar fora
   useEffect(() => {
     const handleClickOutside = (e) => {
+      if (pdfDropdownRef.current && !pdfDropdownRef.current.contains(e.target)) {
+        setPdfDropdownOpen(false);
+      }
+      
       if (onClose && cardRef.current && !cardRef.current.contains(e.target)) {
         onClose();
       }
     };
 
-    if (onClose) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [onClose]);
 
-  // Fetch projeto nome
   const fetchProjeto = useCallback(async () => {
     if (!projetoAtual?.id) return;
     const { data } = await supabase.from("projects").select("name").eq("id", projetoAtual.id).single();
     setProjetoNome(data?.name || "Projeto sem nome");
   }, [projetoAtual]);
 
-  // Fetch usuário logado
   const fetchUsuarioLogado = useCallback(async () => {
     const { data } = await supabase.auth.getUser();
     setUsuarioId(data?.user?.id || null);
   }, []);
 
-  // Fetch Ata (sem objetivos)
   const fetchAta = useCallback(async () => {
     if (!notaAtual?.id) {
       setLoading(false);
@@ -97,7 +98,6 @@ export default function AtaCard({
       setProxima(ata.proxima_reuniao || "");
       setDataLocal(ata.data_local || "");
 
-      // Carregar participantes
       const { data: partData } = await supabase
         .from("ata_participantes")
         .select(`
@@ -139,7 +139,6 @@ export default function AtaCard({
 
       setParticipantes(participantesCarregados);
 
-      // ✅ Autor: corrige para usar o nome do usuário logado como fallback
       let nomeAutor = "Você";
 
       if (ata.redigido_por) {
@@ -188,7 +187,6 @@ export default function AtaCard({
 
       setAutorNome(nomeAutor);
 
-      // Última alteração
       if (ata.alterado_por) {
         const { data: perfilAlterador } = await supabase
           .from("profiles")
@@ -229,7 +227,6 @@ export default function AtaCard({
     if (projetoAtual?.id && notaAtual?.id) fetchAta();
   }, [projetoAtual?.id, notaAtual?.id, fetchAta]);
 
-  // 🔍 Buscar participantes com @ — MEMBROS DO CONTAINER ATUAL (containerAtual.id)
   const handleParticipanteChange = async (e) => {
     const v = e.target.value;
     setParticipanteInput(v);
@@ -306,7 +303,78 @@ export default function AtaCard({
 
   const removerParticipante = (id) => setParticipantes(participantes.filter(p => p.id !== id));
 
-  // Salvar Ata (sem objetivos)
+  const exportarPdf = async (opcao) => {
+    setPdfDropdownOpen(false);
+    
+    if (!projetoNome || !notaAtual?.nome) {
+      alert("Não é possível exportar PDF: projeto ou nota não identificados.");
+      return;
+    }
+
+    let objetivosAtuais = [];
+    if (ataId && (opcao === 'objetivos' || opcao === 'completo')) {
+      try {
+        const { data: objetivosData } = await supabase
+          .from("ata_objetivos")
+          .select(`*, profiles(id, nome)`)
+          .eq("ata_id", ataId)
+          .order("id", { ascending: true });
+
+        if (objetivosData?.length) {
+          const objetivoIds = objetivosData.map(o => o.id);
+          let respPorObj = {};
+
+          if (objetivoIds.length > 0) {
+            const { data: respData } = await supabase
+              .from("ata_objetivos_responsaveis_enriquecidos")
+              .select("*")
+              .in("ata_objetivo_id", objetivoIds);
+
+            if (respData?.length) {
+              respPorObj = respData.reduce((acc, r) => {
+                if (!acc[r.ata_objetivo_id]) acc[r.ata_objetivo_id] = [];
+                acc[r.ata_objetivo_id].push({
+                  id: r.id,
+                  usuario_id: r.usuario_id,
+                  nome_externo: r.nome_externo,
+                  nome_exibicao: r.nome_exibicao
+                });
+                return acc;
+              }, {});
+            }
+          }
+
+          objetivosAtuais = objetivosData
+            .filter(o => !o.texto?.startsWith('[EXCLUIDO]'))
+            .map(o => ({
+              id: o.id,
+              texto: o.texto || "",
+              responsaveis: respPorObj[o.id] || [],
+              dataEntrega: o.data_entrega,
+              concluido: o.concluido || false,
+              concluidoEm: o.concluido_em ? new Date(o.concluido_em) : null,
+              comentario: o.comentario || "",
+            }));
+        }
+      } catch (err) {
+        console.error("Erro ao buscar objetivos para PDF:", err);
+        alert("Erro ao carregar objetivos para exportação. Continuando com texto apenas.");
+      }
+    }
+
+    await AtaPdf.exportar(
+      opcao,
+      projetoNome,
+      notaAtual.nome,
+      dataLocal,
+      pauta,
+      local,
+      texto,
+      participantes,
+      objetivosAtuais
+    );
+  };
+
   const salvarAta = useCallback(async () => {
     if (!usuarioId || !notaAtual?.id || !projetoAtual?.id || !projetoAtual?.tipo) {
       alert("Dados insuficientes: verifique se 'projetoAtual' tem 'id' e 'tipo' válido ('projeto' ou 'setor').");
@@ -365,7 +433,6 @@ export default function AtaCard({
         setAutorNome("Carregando...");
       }
 
-      // Salvar participantes
       await supabase.from("ata_participantes").delete().eq("ata_id", savedAta.id);
       for (const p of participantes) {
         if (p.id.toString().startsWith("ext")) {
@@ -408,14 +475,12 @@ export default function AtaCard({
     <div className="ata-card" ref={cardRef}>
       <div className="listagem-card">
         <div className="listagem-header-container">
-          {/* ✅ ESQUERDA: título e subtítulo */}
           <div className="listagem-header-titles">
             <span className="project-name">{projetoNome}</span>
             <div className="sub-info">
               <span className="nota-name">{notaAtual?.nome || "Sem nota"}</span>
             </div>
           </div>
-          {/* ✅ DIREITA: botão de fechar + info de alteração (agrupados para não centralizar) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             {onClose && (
               <button
@@ -510,7 +575,6 @@ export default function AtaCard({
           />
         </div>
 
-        {/* ✅ Novo componente de objetivos */}
         <AtaObjetivos
           ataId={ataId}
           texto={texto}
@@ -527,14 +591,6 @@ export default function AtaCard({
           <div className="proxima-reuniao-linha">
             <label>Próxima reunião em:</label>
             <input type="date" value={proxima} onChange={e => setProxima(e.target.value)} className="proxima-data-input" />
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <button className="btn-salvar-ata" onClick={salvarAta} disabled={salvando}>
-              Salvar
-            </button>
-            {salvando && <div className="loader"></div>}
-            {salvoComSucesso && <span style={{ color: "green", marginLeft: "8px" }}>✓ Salvo!</span>}
           </div>
 
           <div className="ata-data-local">
@@ -568,6 +624,47 @@ export default function AtaCard({
                 )}
               </>
             )}
+          </div>
+        </div>
+
+        <div className="ata-actions-container">
+          <div className="ata-pdf-container" ref={pdfDropdownRef}>
+            <button 
+              className="btn-pdf-ata"
+              onClick={() => setPdfDropdownOpen(prev => !prev)}
+            >
+              PDF
+            </button>
+            {pdfDropdownOpen && (
+              <div className="pdf-dropdown-content">
+                <button 
+                  onClick={() => exportarPdf('texto')}
+                  className="pdf-option"
+                >
+                  Texto da ata
+                </button>
+                <button 
+                  onClick={() => exportarPdf('objetivos')}
+                  className="pdf-option"
+                >
+                  Apenas Objetivos
+                </button>
+                <button 
+                  onClick={() => exportarPdf('completo')}
+                  className="pdf-option pdf-option-highlight"
+                >
+                  Texto e Objetivos
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <button className="btn-salvar-ata" onClick={salvarAta} disabled={salvando}>
+              Salvar
+            </button>
+            {salvando && <div className="loader"></div>}
+            {salvoComSucesso && <span style={{ color: "green", marginLeft: "8px" }}>✓ Salvo!</span>}
           </div>
         </div>
       </div>

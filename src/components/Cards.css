@@ -205,7 +205,6 @@
   overflow-y: hidden; /* ✅ Previne scroll vertical no body */
   scroll-behavior: smooth;
   align-items: flex-start; /* ✅ Alinha as colunas no topo */
-  scrollbar-width: thin;
   scrollbar-color: #cbd5e1 transparent;
 }
 

@@ -4,6 +4,7 @@ import { supabase } from "../supabaseClient";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faUserPlus, faCalendar } from "@fortawesome/free-solid-svg-icons";
 
+// ✅ Mantido apenas para referência histórica (não usado mais para extrair)
 const VERBOS = [
   "verificar", "quantificar", "viabilizar", "cobrar", "fechar", "iniciar", "definir", "reduzir", "alcançar", "acompanhar", "implementar", "analisar",
   "finalizar", "revisar", "enviar", "agendar", "checar", "executar", "conferir", "monitorar", "organizar", "planejar", "informar",
@@ -16,29 +17,23 @@ const VERBOS = [
 
 const PREFIXO_EXCLUIDO = "[EXCLUIDO]";
 
-const extrairObjetivosValidos = (texto, verbosSet) => {
+// ✅ Nova função: extrai SOMENTE objetivos entre aspas simples
+const extrairObjetivosValidos = (texto) => {
   if (!texto?.trim()) return [];
-  const partes = texto.split(/([,.])/);
-  const segmentos = [];
-  let acumulador = "";
-  for (let i = 0; i < partes.length; i++) {
-    const p = partes[i];
-    if (p === "," || p === ".") {
-      acumulador += p;
-      segmentos.push(acumulador.trim());
-      acumulador = "";
-    } else {
-      acumulador += p;
+  
+  // Regex para capturar texto entre aspas simples
+  const regex = /'([^']+)'/g;
+  const matches = [];
+  let match;
+  
+  while ((match = regex.exec(texto)) !== null) {
+    const objetivo = match[1].trim();
+    if (objetivo) {
+      matches.push(objetivo);
     }
   }
-  if (acumulador.trim()) segmentos.push(acumulador.trim());
-  return segmentos
-    .map(seg => seg.replace(/[,.]+$/, "").trim())
-    .filter(seg => {
-      if (!seg) return false;
-      const primeiraPalavra = seg.split(/\s+/)[0].toLowerCase().replace(/[^\wÀ-ÿ]/g, "");
-      return verbosSet.has(primeiraPalavra);
-    });
+  
+  return matches;
 };
 
 const ComentarioIcon = ({ onClick, title }) => (
@@ -118,7 +113,7 @@ export default function AtaObjetivos({
   const [comentarioTemp, setComentarioTemp] = useState({});
   const [meuNome, setMeuNome] = useState("Você");
   const [inputResponsavel, setInputResponsavel] = useState({});
-  const verbosSet = React.useMemo(() => new Set(VERBOS), []);
+  const verbosSet = React.useMemo(() => new Set(VERBOS), []); // ✅ Mantido para referência apenas
   const isSaving = useRef(false);
 
   useEffect(() => {
@@ -222,7 +217,8 @@ export default function AtaObjetivos({
   useEffect(() => {
     if (!criarObjetivos) return;
 
-    const validos = extrairObjetivosValidos(texto, verbosSet);
+    // ✅ Extrair SOMENTE por aspas simples (não mais por verbos)
+    const validos = extrairObjetivosValidos(texto);
     const novosObjetivos = validos.map(txt => {
       const existente = objetivosList.find(o => o.texto === txt && o.id && !String(o.id).startsWith('temp'));
       if (existente) return existente;
@@ -238,16 +234,24 @@ export default function AtaObjetivos({
       };
     });
 
+    // ✅ Manter objetivos existentes + adicionar novos entre aspas
+    const todosObjetivos = [
+      ...objetivosList.filter(o => o.id && !String(o.id).startsWith('temp')), // Mantém os salvos
+      ...novosObjetivos.filter(novo => 
+        !objetivosList.some(o => o.texto === novo.texto && o.id && !String(o.id).startsWith('temp'))
+      )
+    ];
+
     const textosAtuais = objetivosList.map(o => o.texto).sort();
-    const textosNovos = novosObjetivos.map(o => o.texto).sort();
+    const textosNovos = todosObjetivos.map(o => o.texto).sort();
     if (JSON.stringify(textosAtuais) !== JSON.stringify(textosNovos)) {
-      setObjetivosList(novosObjetivos);
+      setObjetivosList(todosObjetivos);
     }
 
-    if (validos.length > 0) {
+    if (validos.length > 0 || objetivosList.length > 0) {
       setCriarObjetivos(true);
     }
-  }, [texto, criarObjetivos, verbosSet, objetivosList]);
+  }, [texto, criarObjetivos, objetivosList]);
 
   useEffect(() => {
     if (!ataId || !criarObjetivos) return;
@@ -257,11 +261,14 @@ export default function AtaObjetivos({
       isSaving.current = true;
 
       try {
-        const validos = extrairObjetivosValidos(texto, verbosSet);
+        // ✅ Extrair SOMENTE por aspas simples
+        const validos = extrairObjetivosValidos(texto);
         const salvos = new Set(objetivosList
           .filter(o => o.id && !String(o.id).startsWith('temp'))
           .map(o => o.texto));
 
+        // ✅ SOMENTE inserir novos objetivos entre aspas
+        // ✅ NÃO excluir objetivos antigos (mesmo que não estejam mais no texto)
         const paraInserir = validos.filter(txt => !salvos.has(txt));
         if (paraInserir.length > 0) {
           const inserts = paraInserir.map(txt => ({
@@ -288,6 +295,16 @@ export default function AtaObjetivos({
                 );
                 if (tempIndex !== -1) {
                   atualizado[tempIndex] = { ...atualizado[tempIndex], id: novo.id };
+                } else {
+                  atualizado.push({
+                    id: novo.id,
+                    texto: txt,
+                    responsaveis: [],
+                    dataEntrega: null,
+                    concluido: false,
+                    concluidoEm: null,
+                    comentario: "",
+                  });
                 }
               });
               return atualizado;
@@ -295,15 +312,8 @@ export default function AtaObjetivos({
           }
         }
 
-        const paraExcluir = objetivosList.filter(o => 
-          o.id && !String(o.id).startsWith('temp') && !validos.includes(o.texto)
-        );
-        for (const o of paraExcluir) {
-          await supabase
-            .from("ata_objetivos")
-            .update({ texto: `${PREFIXO_EXCLUIDO} ${o.texto}` })
-            .eq("id", o.id);
-        }
+        // ✅ REMOVIDO: Não exclui mais objetivos antigos
+        // Os objetivos criados por verbos anteriormente permanecem salvos
 
       } finally {
         isSaving.current = false;
@@ -311,7 +321,7 @@ export default function AtaObjetivos({
     }, 800);
 
     return () => clearTimeout(timer);
-  }, [texto, ataId, criarObjetivos, objetivosList, verbosSet]);
+  }, [texto, ataId, criarObjetivos, objetivosList]);
 
   const progressoPercent = objetivosList.length
     ? Math.round((objetivosList.filter(o => o.concluido).length / objetivosList.length) * 100)
