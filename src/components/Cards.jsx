@@ -49,6 +49,9 @@ export default function Cards() {
   const [dataEntregaEdit, setDataEntregaEdit] = useState({});
   const [dataEntregaSalva, setDataEntregaSalva] = useState({});
 
+  const [expandedColumnId, setExpandedColumnId] = useState(null);
+  const [expandedNotaView, setExpandedNotaView] = useState(null);
+
   const atualizarStatusNota = (notaId, updates) => {
     const setter = modoArquivadas ? setColumnsArquivadas : setColumnsNormais;
     setter(prev =>
@@ -878,6 +881,10 @@ export default function Cards() {
                   dataEntregaSalva={dataEntregaSalva}
                   setDataEntregaEdit={setDataEntregaEdit}
                   saveDataEntrega={saveDataEntrega}
+                  expandedColumnId={expandedColumnId}
+                  setExpandedColumnId={setExpandedColumnId}
+                  expandedNotaView={expandedNotaView}
+                  setExpandedNotaView={setExpandedNotaView}
                 />
               ))}
               {provided.placeholder}

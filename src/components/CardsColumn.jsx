@@ -1,7 +1,7 @@
 // src/components/CardsColumn.jsx
 import React, { useState, useRef, useEffect } from "react";
 import { Draggable, Droppable } from "@hello-pangea/dnd";
-import { FaPlus, FaEllipsisV, FaEdit, FaTrash, FaTimes, FaMapPin, FaFileExport } from "react-icons/fa";
+import { FaPlus, FaEllipsisV, FaEdit, FaTrash, FaTimes, FaMapPin, FaFileExport, FaCompress } from "react-icons/fa";
 import { supabase } from "../supabaseClient";
 import NotaRapidaCard from "./NotaRapidaCard";
 import CalendarioDiarioObra from "./RdoCalendario";
@@ -48,11 +48,13 @@ export default function Column({
   entityType,
   entity,
   membros,
-  // Props de expansão mantidos na assinatura para não quebrar o pai, mas não usados
-  expandedColumns,
-  setExpandedColumns,
+  expandedColumnId,
+  setExpandedColumnId,
+  expandedNotaView,
+  setExpandedNotaView,
 }) {
   const colorTrackRefs = useRef({});
+  const columnRef = useRef(null);
 
   const getDiaSemana = (dataString) => {
     if (!dataString) return "";
@@ -72,6 +74,7 @@ export default function Column({
   const bgColor = col.cor_fundo || (isRecebidos ? "rgba(46, 125, 50, 0.08)" : "transparent");
   const isColorPickerVisible = showColorPicker[col.id];
   const isDiarioObra = col.tipo_pilha === "diario_obras";
+  const isExpanded = expandedColumnId === col.id;
 
   const handleSaveDescricaoRapida = async (notaId, descricao) => {
     const { error } = await supabase.from("notas").update({ descricao }).eq("id", notaId);
@@ -165,6 +168,22 @@ export default function Column({
       console.error("Erro ao mover nota:", err);
       alert("Erro ao mover a nota. Tente novamente.");
     }
+  };
+
+  const handleToggleExpand = (e) => {
+    e.stopPropagation();
+    if (isExpanded) {
+      setExpandedColumnId(null);
+      setExpandedNotaView(null);
+    } else {
+      setExpandedColumnId(col.id);
+      setExpandedNotaView(null);
+    }
+  };
+
+  const handleNotaClickExpanded = (nota) => {
+    if (nota.tipo === "Nota Rápida") return;
+    setExpandedNotaView(nota);
   };
 
   useEffect(() => {
@@ -295,13 +314,286 @@ export default function Column({
     }
   };
 
+  // ─── RENDER: modo expandido ───────────────────────────────────────────────
+  if (isExpanded) {
+    return (
+      <div className="column-expanded-wrapper">
+        {/* ── PAINEL ESQUERDO: lista de notas ── */}
+        <div className="expanded-left-panel">
+          {/* Header da pilha expandida */}
+          <div className={`column-header ${isArquivo ? 'arquivo-header' : ''} column-header-expanded`}>
+            <h3 className="column-title">{col.title}</h3>
+            <div className="column-actions-bar">
+              <button
+                className="column-action-btn"
+                title="Condensar pilha"
+                onClick={handleToggleExpand}
+              >
+                <span className="material-symbols-outlined">compress</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Grid de notas — reutiliza exatamente os estilos das notas normais */}
+          <div className="expanded-notes-grid">
+            {col.notas.map((nota) => {
+              const isConcluida = notasConcluidas.has(String(nota.id));
+
+              // ── Nota Rápida ──
+              if (nota.tipo === "Nota Rápida") {
+                return (
+                  <div key={String(nota.id)} className="expanded-note-slot">
+                    <NotaRapidaCard
+                      nota={nota}
+                      onSaveResponsavel={onSaveResponsavelRapida}
+                      onSaveDataEntrega={onSaveDataEntregaRapida}
+                      onSaveDescricao={handleSaveDescricaoRapida}
+                      onRemoveResponsavel={onRemoveResponsavelRapida}
+                      isConcluida={isConcluida}
+                      isEditingDate={false}
+                      dataConclusaoEdit={dataConclusaoEdit}
+                      dataConclusaoSalva={dataConclusaoSalva}
+                      setDataConclusaoEdit={setDataConclusaoEdit}
+                      saveDataConclusao={saveDataConclusao}
+                      menuOpenNota={menuOpenNota}
+                      setMenuOpenNota={setMenuOpenNota}
+                      handleEditNota={handleEditNota}
+                      handleDeleteNota={handleDeleteNota}
+                      toggleConclusaoNota={toggleConclusaoNota}
+                      pilhaId={col.id}
+                      dragHandleProps={null}
+                      containerId={donoContainerId}
+                      usuarioId={usuarioId}
+                      entityType={entityType}
+                      entityId={entity?.id}
+                    />
+                  </div>
+                );
+              }
+
+              // ── Calendário ──
+              if (nota.tipo === "Calendário") {
+                return (
+                  <div key={String(nota.id)} className="expanded-note-slot">
+                    <NotaCalendarioCard
+                      nota={nota}
+                      pilhaId={col.id}
+                      usuarioId={usuarioId}
+                      membros={membros || []}
+                      onDelete={() => handleDeleteNota(nota.id, col.id)}
+                    />
+                  </div>
+                );
+              }
+
+              // ── Diário de Obra ──
+              if (nota.tipo === "Diário de Obra") {
+                return (
+                  <div
+                    key={String(nota.id)}
+                    className="expanded-note-slot"
+                  >
+                    <div
+                      className="card-item tipo-rdo"
+                      onClick={() => handleOpenNota(nota)}
+                      style={{ cursor: "pointer" }}
+                    >
+                      <strong>{nota.nome}</strong>
+                      {nota.data_entrega && (
+                        <span style={{ color: "#666", fontSize: "0.85em" }}>
+                          {getDiaSemana(nota.data_entrega)}
+                        </span>
+                      )}
+                      <span style={{ color: "#666", fontSize: "0.85em", fontWeight: "normal" }}>
+                        Diário de Obra
+                      </span>
+                    </div>
+                  </div>
+                );
+              }
+
+              // ── Demais tipos (Lista, Atas, Tarefas, Metas, etc.) ──
+              let cardBackgroundColor = "#ffffff";
+              let cardBorderLeft = "none";
+              if (nota.respondida) {
+                cardBackgroundColor = "#e6f4ea";
+                cardBorderLeft = "4px solid #34a853";
+              } else if (nota.enviada) {
+                cardBackgroundColor = "#fce8e6";
+                cardBorderLeft = "4px solid #ea4335";
+              }
+
+              const usarDataEntrega = nota.tipo === "Tarefas";
+              const dataAtual = usarDataEntrega ? dataEntregaSalva : dataConclusaoSalva;
+
+              return (
+                <div
+                  key={String(nota.id)}
+                  className="expanded-note-slot"
+                  onClick={() => handleNotaClickExpanded(nota)}
+                >
+                  <div
+                    className={`card-item tipo-${(nota.tipo || "lista").toLowerCase()} ${isConcluida ? "concluida" : ""} expanded-card-clickable`}
+                    style={{
+                      backgroundColor: cardBackgroundColor,
+                      borderLeft: cardBorderLeft,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {/* Checkbox + arquivar — mesmo comportamento da view normal */}
+                    <div className="concluir-checkbox-wrapper">
+                      <input
+                        type="checkbox"
+                        checked={isConcluida}
+                        readOnly
+                        className="concluir-checkbox"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleConclusaoNota(nota.id, isConcluida);
+                        }}
+                      />
+                      {isConcluida && (
+                        <button
+                          className="arquivar-btn"
+                          title={col.arquivada ? "Restaurar nota" : "Arquivar nota"}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleArquivarNota(nota, col.id);
+                          }}
+                        >
+                          <FaFileExport size={14} />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="card-info">
+                      <div className="card-title-wrapper">
+                        <strong>{nota.nome}</strong>
+                      </div>
+                      <p>
+                        {nota.tipo}
+                        {nota.tipo === "Atas" && notaProgresso[nota.id] !== undefined && <> - {notaProgresso[nota.id]}%</>}
+                      </p>
+
+                      {/* Data — exatamente como na view normal */}
+                      <div className="data-conclusao-container" data-nota-id={nota.id} onClick={(e) => e.stopPropagation()}>
+                        <div
+                          style={{
+                            marginTop: "4px",
+                            fontSize: "0.85em",
+                            color: dataAtual?.[nota.id] ? "#444" : "#999",
+                            fontStyle: dataAtual?.[nota.id] ? "normal" : "italic",
+                          }}
+                        >
+                          {dataAtual?.[nota.id]
+                            ? formatarDataLocal(dataAtual[nota.id])
+                            : usarDataEntrega ? "Data para entrega" : "Data da entrega"}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Menu 3 pontos — mesmo da view normal */}
+                    {!isConcluida && (
+                      <div className="card-menu-wrapper" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          className="card-menu-btn"
+                          onClick={() => setMenuOpenNota(menuOpenNota === nota.id ? null : nota.id)}
+                        >
+                          <FaEllipsisV />
+                        </button>
+                        {menuOpenNota === nota.id && (
+                          <div className="card-menu-dropdown">
+                            <button onClick={() => handleEditNota(nota, col.id)}>
+                              <FaEdit /> Editar
+                            </button>
+                            <button onClick={() => handleDeleteNota(nota.id, col.id)}>
+                              <FaTrash /> Excluir
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── PAINEL DIREITO: visualização da nota selecionada ── */}
+        <div className="expanded-right-panel">
+          {expandedNotaView ? (
+            <div className="expanded-note-viewer">
+              <button
+                className="close-expanded-view"
+                onClick={() => setExpandedNotaView(null)}
+                title="Fechar visualização"
+              >
+                <FaTimes />
+              </button>
+
+              <div className="expanded-view-content">
+                {expandedNotaView.tipo === "Nota Rápida" ? (
+                  <NotaRapidaCard
+                    nota={expandedNotaView}
+                    onSaveResponsavel={onSaveResponsavelRapida}
+                    onSaveDataEntrega={onSaveDataEntregaRapida}
+                    onSaveDescricao={handleSaveDescricaoRapida}
+                    onRemoveResponsavel={onRemoveResponsavelRapida}
+                    isConcluida={notasConcluidas.has(String(expandedNotaView.id))}
+                    isEditingDate={false}
+                    dataConclusaoEdit={dataConclusaoEdit}
+                    dataConclusaoSalva={dataConclusaoSalva}
+                    setDataConclusaoEdit={setDataConclusaoEdit}
+                    saveDataConclusao={saveDataConclusao}
+                    menuOpenNota={menuOpenNota}
+                    setMenuOpenNota={setMenuOpenNota}
+                    handleEditNota={handleEditNota}
+                    handleDeleteNota={handleDeleteNota}
+                    toggleConclusaoNota={toggleConclusaoNota}
+                    pilhaId={col.id}
+                    dragHandleProps={null}
+                    containerId={donoContainerId}
+                    usuarioId={usuarioId}
+                    entityType={entityType}
+                    entityId={entity?.id}
+                  />
+                ) : (
+                  <div className="expanded-view-details">
+                    <h2>{expandedNotaView.nome}</h2>
+                    <p><strong>Tipo:</strong> {expandedNotaView.tipo}</p>
+                    {expandedNotaView.data_entrega && (
+                      <p><strong>Data:</strong> {formatarDataLocal(expandedNotaView.data_entrega)}</p>
+                    )}
+                    {expandedNotaView.descricao && (
+                      <div className="expanded-view-descricao">
+                        <strong>Descrição:</strong>
+                        <p>{expandedNotaView.descricao}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="expanded-right-panel-empty">
+              <span className="material-symbols-outlined">open_in_new</span>
+              <p>Selecione uma nota para visualizar</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ─── RENDER: modo normal (não expandido) ─────────────────────────────────
   return (
     <Draggable
       key={col.id}
       draggableId={col.id}
       index={index}
       type="COLUMN"
-      isDragDisabled={isRecebidos}
+      isDragDisabled={isRecebidos || !!expandedColumnId}
     >
       {(colProvided, colSnapshot) => (
         <div
@@ -310,6 +602,9 @@ export default function Column({
           style={{
             ...colProvided.draggableProps.style,
             opacity: colSnapshot.isDragging ? 0.85 : 1,
+            // Oculta colunas quando outra está expandida
+            display: expandedColumnId && expandedColumnId !== col.id ? 'none' : 'flex',
+            flexDirection: 'column',
           }}
         >
           {!isRecebidos && (
@@ -351,9 +646,11 @@ export default function Column({
             </div>
           )}
 
-          {/* NOVO LAYOUT DO COLUMN HEADER - APENAS VISUAL */}
-          <div className={`column-header ${isArquivo ? 'arquivo-header' : ''}`}>
-            {/* Título da Pilha */}
+          {/* COLUMN HEADER */}
+          <div 
+            className={`column-header ${isArquivo ? 'arquivo-header' : ''}`}
+            ref={columnRef}
+          >
             {editingColumnId === col.id && !isRecebidos ? (
               <input
                 type="text"
@@ -379,10 +676,9 @@ export default function Column({
               </h3>
             )}
 
-            {/* Barra de Ações - apenas para pilhas não-Recebidos */}
+            {/* Barra de Ações */}
             {!isRecebidos && (
               <div className="column-actions-bar">
-                {/* Botão Adicionar Nota */}
                 {!isDiarioObra && (
                   <button 
                     className="column-action-btn"
@@ -393,7 +689,6 @@ export default function Column({
                   </button>
                 )}
 
-                {/* Botão Mudar Cor */}
                 <button 
                   className="column-action-btn"
                   title="Mudar cor"
@@ -405,19 +700,14 @@ export default function Column({
                   <span className="material-symbols-outlined">palette</span>
                 </button>
 
-                {/* Botão Expandir/Recolher - APENAS VISUAL, SEM FUNCIONALIDADE */}
                 <button 
                   className="column-action-btn"
-                  title="Expandir/Recolher pilha (em breve)"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    console.log("Funcionalidade de expansão ainda não implementada");
-                  }}
+                  title="Expandir pilha"
+                  onClick={handleToggleExpand}
                 >
                   <span className="material-symbols-outlined">expand_content</span>
                 </button>
 
-                {/* Botão Excluir Pilha */}
                 <button 
                   className={`column-action-btn ${col.notas.length > 0 ? 'disabled' : ''}`}
                   title={col.notas.length > 0 ? "Pilha não vazia" : "Excluir pilha"}
@@ -435,7 +725,7 @@ export default function Column({
             )}
           </div>
 
-          {/* Conteúdo da Coluna - SEM ALTERAÇÕES NO COMPORTAMENTO */}
+          {/* CONTEÚDO NORMAL */}
           {isDiarioObra ? (
             <div
               className="cards-list diario-obras-list"
@@ -522,7 +812,7 @@ export default function Column({
                   }}
                 >
                   {col.notas.map((nota, idx) => {
-                    // ✅ CALENDÁRIO - ARRASTÁVEL
+                    // ✅ CALENDÁRIO
                     if (nota.tipo === "Calendário") {
                       return (
                         <Draggable key={String(nota.id)} draggableId={String(nota.id)} index={idx} type="CARD">
