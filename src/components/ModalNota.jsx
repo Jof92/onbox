@@ -62,7 +62,8 @@ export default function ModalNota({
   onStatusUpdate,
   setColumns,
   setColumnsNormais,
-  setColumnsArquivadas 
+  setColumnsArquivadas,
+  inline = false // ← NOVA PROP: indica se deve renderizar sem modal overlay
 }) {
   const [hoveredTipo, setHoveredTipo] = useState(null);
 
@@ -108,172 +109,212 @@ export default function ModalNota({
   // Determinar título do modal
   const tituloModal = showNovaNota ? "Nova Nota" : "Editar Nota";
 
-  return (
-    <div className="modal-overlay">
-      <div className={`modal-content ${showVisualizarNota ? "large" : ""}`}>
-        {/* Modal de Criação/Edição */}
-        {(showNovaNota || showEditarNota) && (
-          <div className="nota-modal-container">
-            {/* Header com título - apenas texto, sem ícone */}
-            <div className="modal-header">
-              <h2 className="modal-title">
-                {tituloModal}
-              </h2>
-              <button 
-                className="modal-close-btn" 
-                onClick={showNovaNota ? onCloseNovaNota : onCloseEditarNota}
-              >
-                <FaTimes />
-              </button>
-            </div>
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ║  CONTEÚDO DO MODAL (usado tanto no overlay quanto inline)
+  // ╚══════════════════════════════════════════════════════════════════════════
+  const modalContent = (
+    <>
+      {/* Modal de Criação/Edição */}
+      {(showNovaNota || showEditarNota) && (
+        <div className="nota-modal-container">
+          {/* Header com título - apenas texto, sem ícone */}
+          <div className="modal-header">
+            <h2 className="modal-title">
+              {tituloModal}
+            </h2>
+            <button 
+              className="modal-close-btn" 
+              onClick={showNovaNota ? onCloseNovaNota : onCloseEditarNota}
+            >
+              <FaTimes />
+            </button>
+          </div>
 
-            <div className="modal-body">
-              <label>Nome da nota</label>
-              <input
-                type="text"
-                value={showNovaNota ? formData.nome : notaEditData.nome}
-                onChange={(e) => handleFieldChange("nome", e.target.value)}
-                placeholder="Digite o nome da nota"
-              />
+          <div className="modal-body">
+            <label>Nome da nota</label>
+            <input
+              type="text"
+              value={showNovaNota ? formData.nome : notaEditData.nome}
+              onChange={(e) => handleFieldChange("nome", e.target.value)}
+              placeholder="Digite o nome da nota"
+            />
 
-              {showNovaNota && (
-                <>
-                  <label>Tipo de Nota</label>
-                  <div className="tipo-nota-buttons">
-                    {TIPOS_NOTA_CRIACAO.map(({ key, label }) => {
-                      const isSelected = formData.tipo === key;
-                      const isHovered = hoveredTipo === key;
+            {showNovaNota && (
+              <>
+                <label>Tipo de Nota</label>
+                <div className="tipo-nota-buttons">
+                  {TIPOS_NOTA_CRIACAO.map(({ key, label }) => {
+                    const isSelected = formData.tipo === key;
+                    const isHovered = hoveredTipo === key;
 
-                      const bgColor = isHovered
-                        ? CORES_TIPO[key]
-                        : isSelected
-                        ? CORES_TIPO[key]
-                        : "";
+                    const bgColor = isHovered
+                      ? CORES_TIPO[key]
+                      : isSelected
+                      ? CORES_TIPO[key]
+                      : "";
 
-                      const color = isSelected || isHovered ? "#fff" : "#000";
+                    const color = isSelected || isHovered ? "#fff" : "#000";
 
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          className={`tipo-btn ${isSelected ? "ativo" : ""}`}
-                          onClick={() => setFormData((prev) => ({ ...prev, tipo: key }))}
-                          onMouseEnter={() => setHoveredTipo(key)}
-                          onMouseLeave={() => setHoveredTipo(null)}
-                          style={{
-                            backgroundColor: bgColor,
-                            color: color,
-                          }}
-                        >
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Botões - ordem original mantida */}
-            <div className="modal-nota-actions-container">
-              <div className="modal-action-buttons">
-                <div className="modal-send-action-wrapper">
-                  <button
-                    className="modal-send-btn"
-                    style={{ 
-                      background: tipoAtual 
-                        ? `linear-gradient(135deg, ${corHeader} 0%, ${adjustColor(corHeader, -20)} 100%)`
-                        : "linear-gradient(135deg, #6c757d 0%, #495057 100%)"
-                    }}
-                    onClick={showNovaNota ? handleSaveTask : saveEditedNota}
-                  >
-                    {showNovaNota ? "Criar" : "Salvar"}
-                  </button>
-                  <button 
-                    className="modal-btn-cancelar-evento" 
-                    onClick={showNovaNota ? onCloseNovaNota : onCloseEditarNota}
-                  >
-                    Cancelar
-                  </button>
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        className={`tipo-btn ${isSelected ? "ativo" : ""}`}
+                        onClick={() => setFormData((prev) => ({ ...prev, tipo: key }))}
+                        onMouseEnter={() => setHoveredTipo(key)}
+                        onMouseLeave={() => setHoveredTipo(null)}
+                        style={{
+                          backgroundColor: bgColor,
+                          color: color,
+                        }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
                 </div>
+              </>
+            )}
+          </div>
+
+          {/* Botões - ordem original mantida */}
+          <div className="modal-nota-actions-container">
+            <div className="modal-action-buttons">
+              <div className="modal-send-action-wrapper">
+                <button
+                  className="modal-send-btn"
+                  style={{ 
+                    background: tipoAtual 
+                      ? `linear-gradient(135deg, ${corHeader} 0%, ${adjustColor(corHeader, -20)} 100%)`
+                      : "linear-gradient(135deg, #6c757d 0%, #495057 100%)"
+                  }}
+                  onClick={showNovaNota ? handleSaveTask : saveEditedNota}
+                >
+                  {showNovaNota ? "Criar" : "Salvar"}
+                </button>
+                <button 
+                  className="modal-btn-cancelar-evento" 
+                  onClick={showNovaNota ? onCloseNovaNota : onCloseEditarNota}
+                >
+                  Cancelar
+                </button>
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Modal de Visualização — mantém todos os tipos + Calendário */}
-        {showVisualizarNota && notaSelecionada && (
-          <>
-            {(() => {
-              switch (notaSelecionada.tipo) {
-                case "Atas":
-                  return (
-                    <AtaCard
-                      projetoAtual={project}
-                      notaAtual={notaSelecionada}
-                      onProgressoChange={handleProgressoChange}
-                      user={{ id: usuarioId }}
-                      onClose={onCloseVisualizarNota}
-                      containerAtual={{ id: donoContainerId }}
-                    />
-                  );
-                case "Calendário":
-                  return (
-                    <NotaCalendario
-                      notaId={notaSelecionada.id}
-                      onClose={onCloseVisualizarNota}
-                      usuarioId={usuarioId}
-                      projetoAtual={project}
-                      projetoNome={project?.name || "Projeto"}
-                      notaNome={notaSelecionada?.nome || "Calendário"}  
-                    />
-                  );
-                case "Tarefas":
-                  return (
-                    <Task
-                      projetoAtual={project}
-                      notaAtual={notaSelecionada}
-                      pilhaAtual={notaSelecionada.pilha_id ? { id: notaSelecionada.pilha_id } : null}
-                      usuarioAtual={usuarioAtual}
-                      onClose={onCloseVisualizarNota}
-                      containerAtual={{ id: donoContainerId }}
-                      setColumns={setColumns}
-                      setColumnsNormais={setColumnsNormais}
-                      setColumnsArquivadas={setColumnsArquivadas}
-                    />
-                  );
-                case "Metas":
-                  return (
-                    <Metas
-                      notaId={notaSelecionada.id}
-                      projectId={project?.type === "projeto" ? project.id : null}
-                      usuarioId={usuarioId}
-                    />
-                  );
-                case "Diário de Obra":
-                  return (
-                    <Rdo
-                      notaId={notaSelecionada.id}
-                      onClose={onCloseVisualizarNota}
-                      usuarioId={usuarioId}
-                      projetoAtual={project}
-                    />
-                  );
-                default:
-                  return (
-                    <Listagem
-                      projetoAtual={project}
-                      notaAtual={notaSelecionada}
-                      containerAtual={{ id: donoContainerId }}
-                      usuarioAtual={usuarioAtual}
-                      onClose={onCloseVisualizarNota}
-                      onStatusUpdate={onStatusUpdate}
-                    />
-                  );
-              }
-            })()}
-          </>
-        )}
+      {/* Modal de Visualização — mantém todos os tipos + Calendário */}
+      {showVisualizarNota && notaSelecionada && (
+        <>
+          {(() => {
+            // Debug: verificar o tipo recebido
+            console.log('🔍 ModalNota - Renderizando nota:', {
+              id: notaSelecionada.id,
+              nome: notaSelecionada.nome,
+              tipo: notaSelecionada.tipo,
+              inline: inline
+            });
+
+            const tipo = notaSelecionada.tipo;
+
+            switch (tipo) {
+              case "Atas":
+                return (
+                  <AtaCard
+                    projetoAtual={project}
+                    notaAtual={notaSelecionada}
+                    onProgressoChange={handleProgressoChange}
+                    user={{ id: usuarioId }}
+                    onClose={onCloseVisualizarNota}
+                    containerAtual={{ id: donoContainerId }}
+                  />
+                );
+              case "Calendário":
+                return (
+                  <NotaCalendario
+                    notaId={notaSelecionada.id}
+                    onClose={onCloseVisualizarNota}
+                    usuarioId={usuarioId}
+                    projetoAtual={project}
+                    projetoNome={project?.name || "Projeto"}
+                    notaNome={notaSelecionada?.nome || "Calendário"}  
+                  />
+                );
+              case "Tarefas":
+                console.log('✅ Renderizando componente Task para Tarefas');
+                return (
+                  <Task
+                    projetoAtual={project}
+                    notaAtual={notaSelecionada}
+                    pilhaAtual={notaSelecionada.pilha_id ? { id: notaSelecionada.pilha_id } : null}
+                    usuarioAtual={usuarioAtual}
+                    onClose={onCloseVisualizarNota}
+                    containerAtual={{ id: donoContainerId }}
+                    setColumns={setColumns}
+                    setColumnsNormais={setColumnsNormais}
+                    setColumnsArquivadas={setColumnsArquivadas}
+                  />
+                );
+              case "Metas":
+                return (
+                  <Metas
+                    notaId={notaSelecionada.id}
+                    projectId={project?.type === "projeto" ? project.id : null}
+                    usuarioId={usuarioId}
+                  />
+                );
+              case "Diário de Obra":
+                return (
+                  <Rdo
+                    notaId={notaSelecionada.id}
+                    onClose={onCloseVisualizarNota}
+                    usuarioId={usuarioId}
+                    projetoAtual={project}
+                  />
+                );
+              default:
+                console.log('⚠️ Tipo não reconhecido, usando Listagem. Tipo recebido:', tipo);
+                return (
+                  <Listagem
+                    projetoAtual={project}
+                    notaAtual={notaSelecionada}
+                    containerAtual={{ id: donoContainerId }}
+                    usuarioAtual={usuarioAtual}
+                    onClose={onCloseVisualizarNota}
+                    onStatusUpdate={onStatusUpdate}
+                  />
+                );
+            }
+          })()}
+        </>
+      )}
+    </>
+  );
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ║  RENDERIZAÇÃO: COM OU SEM OVERLAY
+  // ╚══════════════════════════════════════════════════════════════════════════
+  
+  // Se inline=true, renderiza sem o modal-overlay (para o painel lateral)
+  if (inline) {
+    return (
+      <div className={`modal-content ${showVisualizarNota ? "large" : ""}`} style={{ 
+        margin: 0, 
+        maxWidth: '100%', 
+        height: '100%',
+        borderRadius: 0 
+      }}>
+        {modalContent}
+      </div>
+    );
+  }
+
+  // Renderização normal com modal-overlay (comportamento original)
+  return (
+    <div className="modal-overlay">
+      <div className={`modal-content ${showVisualizarNota ? "large" : ""}`}>
+        {modalContent}
       </div>
     </div>
   );

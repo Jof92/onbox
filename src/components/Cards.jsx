@@ -789,6 +789,45 @@ export default function Cards() {
     updateUrlWithNota(null);
   };
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ║  NOVA FUNÇÃO: RENDERIZAR CONTEÚDO COMPLETO DA NOTA NO PAINEL LATERAL
+  // ╚══════════════════════════════════════════════════════════════════════════
+  const renderNotaContent = (nota, onClose) => {
+    if (!nota) return null;
+
+    // Debug: verificar os dados da nota
+    console.log('🔍 Cards.renderNotaContent - Nota recebida:', {
+      id: nota.id,
+      nome: nota.nome,
+      tipo: nota.tipo,
+      notaCompleta: nota
+    });
+
+    // Renderiza o ModalNota em modo inline (sem overlay)
+    // O ModalNota já contém toda a lógica para cada tipo de nota
+    return (
+      <ModalNota
+        inline={true}  // ← Modo inline: sem overlay, para o painel lateral
+        showVisualizarNota={true}
+        onCloseVisualizarNota={onClose}
+        notaSelecionada={nota}
+        project={{ ...entity, tipo: entity?.type === "project" ? "projeto" : "setor" }}
+        usuarioAtual={usuarioAtual}
+        usuarioId={usuarioId}
+        notaProgresso={notaProgresso}
+        setNotaProgresso={setNotaProgresso}
+        donoContainerId={donoContainerId}
+        onStatusUpdate={atualizarStatusNota}
+        setColumnsNormais={setColumnsNormais}
+        setColumnsArquivadas={setColumnsArquivadas}
+        showNovaNota={false}
+        showEditarNota={false}
+        onCloseNovaNota={() => {}}
+        onCloseEditarNota={() => {}}
+      />
+    );
+  };
+
   if (loading) return <Loading />;
 
   const filteredColumns = searchTerm
@@ -885,6 +924,7 @@ export default function Cards() {
                   setExpandedColumnId={setExpandedColumnId}
                   expandedNotaView={expandedNotaView}
                   setExpandedNotaView={setExpandedNotaView}
+                  renderNotaContent={renderNotaContent}
                 />
               ))}
               {provided.placeholder}
