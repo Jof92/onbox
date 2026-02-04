@@ -299,12 +299,7 @@ export default function ModalNota({
   // Se inline=true, renderiza sem o modal-overlay (para o painel lateral)
   if (inline) {
     return (
-      <div className={`modal-content ${showVisualizarNota ? "large" : ""}`} style={{ 
-        margin: 0, 
-        maxWidth: '100%', 
-        height: '100%',
-        borderRadius: 0 
-      }}>
+      <div className={`modal-content ${showVisualizarNota ? "large" : ""}`}>
         {modalContent}
       </div>
     );

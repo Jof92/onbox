@@ -15,7 +15,6 @@
   flex-shrink: 0;
 }
 
-
 /* ─── PAINEL ESQUERDO (lista de notas) ────────────────────────
    Metade esquerda: título da pilha + grid flex-wrap de cards.   */
 
@@ -24,10 +23,11 @@
   display: flex;
   flex-direction: column;
   background: #fff;
-  border-radius: 12px 0 0 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   border-right: 2px solid #e2e8f0;
-  overflow: hidden;               /* clipa o grid internamente */
+  overflow: hidden;
+  padding: 5px;
+  margin-right: 5px;
 }
 
 /* header dentro do painel esquerdo — sem margem inferior grande */
@@ -41,7 +41,6 @@
 .column-header-expanded {
   margin-bottom: 0 !important;
 }
-
 
 /* ─── GRID DE NOTAS (flex-wrap) ───────────────────────────────
    As notas ocupam o espaço disponível lado a lado.
@@ -67,7 +66,6 @@
 .expanded-notes-grid::-webkit-scrollbar-track   { background: transparent; }
 .expanded-notes-grid::-webkit-scrollbar-thumb   { background: #cbd5e1; border-radius: 3px; }
 .expanded-notes-grid::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-
 
 /* ─── SLOT de cada nota dentro do grid ────────────────────────
    Cada .expanded-note-slot é um item do flex-wrap.
@@ -144,7 +142,6 @@
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
-
 /* ─── PAINEL DIREITO ──────────────────────────────────────────
    Metade direita: mostra detalhes da nota selecionada ou
    mensagem de placeholder.                                     */
@@ -153,12 +150,10 @@
   width: 50%;
   display: flex;
   flex-direction: column;
-  background: #f4f6fa;
   border-radius: 0 12px 12px 0;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  overflow: hidden;
+  overflow: hidden; /* Mantém o overflow hidden para o painel direito inteiro */
+  position: relative; /* Para garantir que o scroll interno funcione */
 }
-
 
 /* ── Estado vazio (nenhuma nota selecionada) ── */
 
@@ -182,7 +177,6 @@
   margin: 0;
 }
 
-
 /* ── Nota selecionada — viewer ── */
 
 .expanded-note-viewer {
@@ -190,16 +184,9 @@
   display: flex;
   flex-direction: column;
   position: relative;
-  overflow-y: auto;
-
-  scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 transparent;
+  overflow: hidden; /* Painel viewer não tem scroll */
+  max-height: 100%; /* Garante que não ultrapasse o painel direito */
 }
-
-.expanded-note-viewer::-webkit-scrollbar        { width: 6px; }
-.expanded-note-viewer::-webkit-scrollbar-track   { background: transparent; }
-.expanded-note-viewer::-webkit-scrollbar-thumb   { background: #cbd5e1; border-radius: 3px; }
-
 
 /* botão fechar (X) no canto superior direito do painel */
 .close-expanded-view {
@@ -226,16 +213,23 @@
   border-color: #fca5a5;
 }
 
-
-/* wrapper do conteúdo da nota */
-.expanded-view-content {
+/* wrapper do conteúdo da nota - APENAS ELE TEM SCROLL */
+.expanded-note-content {
   flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
 }
 
+.expanded-note-content::-webkit-scrollbar        { width: 6px; }
+.expanded-note-content::-webkit-scrollbar-track   { background: transparent; }
+.expanded-note-content::-webkit-scrollbar-thumb   { background: #cbd5e1; border-radius: 3px; }
+.expanded-note-content::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
 /* ── Detalhes textuais da nota (tipos que não são Nota Rápida) ── */
 
@@ -269,7 +263,6 @@
   min-width: 60px;
   display: inline-block;
 }
-
 
 /* bloco de descrição */
 .expanded-view-descricao {

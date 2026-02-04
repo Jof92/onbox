@@ -790,24 +790,21 @@ export default function Cards() {
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // ║  NOVA FUNÇÃO: RENDERIZAR CONTEÚDO COMPLETO DA NOTA NO PAINEL LATERAL
+  // ║  FUNÇÃO: RENDERIZAR CONTEÚDO COMPLETO DA NOTA NO PAINEL LATERAL
   // ╚══════════════════════════════════════════════════════════════════════════
   const renderNotaContent = (nota, onClose) => {
     if (!nota) return null;
 
-    // Debug: verificar os dados da nota
-    console.log('🔍 Cards.renderNotaContent - Nota recebida:', {
+    console.log('🔍 Cards.renderNotaContent - Renderizando nota completa:', {
       id: nota.id,
       nome: nota.nome,
-      tipo: nota.tipo,
-      notaCompleta: nota
+      tipo: nota.tipo
     });
 
-    // Renderiza o ModalNota em modo inline (sem overlay)
-    // O ModalNota já contém toda a lógica para cada tipo de nota
+    // Usa o ModalNota em modo inline para renderizar o conteúdo completo
     return (
       <ModalNota
-        inline={true}  // ← Modo inline: sem overlay, para o painel lateral
+        inline={true}
         showVisualizarNota={true}
         onCloseVisualizarNota={onClose}
         notaSelecionada={nota}
@@ -818,6 +815,7 @@ export default function Cards() {
         setNotaProgresso={setNotaProgresso}
         donoContainerId={donoContainerId}
         onStatusUpdate={atualizarStatusNota}
+        setColumns={modoArquivadas ? setColumnsArquivadas : setColumnsNormais}
         setColumnsNormais={setColumnsNormais}
         setColumnsArquivadas={setColumnsArquivadas}
         showNovaNota={false}
@@ -851,28 +849,31 @@ export default function Cards() {
         modoArquivadas={modoArquivadas}
       />
 
-      <div className="floating-add-column-container">
-        <button
-          className="floating-add-column-btn"
-          onClick={() => setShowAddColumnMenu(prev => !prev)}
-          title="Adicionar pilha"
-        >
-          <FaPlus />
-        </button>
+      {/* Botão flutuante que só aparece no modo normal (desaparece no modo expandido) */}
+      {!expandedColumnId && (
+        <div className="floating-add-column-container">
+          <button
+            className="floating-add-column-btn"
+            onClick={() => setShowAddColumnMenu(prev => !prev)}
+            title="Adicionar pilha"
+          >
+            <FaPlus />
+          </button>
 
-        {showAddColumnMenu && (
-          <div className="add-column-menu">
-            <button onClick={() => handleCreateColumn("normal")}>
-              Pilha normal
-            </button>
-            {!jaExisteDiario && (
-              <button onClick={() => handleCreateColumn("diario_obras")}>
-                Diário de Obra
+          {showAddColumnMenu && (
+            <div className="add-column-menu">
+              <button onClick={() => handleCreateColumn("normal")}>
+                Pilha normal
               </button>
-            )}
-          </div>
-        )}
-      </div>
+              {!jaExisteDiario && (
+                <button onClick={() => handleCreateColumn("diario_obras")}>
+                  Diário de Obra
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <DragDropContext onDragEnd={onDragEnd}>
         <Droppable droppableId="all-columns" direction="horizontal" type="COLUMN">

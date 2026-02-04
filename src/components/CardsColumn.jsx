@@ -62,11 +62,11 @@ export default function Column({
   setExpandedColumnId,
   expandedNotaView,
   setExpandedNotaView,
+  renderNotaContent,
 }) {
   const colorTrackRefs = useRef({});
   const columnRef = useRef(null);
 
-  // ── FUNÇÕES AUXILIARES ───────────────────────────────────────────────────
   const getDiaSemana = (dataString) => {
     if (!dataString) return "";
     const dias = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
@@ -80,7 +80,6 @@ export default function Column({
     return new Date(ano, mes - 1, dia).toLocaleDateString("pt-BR");
   };
 
-  // ── FLAGS ────────────────────────────────────────────────────────────────
   const isRecebidos = col.title === "Recebidos";
   const isArquivo = modoArquivadas && !isRecebidos;
   const bgColor = col.cor_fundo || (isRecebidos ? "rgba(46, 125, 50, 0.08)" : "transparent");
@@ -88,163 +87,6 @@ export default function Column({
   const isDiarioObra = col.tipo_pilha === "diario_obras";
   const isExpanded = expandedColumnId === col.id;
 
-  // ── RENDERIZADOR DE NOTAS PARA MODO EXPANDIDO ─────────────────────────────
-  const renderNotaContent = (nota, onClose) => {
-    // Calendário
-    if (nota.tipo === "Calendário") {
-      return (
-        <div style={{ marginBottom: '12px' }}>
-          <NotaCalendarioCard
-            nota={nota}
-            pilhaId={col.id}
-            usuarioId={usuarioId}
-            membros={membros || []}
-            onDelete={() => handleDeleteNota(nota.id, col.id)}
-          />
-        </div>
-      );
-    }
-
-    // Nota Rápida
-    if (nota.tipo === "Nota Rápida") {
-      const isConcluida = notasConcluidas.has(String(nota.id));
-      const isEditingDate = dataConclusaoEdit.hasOwnProperty(String(nota.id));
-      return (
-        <div style={{ marginBottom: '12px' }}>
-          <NotaRapidaCard
-            nota={nota}
-            onSaveResponsavel={onSaveResponsavelRapida}
-            onSaveDataEntrega={onSaveDataEntregaRapida}
-            onSaveDescricao={handleSaveDescricaoRapida}
-            onRemoveResponsavel={onRemoveResponsavelRapida}
-            isConcluida={isConcluida}
-            isEditingDate={isEditingDate}
-            dataConclusaoEdit={dataConclusaoEdit}
-            dataConclusaoSalva={dataConclusaoSalva}
-            setDataConclusaoEdit={setDataConclusaoEdit}
-            saveDataConclusao={saveDataConclusao}
-            menuOpenNota={menuOpenNota}
-            setMenuOpenNota={setMenuOpenNota}
-            handleEditNota={handleEditNota}
-            handleDeleteNota={handleDeleteNota}
-            toggleConclusaoNota={toggleConclusaoNota}
-            pilhaId={col.id}
-            dragHandleProps={null}
-            containerId={donoContainerId}
-            usuarioId={usuarioId}
-            entityType={entityType}
-            entityId={entity?.id}
-          />
-        </div>
-      );
-    }
-
-    // Diário de Obra
-    if (nota.tipo === "Diário de Obra") {
-      return (
-        <div 
-          className="expanded-rdo-item"
-          style={{
-            padding: '12px',
-            borderBottom: '1px solid #eee',
-            cursor: 'pointer',
-            backgroundColor: '#f8f9fa',
-            borderRadius: '6px',
-            marginBottom: '8px'
-          }}
-        >
-          <strong>{nota.nome}</strong>
-          {nota.data_entrega && (
-            <div style={{ color: '#5f6368', fontSize: '0.875em', marginTop: '4px' }}>
-              {getDiaSemana(nota.data_entrega)} • {formatarDataLocal(nota.data_entrega)}
-            </div>
-          )}
-          {nota.descricao && (
-            <div style={{ marginTop: '8px', color: '#202124', lineHeight: '1.5' }}>
-              {nota.descricao}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    // Demais tipos (Tarefas, Atas, etc.)
-    const isConcluida = notasConcluidas.has(String(nota.id));
-    const usarDataEntrega = nota.tipo === "Tarefas";
-    const dataAtual = usarDataEntrega ? dataEntregaSalva : dataConclusaoSalva;
-    
-    return (
-      <div 
-        className={`expanded-generic-item ${isConcluida ? 'concluida' : ''}`}
-        style={{
-          padding: '14px',
-          borderBottom: '1px solid #eee',
-          cursor: 'pointer',
-          backgroundColor: isConcluida ? '#f0f9ff' : 'white',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px',
-          marginBottom: '8px',
-          borderRadius: '6px'
-        }}
-      >
-        <div>
-          <strong style={{ color: isConcluida ? '#1a73e8' : '#202124', fontSize: '1.2em' }}>
-            {nota.nome}
-          </strong>
-          <div style={{ color: '#5f6368', fontSize: '0.875em', marginTop: '4px' }}>
-            {nota.tipo}
-            {nota.tipo === "Atas" && notaProgresso[nota.id] !== undefined && (
-              <> • Progresso: {notaProgresso[nota.id]}%</>
-            )}
-          </div>
-        </div>
-        
-        {/* Data */}
-        {dataAtual?.[nota.id] && (
-          <div style={{ 
-            fontSize: '0.85em', 
-            color: '#444',
-            padding: '8px',
-            background: '#f8f9fa',
-            borderRadius: '4px'
-          }}>
-            <strong>Data:</strong> {formatarDataLocal(dataAtual[nota.id])}
-          </div>
-        )}
-        
-        {/* Descrição */}
-        {nota.descricao && (
-          <div style={{ 
-            color: '#202124', 
-            lineHeight: '1.6',
-            padding: '12px',
-            background: '#f8f9fa',
-            borderRadius: '4px'
-          }}>
-            <strong>Descrição:</strong>
-            <div style={{ marginTop: '8px' }}>{nota.descricao}</div>
-          </div>
-        )}
-        
-        {/* Status */}
-        {isConcluida && (
-          <div style={{ 
-            background: '#e6f4ea', 
-            color: '#137333', 
-            padding: '8px 12px', 
-            borderRadius: '12px', 
-            fontSize: '0.8em',
-            alignSelf: 'flex-start'
-          }}>
-            ✅ Concluída
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // ── SALVAR DESCRIÇÃO NOTA RÁPIDA ─────────────────────────────────────────
   const handleSaveDescricaoRapida = async (notaId, descricao) => {
     const { error } = await supabase.from("notas").update({ descricao }).eq("id", notaId);
     if (error) return;
@@ -257,7 +99,6 @@ export default function Column({
     );
   };
 
-  // ── ATUALIZAR COR DA PILHA ───────────────────────────────────────────────
   const updatePilhaCor = async (pilhaId, cor) => {
     const { error } = await supabase.from("pilhas").update({ cor_fundo: cor }).eq("id", pilhaId);
     if (!error) {
@@ -265,18 +106,15 @@ export default function Column({
     }
   };
 
-  // ── RESETAR COR ──────────────────────────────────────────────────────────
   const handleResetCor = (pilhaId) => {
     updatePilhaCor(pilhaId, null);
     setShowColorPicker(prev => ({ ...prev, [pilhaId]: false }));
   };
 
-  // ── TOGGLE COLOR PICKER ──────────────────────────────────────────────────
   const toggleColorPicker = (pilhaId, show) => {
     setShowColorPicker(prev => ({ ...prev, [pilhaId]: show }));
   };
 
-  // ── SALVAR TÍTULO DA COLUNA ──────────────────────────────────────────────
   const saveColumnTitle = async (id) => {
     if (!columnTitleDraft.trim()) return setEditingColumnId(null);
     const { error } = await supabase.from("pilhas").update({ title: columnTitleDraft }).eq("id", id);
@@ -286,7 +124,6 @@ export default function Column({
     setEditingColumnId(null);
   };
 
-  // ── EXCLUIR PILHA ────────────────────────────────────────────────────────
   const handleDeletePilha = async (pilhaId) => {
     const pilha = columns.find(c => c.id === pilhaId);
     if (!pilha || pilha.notas.length > 0) {
@@ -301,7 +138,6 @@ export default function Column({
     }
   };
 
-  // ── ARQUIVAR/RESTAURAR NOTA ──────────────────────────────────────────────
   const handleArquivarNota = async (nota, pilhaAtualId) => {
     const estaEmArquivo = col.arquivada;
     const pilhasAlvo = columns.filter(c => c.arquivada !== estaEmArquivo);
@@ -344,7 +180,6 @@ export default function Column({
     }
   };
 
-  // ── TOGGLE EXPANDIR/COLAPSTAR PILHA ──────────────────────────────────────
   const handleToggleExpand = (e) => {
     e.stopPropagation();
     if (isExpanded) {
@@ -356,13 +191,11 @@ export default function Column({
     }
   };
 
-  // ── CLICAR EM NOTA NO MODO EXPANDIDO ─────────────────────────────────────
   const handleNotaClickExpanded = (nota) => {
     if (nota.tipo === "Nota Rápida") return;
     setExpandedNotaView(nota);
   };
 
-  // ── COLOR TRACK CLICK HANDLER ────────────────────────────────────────────
   useEffect(() => {
     if (!showColorPicker[col.id]) return;
     const track = colorTrackRefs.current[col.id];
@@ -382,7 +215,6 @@ export default function Column({
     return () => track.removeEventListener("click", handleClick);
   }, [showColorPicker, col.id]);
 
-  // ── DIÁRIO DE OBRA SUBSCRIPTION ──────────────────────────────────────────
   useEffect(() => {
     if (!isDiarioObra) return;
 
@@ -459,7 +291,6 @@ export default function Column({
     };
   }, [col.id, isDiarioObra, setColumns]);
 
-  // ── ABRIR NOTA POR ID ────────────────────────────────────────────────────
   const openNotaById = async (notaId) => {
     console.log("🔍 Tentando abrir nota ID:", notaId);
     const allColumns = [...columnsNormais, ...columnsArquivadas];
@@ -495,9 +326,6 @@ export default function Column({
     }
   };
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ║  RENDER: MODO EXPANDIDO
-  // ╚══════════════════════════════════════════════════════════════════════════
   if (isExpanded) {
     return (
       <CardPilhaExpand
@@ -532,14 +360,11 @@ export default function Column({
         setExpandedNotaView={setExpandedNotaView}
         setExpandedColumnId={setExpandedColumnId}
         handleArquivarNota={handleArquivarNota}
-        renderNotaContent={renderNotaContent} // ✅ PROP ADICIONADA
+        renderNotaContent={renderNotaContent}
       />
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ║  RENDER: MODO NORMAL (NÃO EXPANDIDO)
-  // ╚══════════════════════════════════════════════════════════════════════════
   return (
     <Draggable
       key={col.id}
@@ -559,7 +384,6 @@ export default function Column({
             flexDirection: 'column',
           }}
         >
-          {/* ── PIN ── */}
           {!isRecebidos && (
             <div
               {...colProvided.dragHandleProps}
@@ -575,7 +399,6 @@ export default function Column({
             </div>
           )}
 
-          {/* ── COLOR PICKER ── */}
           {isColorPickerVisible && !isRecebidos && (
             <div className="color-picker-toolbar">
               <button
@@ -600,12 +423,10 @@ export default function Column({
             </div>
           )}
 
-          {/* ── COLUMN HEADER ── */}
           <div
             className={`column-header ${isArquivo ? 'arquivo-header' : ''}`}
             ref={columnRef}
           >
-            {/* Título Editável */}
             {editingColumnId === col.id && !isRecebidos ? (
               <input
                 type="text"
@@ -631,7 +452,6 @@ export default function Column({
               </h3>
             )}
 
-            {/* Barra de Ações */}
             {!isRecebidos && (
               <div className="column-actions-bar">
                 {!isDiarioObra && (
@@ -677,11 +497,7 @@ export default function Column({
             )}
           </div>
 
-          {/* ── CONTEÚDO DA COLUNA ── */}
           {isDiarioObra ? (
-            // ═════════════════════════════════════════════════════════════════
-            // ║  DIÁRIO DE OBRA
-            // ╚════════════════════════════════════════════════════════════════
             <div
               className="cards-list diario-obras-list"
               style={{
@@ -754,9 +570,6 @@ export default function Column({
               </Droppable>
             </div>
           ) : (
-            // ═════════════════════════════════════════════════════════════════
-            // ║  DEMAIS TIPOS DE PILHA
-            // ╚════════════════════════════════════════════════════════════════
             <Droppable droppableId={col.id} type="CARD">
               {(innerProvided) => (
                 <div
@@ -769,9 +582,6 @@ export default function Column({
                   }}
                 >
                   {col.notas.map((nota, idx) => {
-                    // ─────────────────────────────────────────────────────────────
-                    // ✅ CALENDÁRIO
-                    // ─────────────────────────────────────────────────────────────
                     if (nota.tipo === "Calendário") {
                       return (
                         <Draggable key={String(nota.id)} draggableId={String(nota.id)} index={idx} type="CARD">
@@ -799,9 +609,6 @@ export default function Column({
                       );
                     }
 
-                    // ─────────────────────────────────────────────────────────────
-                    // ✅ NOTA RÁPIDA
-                    // ─────────────────────────────────────────────────────────────
                     if (nota.tipo === "Nota Rápida") {
                       const isConcluida = notasConcluidas.has(String(nota.id));
                       const isEditingDate = dataConclusaoEdit.hasOwnProperty(String(nota.id));
@@ -843,9 +650,6 @@ export default function Column({
                       );
                     }
 
-                    // ─────────────────────────────────────────────────────────────
-                    // ✅ DEMAIS TIPOS DE NOTA
-                    // ─────────────────────────────────────────────────────────────
                     const isConcluida = notasConcluidas.has(String(nota.id));
                     let cardBackgroundColor = "#ffffff";
                     let cardBorderLeft = "none";
@@ -884,7 +688,6 @@ export default function Column({
                             }}
                             onClick={() => handleOpenNota(nota)}
                           >
-                            {/* ── Checkbox + Arquivar ── */}
                             <div className="concluir-checkbox-wrapper">
                               <input
                                 type="checkbox"
@@ -910,7 +713,6 @@ export default function Column({
                               )}
                             </div>
 
-                            {/* ── Informações do Card ── */}
                             <div className="card-info">
                               <div className="card-title-wrapper">
                                 <strong>{nota.nome}</strong>
@@ -920,7 +722,6 @@ export default function Column({
                                 {nota.tipo === "Atas" && notaProgresso[nota.id] !== undefined && <> - {notaProgresso[nota.id]}%</>}
                               </p>
 
-                              {/* ── Data ── */}
                               <div
                                 className="data-conclusao-container"
                                 data-nota-id={nota.id}
@@ -979,7 +780,6 @@ export default function Column({
                               </div>
                             </div>
 
-                            {/* ── Menu 3 Pontos ── */}
                             {!isConcluida && (
                               <div className="card-menu-wrapper" onClick={(e) => e.stopPropagation()}>
                                 <button

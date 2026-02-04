@@ -37,9 +37,8 @@ export default function CardPilhaExpand({
   setExpandedNotaView,
   setExpandedColumnId,
   handleArquivarNota,
-  renderNotaContent, // Nova prop para renderizar conteúdo completo
+  renderNotaContent,
 }) {
-  // ── FUNÇÕES AUXILIARES ───────────────────────────────────────────────────
   const getDiaSemana = (dataString) => {
     if (!dataString) return "";
     const dias = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
@@ -53,37 +52,20 @@ export default function CardPilhaExpand({
     return new Date(ano, mes - 1, dia).toLocaleDateString("pt-BR");
   };
 
-  // ── FECHAR MODO EXPANDIDO ────────────────────────────────────────────────
   const handleToggleExpand = (e) => {
     e.stopPropagation();
     setExpandedColumnId(null);
     setExpandedNotaView(null);
   };
 
-  // ── CLICAR EM NOTA PARA VISUALIZAÇÃO ──────────────────────────────────────
   const handleNotaClickExpanded = (nota) => {
     if (nota.tipo === "Nota Rápida") return;
-    
-    // Debug: verificar a nota clicada
-    console.log('🔍 CardPilhaExpand - Nota clicada:', {
-      id: nota.id,
-      nome: nota.nome,
-      tipo: nota.tipo,
-      notaCompleta: nota
-    });
-    
-    // Define a nota para visualização no painel lateral (não abre modal)
     setExpandedNotaView(nota);
   };
 
-  // ── RENDERIZAÇÃO ──────────────────────────────────────────────────────────
   return (
     <div className="column-expanded-wrapper">
-      {/* ════════════════════════════════════════════════════════════════════════
-         ║  PAINEL ESQUERDO: LISTA DE NOTAS
-         ╚══════════════════════════════════════════════════════════════════════ */}
       <div className="expanded-left-panel">
-        {/* ── Header da Pilha Expandida ── */}
         <div className={`column-header ${isArquivo ? 'arquivo-header' : ''} column-header-expanded`}>
           <h3 className="column-title">{col.title}</h3>
           <div className="column-actions-bar">
@@ -92,19 +74,15 @@ export default function CardPilhaExpand({
               title="Condensar pilha"
               onClick={handleToggleExpand}
             >
-              <span className="material-symbols-outlined">compress</span>
+              <span className="material-symbols-outlined">collapse_content</span>
             </button>
           </div>
         </div>
 
-        {/* ── Grid de Notas ── */}
         <div className="expanded-notes-grid">
           {col.notas.map((nota) => {
             const isConcluida = notasConcluidas.has(String(nota.id));
 
-            // ───────────────────────────────────────────────────────────────────
-            // ✅ NOTA RÁPIDA
-            // ───────────────────────────────────────────────────────────────────
             if (nota.tipo === "Nota Rápida") {
               return (
                 <div key={String(nota.id)} className="expanded-note-slot">
@@ -136,9 +114,6 @@ export default function CardPilhaExpand({
               );
             }
 
-            // ───────────────────────────────────────────────────────────────────
-            // ✅ CALENDÁRIO
-            // ───────────────────────────────────────────────────────────────────
             if (nota.tipo === "Calendário") {
               return (
                 <div key={String(nota.id)} className="expanded-note-slot">
@@ -153,9 +128,6 @@ export default function CardPilhaExpand({
               );
             }
 
-            // ───────────────────────────────────────────────────────────────────
-            // ✅ DIÁRIO DE OBRA
-            // ───────────────────────────────────────────────────────────────────
             if (nota.tipo === "Diário de Obra") {
               return (
                 <div
@@ -164,7 +136,7 @@ export default function CardPilhaExpand({
                 >
                   <div
                     className="card-item tipo-rdo"
-                    onClick={() => setExpandedNotaView(nota)}
+                    onClick={() => handleNotaClickExpanded(nota)}
                     style={{ cursor: "pointer" }}
                   >
                     <strong>{nota.nome}</strong>
@@ -181,9 +153,6 @@ export default function CardPilhaExpand({
               );
             }
 
-            // ───────────────────────────────────────────────────────────────────
-            // ✅ DEMAIS TIPOS (Lista, Atas, Tarefas, Metas, etc.)
-            // ───────────────────────────────────────────────────────────────────
             let cardBackgroundColor = "#ffffff";
             let cardBorderLeft = "none";
             
@@ -212,7 +181,6 @@ export default function CardPilhaExpand({
                     cursor: "pointer",
                   }}
                 >
-                  {/* ── Checkbox + Arquivar ── */}
                   <div className="concluir-checkbox-wrapper">
                     <input
                       type="checkbox"
@@ -238,7 +206,6 @@ export default function CardPilhaExpand({
                     )}
                   </div>
 
-                  {/* ── Informações do Card ── */}
                   <div className="card-info">
                     <div className="card-title-wrapper">
                       <strong>{nota.nome}</strong>
@@ -248,7 +215,6 @@ export default function CardPilhaExpand({
                       {nota.tipo === "Atas" && notaProgresso[nota.id] !== undefined && <> - {notaProgresso[nota.id]}%</>}
                     </p>
 
-                    {/* ── Data ── */}
                     <div className="data-conclusao-container" data-nota-id={nota.id} onClick={(e) => e.stopPropagation()}>
                       <div
                         style={{
@@ -265,7 +231,6 @@ export default function CardPilhaExpand({
                     </div>
                   </div>
 
-                  {/* ── Menu 3 Pontos ── */}
                   {!isConcluida && (
                     <div className="card-menu-wrapper" onClick={(e) => e.stopPropagation()}>
                       <button
@@ -293,9 +258,6 @@ export default function CardPilhaExpand({
         </div>
       </div>
 
-      {/* ════════════════════════════════════════════════════════════════════════
-         ║  PAINEL DIREITO: VISUALIZAÇÃO DA NOTA SELECIONADA
-         ╚══════════════════════════════════════════════════════════════════════ */}
       <div className="expanded-right-panel">
         {expandedNotaView ? (
           <div className="expanded-note-viewer">
@@ -307,79 +269,11 @@ export default function CardPilhaExpand({
               <FaTimes />
             </button>
             
-            {/* ═══════════════════════════════════════════════════════════ */}
-            {/* DEBUG: INFORMAÇÕES DA NOTA */}
-            {/* ═══════════════════════════════════════════════════════════ */}
-            <div style={{ padding: '20px', background: '#f0f0f0', margin: '10px', borderRadius: '8px' }}>
-              <h3 style={{ margin: '0 0 10px 0' }}>🔍 DEBUG - Informações da Nota</h3>
-              <pre style={{ 
-                background: '#fff', 
-                padding: '10px', 
-                borderRadius: '4px',
-                fontSize: '12px',
-                overflow: 'auto',
-                margin: 0
-              }}>
-{JSON.stringify({
-  id: expandedNotaView.id,
-  nome: expandedNotaView.nome,
-  tipo: expandedNotaView.tipo,
-  pilha_id: expandedNotaView.pilha_id,
-  renderNotaContent_existe: !!renderNotaContent,
-  renderNotaContent_tipo: typeof renderNotaContent
-}, null, 2)}
-              </pre>
-            </div>
-
-            <div className="expanded-view-content">
-              {/* Renderiza o conteúdo completo da nota (mesmo que seria no modal) */}
-              {renderNotaContent ? (
-                <>
-                  <div style={{ 
-                    background: '#4CAF50', 
-                    color: 'white', 
-                    padding: '10px',
-                    margin: '10px',
-                    borderRadius: '4px'
-                  }}>
-                    ✅ renderNotaContent EXISTE - Tentando renderizar conteúdo completo...
-                  </div>
-                  {renderNotaContent(expandedNotaView, () => setExpandedNotaView(null))}
-                </>
-              ) : (
-                /* Fallback caso renderNotaContent não seja fornecido */
-                <div style={{ padding: '20px' }}>
-                  <div style={{ 
-                    background: '#f44336', 
-                    color: 'white', 
-                    padding: '20px',
-                    marginBottom: '20px',
-                    borderRadius: '8px'
-                  }}>
-                    ❌ ERRO: renderNotaContent NÃO FOI PASSADO COMO PROP
-                    <br /><br />
-                    Verifique se o componente Column está passando a prop renderNotaContent para CardPilhaExpand
-                  </div>
-                  
-                  <div className="expanded-view-details">
-                    <h2>{expandedNotaView.nome}</h2>
-                    <p><strong>Tipo:</strong> {expandedNotaView.tipo}</p>
-                    {expandedNotaView.data_entrega && (
-                      <p><strong>Data:</strong> {formatarDataLocal(expandedNotaView.data_entrega)}</p>
-                    )}
-                    {expandedNotaView.descricao && (
-                      <div className="expanded-view-descricao">
-                        <strong>Descrição:</strong>
-                        <p>{expandedNotaView.descricao}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+            <div className="expanded-note-content">
+              {renderNotaContent && renderNotaContent(expandedNotaView, () => setExpandedNotaView(null))}
             </div>
           </div>
         ) : (
-          /* ── Estado Vazio ── */
           <div className="expanded-right-panel-empty">
             <span className="material-symbols-outlined">open_in_new</span>
             <p>Selecione uma nota para visualizar</p>
