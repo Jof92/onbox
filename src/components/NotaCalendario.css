@@ -2,6 +2,9 @@
    HEADER SIMPLES DO CALENDÁRIO
    ======================================== */
 
+   /* Material Symbols */
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
+
 .calendario-header-simples {
   display: flex;
   justify-content: space-between;
@@ -129,10 +132,13 @@
   cursor: pointer;
   font-size: 13px;
   transition: all 0.2s;
+  background: none;
+  border: none;
+  padding: 4px 8px;
 }
 
 .cal-nav-btn:hover {
- color: #ffd69d;
+  color: #ffd69d;
 }
 
 /* Dias da semana */
@@ -165,9 +171,11 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  padding-top: 6px;
+  height: 45px;
   border: 1px solid #e0e0e0;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
   position: relative;
@@ -181,41 +189,109 @@
 }
 
 .cal-day:not(.empty):hover {
-  background: #f7e7cb;
-  border-color: #f59e0b;
+  background: #fff7ed;
+  border-color: #ff9908;
   transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(255, 153, 8, 0.2);
 }
 
 .cal-day.today {
-  background: #f7e7cb;
-  border-color: #f59e0b;
+  background: #fef3c7;
+  border: 2px solid #f59e0b;
   font-weight: 700;
 }
 
+/* DESTAQUE PARA DIAS COM EVENTOS */
 .cal-day.has-events {
-  background: #fef3c7;
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  border: 1px solid #ff9908;
+}
+
+.cal-day.has-events:hover {
+  background: linear-gradient(135deg, #ffedd5 0%, #fed7aa 100%);
   border-color: #f59e0b;
+  transform: scale(1.08);
+  box-shadow: 0 4px 12px rgba(255, 153, 8, 0.3);
+}
+
+/* Dia de hoje COM eventos - destaque especial */
+.cal-day.today.has-events {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border: 2px solid #f59e0b;
+  box-shadow: 0 3px 10px rgba(245, 158, 11, 0.3);
 }
 
 .day-num {
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 600;
   color: #333;
+  z-index: 1;
+  margin-bottom: 4px;
 }
 
+.cal-day.has-events .day-num {
+  color: #d97706;
+  font-weight: 700;
+}
+
+/* Container de bolinhas de eventos */
+.event-dots-container {
+  display: flex;
+  gap: 3px;
+  margin-top: 2px;
+  justify-content: center;
+  flex-wrap: wrap;
+  width: 100%;
+  padding: 0 2px;
+}
+
+/* Bolinha individual de evento */
 .event-dot {
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  background: #f59e0b;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff9908 0%, #f59e0b 100%);
+  transition: all 0.2s;
+  animation: pulseIn 0.3s ease;
+}
+
+@keyframes pulseIn {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.cal-day:hover .event-dot {
+  transform: scale(1.3);
+}
+
+/* Indicador de mais eventos */
+.event-dot-more {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff9908 0%, #f59e0b 100%);
   color: white;
   font-size: 9px;
   font-weight: 700;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 2px 4px rgba(255, 153, 8, 0.4);
+  transition: all 0.2s;
+}
+
+.cal-day:hover .event-dot-more {
+  transform: scale(1.15);
+  box-shadow: 0 3px 6px rgba(255, 153, 8, 0.6);
 }
 
 .cal-loading {
@@ -226,7 +302,10 @@
   font-size: 14px;
 }
 
-/* Eventos resumo */
+/* ========================================
+   RESUMO DE EVENTOS - ESTILOS COMPLETOS
+   ======================================== */
+
 .cal-eventos-resumo {
   padding: 14px 16px;
   border-top: 1px solid #e0e0e0;
@@ -243,53 +322,473 @@
 .eventos-lista-resumo {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
+/* ITEM DE EVENTO COM STATUS */
 .evento-resumo-item {
   display: flex;
-  gap: 10px;
-  padding: 8px 10px;
+  flex-direction: column;
+  padding: 10px;
   background: white;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s;
-  border-left: 3px solid #8b5cf6;
+  transition: all 0.25s ease;
+  border-left: 4px solid #ff9908;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
-.evento-resumo-item:hover {
-  background: #f3f4f6;
-  transform: translateX(3px);
+/* ESTADO: CONCLUÍDO (VERDE) */
+.evento-resumo-item.concluido {
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  border-left: 4px solid #2e7d32;
+  opacity: 0.95;
+}
+
+.evento-resumo-item.concluido:hover {
+  background: linear-gradient(135deg, #c8e6c9 0%, #a5d6a7 100%);
+  transform: translateX(4px);
+  box-shadow: 0 3px 8px rgba(46, 125, 50, 0.25);
+}
+
+/* ESTADO: CANCELADO (CINZA) */
+.evento-resumo-item.cancelado {
+  background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%);
+  border-left: 4px solid #616161;
+  opacity: 0.85;
+  text-decoration: line-through;
+  cursor: default;
+}
+
+.evento-resumo-item.cancelado:hover {
+  background: linear-gradient(135deg, #e0e0e0 0%, #d5d5d5 100%);
+  transform: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.evento-resumo-item:hover:not(.cancelado) {
+  background: #fff8e1;
+  transform: translateX(4px);
+  box-shadow: 0 3px 8px rgba(255, 153, 8, 0.2);
+}
+
+/* CONTEÚDO DO EVENTO */
+.evento-resumo-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  width: 100%;
+  gap: 12px;
+}
+
+.evento-resumo-left {
+  flex: 1;
+  min-width: 0;
 }
 
 .evento-resumo-date {
-  font-size: 11px;
-  font-weight: 600;
-  color: #8b5cf6;
-  min-width: 45px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #d32f2f;
+  margin-bottom: 4px;
+  padding: 2px 6px;
+  background: rgba(255, 153, 8, 0.1);
+  border-radius: 4px;
+  display: inline-block;
+  min-width: 48px;
+  text-align: center;
 }
 
-.evento-resumo-info {
-  flex: 1;
+.evento-resumo-item.concluido .evento-resumo-date {
+  color: #2e7d32;
+  background: rgba(46, 125, 50, 0.1);
+}
+
+.evento-resumo-item.cancelado .evento-resumo-date {
+  color: #616161;
+  background: rgba(97, 97, 97, 0.1);
 }
 
 .evento-resumo-nome {
   font-weight: 600;
-  color: #333;
-  font-size: 12px;
+  color: #1e293b;
+  font-size: 13px;
+  margin-bottom: 4px;
+  line-height: 1.4;
 }
 
-.evento-resumo-horario {
+/* DETALHES: HORÁRIO, RESPONSÁVEL E LOCAL */
+.evento-resumo-detail {
   font-size: 11px;
-  color: #666;
+  color: #4b5563;
   margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.5;
 }
 
+.evento-resumo-detail:first-child {
+  margin-top: 4px;
+}
+
+/* RESPONSÁVEL E LOCAL ESPECÍFICOS */
+.evento-resumo-detail.responsavel {
+  color: #1e40af;
+  font-weight: 500;
+}
+
+.evento-resumo-detail.local {
+  color: #7e2d87;
+  font-style: italic;
+}
+
+/* AÇÕES À DIREITA (CHECK, BOTÕES) */
+.evento-resumo-actions {
+  display: flex;
+  flex-direction: row; /* MUDADO DE column PARA row */
+  gap: 5px; /* Espaçamento entre os botões */
+  min-width: 120px; /* Largura mínima para os botões */
+  padding-left: 12px;
+}
+
+/* BOTÃO DE CHECK DE CONCLUSÃO */
+.evento-action-btn.check {
+  width: 26px;
+  height: 26px;
+  border: 2px solid #cbd5e1;
+  border-radius: 50%;
+  background: white;
+  color: #cbd5e1;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.evento-action-btn.check:hover:not(.checked) {
+  border-color: #ff9908;
+  color: #ff9908;
+  transform: scale(1.1);
+}
+
+.evento-action-btn.check.checked {
+  background: #2e7d32;
+  border-color: #2e7d32;
+  color: white;
+  font-weight: bold;
+  transform: scale(1.05);
+}
+
+.evento-action-btn.check.checked:hover {
+  background: #1b5e20;
+  border-color: #1b5e20;
+  transform: scale(1.15);
+}
+
+/* BOTÕES DE AÇÃO (CANCELAR, REPROGRAMAR, EXCLUIR) */
+.evento-action-btn {
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #4b5563;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.evento-action-btn:hover {
+  transform: scale(1.1);
+}
+
+.evento-action-btn.reprogramar {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.evento-action-btn.reprogramar:hover {
+  background: #bbdefb;
+}
+
+.evento-action-btn.cancelar {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.evento-action-btn.cancelar:hover {
+  background: #ffcdd2;
+}
+
+.evento-action-btn.delete {
+  background: #f5f5f5;
+  color: #616161;
+}
+
+.evento-action-btn.delete:hover {
+  background: #e0e0e0;
+  color: #424242;
+}
+
+/* CONTAINER DE REPROGRAMAÇÃO (INPUT + BOTÕES) */
+.reprogramar-container {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px;
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  min-width: 200px;
+  
+}
+
+.reprogramar-input {
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  width: 100%;
+  background: #fff;
+}
+
+.reprogramar-input:focus {
+  outline: none;
+  border-color: #ff9908;
+  box-shadow: 0 0 0 2px rgba(255, 153, 8, 0.25);
+}
+
+.reprogramar-confirm,
+.reprogramar-cancel {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.reprogramar-confirm {
+  background: #2e7d32;
+  color: white;
+}
+
+.reprogramar-confirm:hover {
+  background: #1b5e20;
+  transform: scale(1.1);
+}
+
+.reprogramar-cancel {
+  background: #d32f2f;
+  color: white;
+}
+
+.reprogramar-cancel:hover {
+  background: #b71c1c;
+  transform: scale(1.1);
+}
+
+/* BADGES DE STATUS */
+.evento-status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 14px;
+  font-size: 10px;
+  font-weight: 700;
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.evento-status-badge.concluido {
+  background: rgba(46, 125, 50, 0.15);
+  color: #2e7d32;
+}
+
+.evento-status-badge.cancelado {
+  background: rgba(97, 97, 97, 0.15);
+  color: #616161;
+}
+
+/* VER MAIS EVENTOS */
 .ver-mais-eventos {
   text-align: center;
-  padding: 6px;
-  color: #8b5cf6;
-  font-size: 11px;
+  padding: 8px;
+  color: #ff9908;
+  font-size: 12px;
   font-weight: 600;
-  margin-top: 6px;
+  margin-top: 10px;
+  cursor: pointer;
+  border-radius: 6px;
+  background: rgba(255, 153, 8, 0.05);
+  transition: all 0.2s;
 }
+
+.ver-mais-eventos:hover {
+  background: rgba(255, 153, 8, 0.15);
+  color: #e68a00;
+}
+
+/* ========================================
+   RESPONSIVIDADE
+   ======================================== */
+
+@media (max-width: 600px) {
+  .evento-resumo-content {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .evento-resumo-actions {
+    flex-direction: row;
+    width: 100%;
+    justify-content: flex-end;
+    padding-left: 0;
+  }
+  
+  .evento-resumo-date {
+    font-size: 11px;
+    min-width: auto;
+  }
+  
+  .cal-grid {
+    gap: 2px;
+    padding: 8px;
+  }
+  
+  .cal-day {
+    height: 40px;
+    padding-top: 4px;
+  }
+  
+  .day-num {
+    font-size: 12px;
+  }
+}
+
+/* ========================================
+   CHECKBOX ESTILIZADO
+   ======================================== */
+
+.evento-checkbox-container {
+  display: inline-block;
+  position: relative;
+  padding-left: 30px;
+  margin-bottom: 0;
+  cursor: pointer;
+  font-size: 16px;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  margin-right: 0 !important;
+}
+
+/* Esconder o checkbox padrão */
+.evento-checkbox-container input {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+/* Caixa customizada */
+.evento-checkbox-custom {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 20px;
+  width: 20px;
+  background-color: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  
+}
+
+/* Hover no checkbox */
+.evento-checkbox-container:hover input ~ .evento-checkbox-custom {
+  background-color: #e2e8f0;
+  border-color: #ff9908;
+}
+
+/* Checkbox marcado */
+.evento-checkbox-container input:checked ~ .evento-checkbox-custom {
+  background-color: #2e7d32;
+  border-color: #2e7d32;
+}
+
+/* Ícone de check dentro da caixa */
+.evento-checkbox-custom:after {
+  content: "";
+  position: absolute;
+  display: none;
+}
+
+/* Mostrar ícone quando marcado */
+.evento-checkbox-container input:checked ~ .evento-checkbox-custom:after {
+  display: block;
+}
+
+/* Estilo do ícone de check */
+.evento-checkbox-custom:after {
+  left: 6px;
+  top: 2px;
+  width: 5px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+/* ========================================
+   ÍCONES MATERIAL SYMBOLS
+   ======================================== */
+
+.material-symbols-outlined {
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 400,
+    'GRAD' 0,
+    'opsz' 24;
+  font-size: 18px;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+.evento-resumo-detail .material-symbols-outlined {
+  font-size: 16px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.evento-status-badge .material-symbols-outlined {
+  font-size: 14px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.evento-action-btn .material-symbols-outlined {
+  font-size: 15px;
+}
+
+.reprogramar-confirm .material-symbols-outlined,
+.reprogramar-cancel .material-symbols-outlined {
+  font-size: 18px;
+  vertical-align: middle;
+}
+

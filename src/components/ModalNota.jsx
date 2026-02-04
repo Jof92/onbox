@@ -262,6 +262,9 @@ export default function ModalNota({
                     notaId={notaSelecionada.id}
                     projectId={project?.type === "projeto" ? project.id : null}
                     usuarioId={usuarioId}
+                    projetoNome={project?.name || "Projeto"}
+                    notaNome={notaSelecionada?.nome || "Metas"}
+                    onClose={onCloseVisualizarNota}
                   />
                 );
               case "Diário de Obra":

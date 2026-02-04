@@ -1449,8 +1449,12 @@
 }
 
 /* Estilo para pilhas arquivadas */
-.arquivo-header {
-  background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+.arquivo-header .column-actions-bar {
+  display:none;
+}
+
+.card-item.tipo-metas{
+  border-right: 6px solid #06B6D4CC;
 }
 
 /* Responsividade */

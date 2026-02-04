@@ -597,12 +597,13 @@ export default function Column({
                               }}
                             >
                               <NotaCalendarioCard
-                                nota={nota}
-                                pilhaId={col.id}
-                                usuarioId={usuarioId}
-                                membros={membros || []}
-                                onDelete={() => handleDeleteNota(nota.id, col.id)}
-                              />
+                                  nota={nota}
+                                  pilhaId={col.id}
+                                  usuarioId={usuarioId}
+                                  membros={membros || []}
+                                  containerId={donoContainerId}  // ← ADICIONAR ESTA LINHA
+                                  onDelete={() => handleDeleteNota(nota.id, col.id)}
+                                />
                             </div>
                           )}
                         </Draggable>
