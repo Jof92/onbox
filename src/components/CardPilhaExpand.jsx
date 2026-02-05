@@ -63,6 +63,11 @@ export default function CardPilhaExpand({
     setExpandedNotaView(nota);
   };
 
+  // Função para verificar se a nota está ativa (sendo exibida)
+  const isNotaAtiva = (notaId) => {
+    return expandedNotaView?.id === notaId;
+  };
+
   return (
     <div className="column-expanded-wrapper">
       <div className="expanded-left-panel">
@@ -82,10 +87,14 @@ export default function CardPilhaExpand({
         <div className="expanded-notes-grid">
           {col.notas.map((nota) => {
             const isConcluida = notasConcluidas.has(String(nota.id));
+            const isActive = isNotaAtiva(nota.id); // Verifica se está ativa
 
             if (nota.tipo === "Nota Rápida") {
               return (
-                <div key={String(nota.id)} className="expanded-note-slot">
+                <div 
+                  key={String(nota.id)} 
+                  className={`expanded-note-slot ${isActive ? 'active' : ''}`}
+                >
                   <NotaRapidaCard
                     nota={nota}
                     onSaveResponsavel={onSaveResponsavelRapida}
@@ -116,7 +125,10 @@ export default function CardPilhaExpand({
 
             if (nota.tipo === "Calendário") {
               return (
-                <div key={String(nota.id)} className="expanded-note-slot">
+                <div 
+                  key={String(nota.id)} 
+                  className={`expanded-note-slot ${isActive ? 'active' : ''}`}
+                >
                   <NotaCalendarioCard
                     nota={nota}
                     pilhaId={col.id}
@@ -132,11 +144,11 @@ export default function CardPilhaExpand({
               return (
                 <div
                   key={String(nota.id)}
-                  className="expanded-note-slot"
+                  className={`expanded-note-slot ${isActive ? 'active' : ''}`}
+                  onClick={() => handleNotaClickExpanded(nota)}
                 >
                   <div
                     className="card-item tipo-rdo"
-                    onClick={() => handleNotaClickExpanded(nota)}
                     style={{ cursor: "pointer" }}
                   >
                     <strong>{nota.nome}</strong>
@@ -170,7 +182,7 @@ export default function CardPilhaExpand({
             return (
               <div
                 key={String(nota.id)}
-                className="expanded-note-slot"
+                className={`expanded-note-slot ${isActive ? 'active' : ''}`}
                 onClick={() => handleNotaClickExpanded(nota)}
               >
                 <div

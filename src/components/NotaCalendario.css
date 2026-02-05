@@ -2,7 +2,7 @@
    HEADER SIMPLES DO CALENDÁRIO
    ======================================== */
 
-   /* Material Symbols */
+/* Material Symbols */
 @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
 
 .calendario-header-simples {
@@ -303,7 +303,7 @@
 }
 
 /* ========================================
-   RESUMO DE EVENTOS - ESTILOS COMPLETOS
+   RESUMO DE EVENTOS - NOVO LAYOUT
    ======================================== */
 
 .cal-eventos-resumo {
@@ -329,7 +329,7 @@
 .evento-resumo-item {
   display: flex;
   flex-direction: column;
-  padding: 10px;
+  padding: 12px;
   background: white;
   border-radius: 6px;
   cursor: pointer;
@@ -372,31 +372,37 @@
   box-shadow: 0 3px 8px rgba(255, 153, 8, 0.2);
 }
 
-/* CONTEÚDO DO EVENTO */
+/* ========================================
+   CONTEÚDO DO EVENTO - ESTRUTURA CORRIGIDA
+   ======================================== */
+
 .evento-resumo-content {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 6px;
   width: 100%;
-  gap: 12px;
 }
 
-.evento-resumo-left {
-  flex: 1;
-  min-width: 0;
+/* LINHA 1: DATA + AÇÕES (CHECKBOX, BOTÕES) */
+.evento-resumo-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
 }
 
 .evento-resumo-date {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: #d32f2f;
-  margin-bottom: 4px;
-  padding: 2px 6px;
+  padding: 4px 10px;
   background: rgba(255, 153, 8, 0.1);
-  border-radius: 4px;
-  display: inline-block;
-  min-width: 48px;
+  border-radius: 6px;
+  min-width: 60px;
   text-align: center;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .evento-resumo-item.concluido .evento-resumo-date {
@@ -409,33 +415,65 @@
   background: rgba(97, 97, 97, 0.1);
 }
 
+/* AÇÕES À DIREITA DA DATA */
+.evento-resumo-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: fit-content;
+  flex-shrink: 0;
+}
+
+/* ========================================
+   LINHA 2: NOME DO EVENTO
+   ======================================== */
+
 .evento-resumo-nome {
   font-weight: 600;
   color: #1e293b;
-  font-size: 13px;
-  margin-bottom: 4px;
+  font-size: 14px;
   line-height: 1.4;
+  margin: 0;
+  padding: 4px 0;
+  white-space: normal;
+  word-wrap: break-word;
 }
 
-/* DETALHES: HORÁRIO, RESPONSÁVEL E LOCAL */
+/* ========================================
+   LINHA 3+: DETALHES (HORÁRIO, RESPONSÁVEL, LOCAL)
+   ======================================== */
+
+.evento-resumo-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding-top: 2px;
+}
+
 .evento-resumo-detail {
-  font-size: 11px;
+  font-size: 12px;
   color: #4b5563;
-  margin-top: 2px;
   display: flex;
   align-items: center;
   gap: 6px;
   line-height: 1.5;
+  margin: 0;
 }
 
-.evento-resumo-detail:first-child {
-  margin-top: 4px;
+.evento-resumo-detail .material-symbols-outlined {
+  font-size: 18px;
+  flex-shrink: 0;
+  color: #6b7280;
 }
 
-/* RESPONSÁVEL E LOCAL ESPECÍFICOS */
 .evento-resumo-detail.responsavel {
   color: #1e40af;
   font-weight: 500;
+}
+
+.evento-resumo-detail.responsavel .material-symbols-outlined {
+  color: #1e40af;
 }
 
 .evento-resumo-detail.local {
@@ -443,53 +481,80 @@
   font-style: italic;
 }
 
-/* AÇÕES À DIREITA (CHECK, BOTÕES) */
-.evento-resumo-actions {
-  display: flex;
-  flex-direction: row; /* MUDADO DE column PARA row */
-  gap: 5px; /* Espaçamento entre os botões */
-  min-width: 120px; /* Largura mínima para os botões */
-  padding-left: 12px;
+.evento-resumo-detail.local .material-symbols-outlined {
+  color: #7e2d87;
 }
 
-/* BOTÃO DE CHECK DE CONCLUSÃO */
-.evento-action-btn.check {
-  width: 26px;
-  height: 26px;
-  border: 2px solid #cbd5e1;
-  border-radius: 50%;
-  background: white;
-  color: #cbd5e1;
-  font-size: 16px;
-  display: flex;
+/* ========================================
+   CHECKBOX PERSONALIZADO
+   ======================================== */
+
+.evento-checkbox-container {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
   cursor: pointer;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  margin: 0;
+}
+
+/* Esconder o checkbox padrão */
+.evento-checkbox-container input {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+/* Caixa customizada */
+.evento-checkbox-custom {
+  position: relative;
+  height: 18px;
+  width: 18px;
+  background-color: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
   transition: all 0.2s ease;
-  flex-shrink: 0;
 }
 
-.evento-action-btn.check:hover:not(.checked) {
+/* Hover no checkbox */
+.evento-checkbox-container:hover .evento-checkbox-custom {
+  background-color: #e2e8f0;
   border-color: #ff9908;
-  color: #ff9908;
-  transform: scale(1.1);
 }
 
-.evento-action-btn.check.checked {
-  background: #2e7d32;
+/* Checkbox marcado */
+.evento-checkbox-container input:checked ~ .evento-checkbox-custom {
+  background-color: #2e7d32;
   border-color: #2e7d32;
-  color: white;
-  font-weight: bold;
-  transform: scale(1.05);
 }
 
-.evento-action-btn.check.checked:hover {
-  background: #1b5e20;
-  border-color: #1b5e20;
-  transform: scale(1.15);
+/* Ícone de check dentro da caixa */
+.evento-checkbox-custom:after {
+  content: "";
+  position: absolute;
+  display: none;
+  left: 7px;
+  top: 3px;
+  width: 5px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }
 
-/* BOTÕES DE AÇÃO (CANCELAR, REPROGRAMAR, EXCLUIR) */
+/* Mostrar ícone quando marcado */
+.evento-checkbox-container input:checked ~ .evento-checkbox-custom:after {
+  display: block;
+}
+
+/* ========================================
+   BOTÕES DE AÇÃO
+   ======================================== */
+
 .evento-action-btn {
   width: 20px;
   height: 20px;
@@ -502,8 +567,9 @@
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
-  font-size: 16px;
+  font-size: 18px;
   flex-shrink: 0;
+  padding: 0;
 }
 
 .evento-action-btn:hover {
@@ -538,7 +604,39 @@
   color: #424242;
 }
 
-/* CONTAINER DE REPROGRAMAÇÃO (INPUT + BOTÕES) */
+/* ========================================
+   BADGES DE STATUS (depois do nome do evento)
+   ======================================== */
+
+.evento-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 16px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  margin-top: 4px;
+  align-self: flex-start;
+}
+
+.evento-status-badge.concluido {
+  background: rgba(46, 125, 50, 0.15);
+  color: #2e7d32;
+}
+
+.evento-status-badge.cancelado {
+  background: rgba(97, 97, 97, 0.15);
+  color: #616161;
+}
+
+/* ========================================
+   CONTAINER DE REPROGRAMAÇÃO
+   ======================================== */
+
 .reprogramar-container {
   display: flex;
   gap: 6px;
@@ -547,8 +645,9 @@
   background: white;
   border-radius: 6px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
-  min-width: 200px;
-  
+  min-width: 220px;
+  position: absolute;
+  right: 10px;
 }
 
 .reprogramar-input {
@@ -558,6 +657,7 @@
   font-size: 13px;
   width: 100%;
   background: #fff;
+  flex: 1;
 }
 
 .reprogramar-input:focus {
@@ -568,17 +668,17 @@
 
 .reprogramar-confirm,
 .reprogramar-cancel {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  font-weight: bold;
-  font-size: 16px;
+  font-size: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
+  flex-shrink: 0;
 }
 
 .reprogramar-confirm {
@@ -601,29 +701,10 @@
   transform: scale(1.1);
 }
 
-/* BADGES DE STATUS */
-.evento-status-badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 14px;
-  font-size: 10px;
-  font-weight: 700;
-  margin-top: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
+/* ========================================
+   VER MAIS EVENTOS
+   ======================================== */
 
-.evento-status-badge.concluido {
-  background: rgba(46, 125, 50, 0.15);
-  color: #2e7d32;
-}
-
-.evento-status-badge.cancelado {
-  background: rgba(97, 97, 97, 0.15);
-  color: #616161;
-}
-
-/* VER MAIS EVENTOS */
 .ver-mais-eventos {
   text-align: center;
   padding: 8px;
@@ -647,21 +728,34 @@
    ======================================== */
 
 @media (max-width: 600px) {
-  .evento-resumo-content {
+  .evento-resumo-header {
     flex-direction: column;
-    gap: 10px;
+    align-items: flex-start;
+    gap: 8px;
   }
   
   .evento-resumo-actions {
-    flex-direction: row;
     width: 100%;
     justify-content: flex-end;
-    padding-left: 0;
+    padding-top: 4px;
+    border-top: 1px solid #eee;
   }
   
   .evento-resumo-date {
-    font-size: 11px;
+    font-size: 12px;
     min-width: auto;
+    padding: 3px 8px;
+  }
+  
+  .evento-action-btn {
+    width: 24px;
+    height: 24px;
+    font-size: 16px;
+  }
+  
+  .evento-checkbox-custom {
+    height: 20px;
+    width: 20px;
   }
   
   .cal-grid {
@@ -680,82 +774,6 @@
 }
 
 /* ========================================
-   CHECKBOX ESTILIZADO
-   ======================================== */
-
-.evento-checkbox-container {
-  display: inline-block;
-  position: relative;
-  padding-left: 30px;
-  margin-bottom: 0;
-  cursor: pointer;
-  font-size: 16px;
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
-  margin-right: 0 !important;
-}
-
-/* Esconder o checkbox padrão */
-.evento-checkbox-container input {
-  position: absolute;
-  opacity: 0;
-  cursor: pointer;
-  height: 0;
-  width: 0;
-}
-
-/* Caixa customizada */
-.evento-checkbox-custom {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 20px;
-  width: 20px;
-  background-color: #f1f5f9;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  
-}
-
-/* Hover no checkbox */
-.evento-checkbox-container:hover input ~ .evento-checkbox-custom {
-  background-color: #e2e8f0;
-  border-color: #ff9908;
-}
-
-/* Checkbox marcado */
-.evento-checkbox-container input:checked ~ .evento-checkbox-custom {
-  background-color: #2e7d32;
-  border-color: #2e7d32;
-}
-
-/* Ícone de check dentro da caixa */
-.evento-checkbox-custom:after {
-  content: "";
-  position: absolute;
-  display: none;
-}
-
-/* Mostrar ícone quando marcado */
-.evento-checkbox-container input:checked ~ .evento-checkbox-custom:after {
-  display: block;
-}
-
-/* Estilo do ícone de check */
-.evento-checkbox-custom:after {
-  left: 6px;
-  top: 2px;
-  width: 5px;
-  height: 10px;
-  border: solid white;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
-}
-
-/* ========================================
    ÍCONES MATERIAL SYMBOLS
    ======================================== */
 
@@ -765,30 +783,12 @@
     'wght' 400,
     'GRAD' 0,
     'opsz' 24;
-  font-size: 18px;
+  font-size: 14px;
   vertical-align: middle;
   line-height: 1;
-}
-
-.evento-resumo-detail .material-symbols-outlined {
-  font-size: 16px;
-  margin-right: 6px;
-  vertical-align: middle;
 }
 
 .evento-status-badge .material-symbols-outlined {
   font-size: 14px;
   margin-right: 4px;
-  vertical-align: middle;
 }
-
-.evento-action-btn .material-symbols-outlined {
-  font-size: 15px;
-}
-
-.reprogramar-confirm .material-symbols-outlined,
-.reprogramar-cancel .material-symbols-outlined {
-  font-size: 18px;
-  vertical-align: middle;
-}
-

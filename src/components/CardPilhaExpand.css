@@ -81,6 +81,91 @@
   overflow: hidden;
 }
 
+/* ========================================
+   DESTAQUE PARA NOTA ATIVA NO EXPAND
+   ======================================== */
+
+/* Card item da nota ativa */
+.expanded-note-slot.active .card-item {
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  position: relative;
+}
+
+/* Efeito de pulse suave para a nota ativa */
+.expanded-note-slot.active .card-item {
+  animation: pulseHighlight 2s ease-in-out infinite;
+}
+
+@keyframes pulseHighlight {
+  0%, 100% {
+    box-shadow: 0 0 0 3px rgba(255, 153, 8, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(255, 153, 8, 0.35);
+  }
+}
+
+/* Destaque especial para Nota Rápida ativa */
+.expanded-note-slot.active .nota-rapida-card {
+  border: 2px solid #ff9908;
+  box-shadow: 0 0 0 3px rgba(255, 153, 8, 0.2);
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+}
+
+/* Destaque especial para Calendário ativo */
+.expanded-note-slot.active .nota-calendario-card {
+  border: 2px solid #ff9908;
+  box-shadow: 0 0 0 3px rgba(255, 153, 8, 0.2);
+  transform: scale(1.01);
+}
+
+/* Badge indicadora de nota ativa */
+.expanded-note-slot.active::before {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  height: 4px;
+  background: linear-gradient(90deg, #ff9908, #ffd69d, #ff9908);
+  border-radius: 4px 4px 0 0;
+  z-index: 20;
+}
+
+/* Título da nota ativa com destaque */
+.expanded-note-slot.active .card-item strong {
+  color: #d97706;
+  font-weight: 700;
+}
+
+/* ========================================
+   HOVER SOBRE NOTA ATIVA
+   ======================================== */
+
+.expanded-note-slot.active:hover {
+  transform: scale(1.03);
+}
+
+.expanded-note-slot.active:hover .card-item {
+  box-shadow: 0 0 0 5px rgba(255, 153, 8, 0.3);
+}
+
+/* ========================================
+   NOTA RÁPIDA - DESTAQUE ATIVO
+   ======================================== */
+
+.expanded-note-slot.active .nota-rapida-card {
+  animation: pulseHighlight 2s ease-in-out infinite;
+}
+
+/* ========================================
+   CALENDÁRIO - DESTAQUE ATIVO
+   ======================================== */
+
+.expanded-note-slot.active .nota-calendario-card {
+  animation: pulseHighlight 2s ease-in-out infinite;
+}
+
 /* Dentro do slot, o .card-item preenche toda a altura */
 .expanded-note-slot .card-item {
   width: 100%;

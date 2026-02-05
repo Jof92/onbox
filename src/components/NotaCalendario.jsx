@@ -25,7 +25,6 @@ export default function NotaCalendarioCard({
   const [reprogramandoId, setReprogramandoId] = useState(null);
   const [novaDataReprogramacao, setNovaDataReprogramacao] = useState("");
 
-  // Buscar membros do container
   useEffect(() => {
     const loadMembrosContainer = async () => {
       if (!containerId) return;
@@ -198,16 +197,73 @@ export default function NotaCalendarioCard({
     }
   };
 
+  const enviarNotificacoesCancelamento = async (evento) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: userProfile } = await supabase
+        .from("profiles")
+        .select("nickname, nome")
+        .eq("id", user.id)
+        .single();
+
+      const nomeUsuario = userProfile?.nickname || userProfile?.nome || "Usuário";
+
+      if (!containerId) return;
+
+      const { data: convites } = await supabase
+        .from("convites")
+        .select("user_id")
+        .eq("container_id", containerId)
+        .eq("status", "aceito");
+
+      if (!convites || convites.length === 0) return;
+
+      const dataEvento = new Date(evento.data + 'T00:00:00');
+      const diaFormatado = dataEvento.getDate();
+      const mesFormatado = dataEvento.toLocaleDateString('pt-BR', { month: 'long' });
+
+      const mensagem = `${diaFormatado} de ${mesFormatado} - ${nomeUsuario} cancelou o evento "${evento.evento}".`;
+
+      const notificacoes = convites
+        .filter(c => c.user_id !== user.id)
+        .map(c => ({
+          user_id: c.user_id,
+          remetente_id: user.id,
+          mensagem: mensagem,
+          tipo: "evento_calendario",
+          tipo_nota: "Calendário",
+          nota_id: nota.id,
+          container_id: containerId,
+          lido: false,
+          created_at: new Date().toISOString()
+        }));
+
+      if (notificacoes.length > 0) {
+        await supabase.from("notificacoes").insert(notificacoes);
+      }
+    } catch (err) {
+      console.error("Erro ao enviar notificações de cancelamento:", err);
+    }
+  };
+
   const handleCancelarEvento = async (eventoId) => {
     if (!window.confirm("Deseja cancelar este evento?")) return;
 
     try {
+      const eventoAtual = eventos.find(e => e.id === eventoId);
+
       const { error } = await supabase
         .from("eventos_calendario")
         .update({ status: 'cancelado' })
         .eq("id", eventoId);
 
       if (error) throw error;
+
+      if (eventoAtual) {
+        await enviarNotificacoesCancelamento(eventoAtual);
+      }
 
       await loadEventos();
     } catch (err) {
@@ -405,128 +461,140 @@ export default function NotaCalendarioCard({
                     }}
                   >
                     <div className="evento-resumo-content">
-                      <div className="evento-resumo-left">
+                      <div className="evento-resumo-header">
                         <div className="evento-resumo-date">{dataFormatada}</div>
-                        <div className="evento-resumo-info">
-                          <div className="evento-resumo-nome">{evento.evento}</div>
-                          {evento.horario_inicio && (
-                            <div className="evento-resumo-detail horario">
-                              <span className="material-symbols-outlined">schedule</span>
-                              {evento.horario_inicio}
-                              {evento.horario_termino && ` - ${evento.horario_termino}`}
-                            </div>
+                        
+                        <div className="evento-resumo-actions">
+                          {!isCancelado && (
+                            <label 
+                              className="evento-checkbox-container"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isConcluido}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleEventStatus(evento.id, statusEvento);
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <span className="evento-checkbox-custom"></span>
+                            </label>
                           )}
-                          {responsavel && (
-                            <div className="evento-resumo-detail responsavel">
-                              <span className="material-symbols-outlined">person</span>
-                              {responsavel.nickname || responsavel.nome}
-                            </div>
+
+                          {!isConcluido && (
+                            <>
+                              {isReprogramando ? (
+                                <div 
+                                  className="reprogramar-container" 
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <input
+                                    type="date"
+                                    value={novaDataReprogramacao}
+                                    onChange={(e) => setNovaDataReprogramacao(e.target.value)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="reprogramar-input"
+                                  />
+                                  <button
+                                    className="reprogramar-confirm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (novaDataReprogramacao) {
+                                        handleReprogramarEvento(evento.id, novaDataReprogramacao);
+                                      }
+                                    }}
+                                  >
+                                    <span className="material-symbols-outlined">check</span>
+                                  </button>
+                                  <button
+                                    className="reprogramar-cancel"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setReprogramandoId(null);
+                                      setNovaDataReprogramacao("");
+                                    }}
+                                  >
+                                    <span className="material-symbols-outlined">close</span>
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  className="evento-action-btn reprogramar"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setReprogramandoId(evento.id);
+                                    setNovaDataReprogramacao(evento.data);
+                                  }}
+                                  title="Reprogramar"
+                                >
+                                  <span className="material-symbols-outlined">calendar_month</span>
+                                </button>
+                              )}
+
+                              <button
+                                className="evento-action-btn cancelar"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCancelarEvento(evento.id);
+                                }}
+                                title="Cancelar evento"
+                              >
+                                <span className="material-symbols-outlined">cancel</span>
+                              </button>
+                            </>
                           )}
-                          {evento.local && (
-                            <div className="evento-resumo-detail local">
-                              <span className="material-symbols-outlined">location_on</span>
-                              {evento.local}
-                            </div>
-                          )}
-                          {isConcluido && (
-                            <div className="evento-status-badge concluido">
-                              <span className="material-symbols-outlined">check_circle</span>
-                              Concluído
-                            </div>
-                          )}
-                          {isCancelado && (
-                            <div className="evento-status-badge cancelado">
-                              <span className="material-symbols-outlined">cancel</span>
-                              Cancelado
-                            </div>
-                          )}
+
+                          <button
+                            className="evento-action-btn delete"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteEvento(evento.id, e);
+                            }}
+                            title="Excluir evento"
+                          >
+                            <span className="material-symbols-outlined">delete</span>
+                          </button>
                         </div>
                       </div>
 
-                      <div className="evento-resumo-actions">
-                        {!isCancelado && (
-                          <label className="evento-checkbox-container">
-                            <input
-                              type="checkbox"
-                              checked={isConcluido}
-                              onChange={(e) => {
-                                e.stopPropagation();
-                                handleToggleEventStatus(evento.id, statusEvento);
-                              }}
-                              onClick={(e) => e.stopPropagation()}
-                            />
-                            <span className="evento-checkbox-custom"></span>
-                          </label>
+                      <div className="evento-resumo-nome">{evento.evento}</div>
+
+                      <div className="evento-resumo-info">
+                        {evento.horario_inicio && (
+                          <div className="evento-resumo-detail horario">
+                            <span className="material-symbols-outlined">schedule</span>
+                            {evento.horario_inicio}
+                            {evento.horario_termino && ` - ${evento.horario_termino}`}
+                          </div>
                         )}
-
-                        {!isConcluido && (
-                          <>
-                            {isReprogramando ? (
-                              <div className="reprogramar-container" onClick={(e) => e.stopPropagation()}>
-                                <input
-                                  type="date"
-                                  value={novaDataReprogramacao}
-                                  onChange={(e) => setNovaDataReprogramacao(e.target.value)}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="reprogramar-input"
-                                />
-                                <button
-                                  className="reprogramar-confirm"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (novaDataReprogramacao) {
-                                      handleReprogramarEvento(evento.id, novaDataReprogramacao);
-                                    }
-                                  }}
-                                >
-                                  <span className="material-symbols-outlined">check</span>
-                                </button>
-                                <button
-                                  className="reprogramar-cancel"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setReprogramandoId(null);
-                                    setNovaDataReprogramacao("");
-                                  }}
-                                >
-                                  <span className="material-symbols-outlined">close</span>
-                                </button>
-                              </div>
-                            ) : (
-                              <button
-                                className="evento-action-btn reprogramar"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setReprogramandoId(evento.id);
-                                  setNovaDataReprogramacao(evento.data);
-                                }}
-                                title="Reprogramar"
-                              >
-                                <span className="material-symbols-outlined">calendar_month</span>
-                              </button>
-                            )}
-
-                            <button
-                              className="evento-action-btn cancelar"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleCancelarEvento(evento.id);
-                              }}
-                              title="Cancelar evento"
-                            >
-                              <span className="material-symbols-outlined">cancel</span>
-                            </button>
-                          </>
+                        {responsavel && (
+                          <div className="evento-resumo-detail responsavel">
+                            <span className="material-symbols-outlined">person</span>
+                            {responsavel.nickname || responsavel.nome}
+                          </div>
                         )}
-
-                        <button
-                          className="evento-action-btn delete"
-                          onClick={(e) => handleDeleteEvento(evento.id, e)}
-                          title="Excluir evento"
-                        >
-                          <span className="material-symbols-outlined">delete</span>
-                        </button>
+                        {evento.local && (
+                          <div className="evento-resumo-detail local">
+                            <span className="material-symbols-outlined">location_on</span>
+                            {evento.local}
+                          </div>
+                        )}
                       </div>
+
+                      {isConcluido && (
+                        <div className="evento-status-badge concluido">
+                          <span className="material-symbols-outlined">check_circle</span>
+                          Concluído
+                        </div>
+                      )}
+                      {isCancelado && (
+                        <div className="evento-status-badge cancelado">
+                          <span className="material-symbols-outlined">cancel</span>
+                          Cancelado
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

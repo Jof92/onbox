@@ -15,11 +15,9 @@ export default function ModalEventoCalendario({
   onSave,
   projetoNome,
   notaNome,
-  // NOVO: Aceitar objetos também (compatível com ambos os modos)
   notaAtual,
   projetoAtual
 }) {
-  // NOVO: Extrair nomes dos objetos se forem passados, senão usar as props antigas
   const nomeProjetoFinal = projetoNome || projetoAtual?.name || projetoAtual?.nome || "Projeto";
   const nomeNotaFinal = notaNome || notaAtual?.nome || "Calendário";
   const notaIdFinal = notaId || notaAtual?.id;
@@ -42,7 +40,6 @@ export default function ModalEventoCalendario({
   const [offsetDias, setOffsetDias] = useState(0);
   const [eventosDoMes, setEventosDoMes] = useState({});
 
-  // Gerar os 7 dias com base no offset
   useEffect(() => {
     if (selectedDate) {
       const dataBase = new Date(selectedDate + 'T00:00:00');
@@ -57,7 +54,6 @@ export default function ModalEventoCalendario({
         const mes = data.toLocaleDateString('pt-BR', { month: 'short' });
         const dataStr = data.toISOString().split('T')[0];
         
-        // Verificar se é hoje (data atual do sistema)
         const hoje = new Date().toISOString().split('T')[0];
         
         dias.push({
@@ -74,7 +70,6 @@ export default function ModalEventoCalendario({
     }
   }, [selectedDate, offsetDias, dataSelecionada]);
 
-  // Carregar contagem de eventos do mês
   useEffect(() => {
     loadEventosDoMes();
   }, [notaIdFinal, selectedDate, offsetDias]);
@@ -108,7 +103,6 @@ export default function ModalEventoCalendario({
   const loadEventosDoMes = async () => {
     if (!notaIdFinal) return;
 
-    // Buscar eventos de um período maior (30 dias antes e depois)
     const dataBase = new Date(selectedDate + 'T00:00:00');
     const dataInicio = new Date(dataBase);
     dataInicio.setDate(dataBase.getDate() - 30 + offsetDias);
@@ -123,7 +117,6 @@ export default function ModalEventoCalendario({
       .lte("data", dataFim.toISOString().split('T')[0]);
 
     if (!error && data) {
-      // Contar eventos por dia
       const contagem = {};
       data.forEach(evento => {
         contagem[evento.data] = (contagem[evento.data] || 0) + 1;
@@ -151,7 +144,6 @@ export default function ModalEventoCalendario({
     setDataSelecionada(data);
   };
 
-  // CORRIGIDO: Navegação dia a dia (não de 7 em 7)
   const handleNavegacaoAnterior = () => {
     setOffsetDias(prev => prev - 1);
   };
@@ -173,6 +165,73 @@ export default function ModalEventoCalendario({
   const formatarHorario = (horario) => {
     if (!horario) return "";
     return horario.replace(":", "h");
+  };
+
+  const enviarNotificacoesEvento = async (eventoData, isNovo = true) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: userProfile } = await supabase
+        .from("profiles")
+        .select("nickname, nome")
+        .eq("id", user.id)
+        .single();
+
+      const nomeUsuario = userProfile?.nickname || userProfile?.nome || "Usuário";
+
+      const { data: nota } = await supabase
+        .from("notas")
+        .select("container_id")
+        .eq("id", notaIdFinal)
+        .single();
+
+      if (!nota?.container_id) return;
+
+      const { data: convites } = await supabase
+        .from("convites")
+        .select("user_id")
+        .eq("container_id", nota.container_id)
+        .eq("status", "aceito");
+
+      if (!convites || convites.length === 0) return;
+
+      const dataEvento = new Date(eventoData.data + 'T00:00:00');
+      const diaFormatado = dataEvento.getDate();
+      const mesFormatado = dataEvento.toLocaleDateString('pt-BR', { month: 'long' });
+
+      const horarioTexto = eventoData.horario_inicio && eventoData.horario_termino
+        ? `, no horário de ${eventoData.horario_inicio} às ${eventoData.horario_termino}`
+        : eventoData.horario_inicio
+        ? `, às ${eventoData.horario_inicio}`
+        : "";
+
+      const localTexto = eventoData.local ? `, no local ${eventoData.local}` : "";
+
+      const mensagem = isNovo
+        ? `${diaFormatado} de ${mesFormatado} - ${nomeUsuario} criou um novo evento chamado "${eventoData.evento}", para este dia${horarioTexto}${localTexto}.`
+        : `${diaFormatado} de ${mesFormatado} - ${nomeUsuario} cancelou o evento "${eventoData.evento}".`;
+
+      const notificacoes = convites
+        .filter(c => c.user_id !== user.id)
+        .map(c => ({
+          user_id: c.user_id,
+          remetente_id: user.id,
+          mensagem: mensagem,
+          tipo: "evento_calendario",
+          tipo_nota: "Calendário",
+          nota_id: notaIdFinal,
+          container_id: nota.container_id,
+          lido: false,
+          created_at: new Date().toISOString()
+        }));
+
+      if (notificacoes.length > 0) {
+        await supabase.from("notificacoes").insert(notificacoes);
+      }
+    } catch (err) {
+      console.error("Erro ao enviar notificações:", err);
+    }
   };
 
   const handleSaveEvento = async () => {
@@ -219,20 +278,24 @@ export default function ModalEventoCalendario({
 
         if (error) throw error;
       } else {
+        const eventoData = {
+          nota_id: notaIdFinal,
+          data: dataSelecionada,
+          evento: formEvento.evento.trim(),
+          responsavel_id: formEvento.responsavel_id || null,
+          horario_inicio: formEvento.horario_inicio || null,
+          horario_termino: formEvento.horario_termino || null,
+          local: formEvento.local || null,
+          observacoes: formEvento.observacoes || null
+        };
+
         const { error } = await supabase
           .from("eventos_calendario")
-          .insert([{
-            nota_id: notaIdFinal,
-            data: dataSelecionada,
-            evento: formEvento.evento.trim(),
-            responsavel_id: formEvento.responsavel_id || null,
-            horario_inicio: formEvento.horario_inicio || null,
-            horario_termino: formEvento.horario_termino || null,
-            local: formEvento.local || null,
-            observacoes: formEvento.observacoes || null
-          }]);
+          .insert([eventoData]);
 
         if (error) throw error;
+
+        await enviarNotificacoesEvento(eventoData, true);
       }
 
       setStatusSalvamento("sucesso");
@@ -314,7 +377,6 @@ export default function ModalEventoCalendario({
     }
   };
 
-  // Renderizar bolinhas de eventos
   const renderBolinhasEventos = (quantidadeEventos) => {
     if (!quantidadeEventos || quantidadeEventos === 0) return null;
     
@@ -332,7 +394,6 @@ export default function ModalEventoCalendario({
   return (
     <div className="modal-overlay-evento" onClick={onClose}>
       <div className="modal-evento" onClick={(e) => e.stopPropagation()}>
-        {/* Header com nome do projeto e nota - USA AS VARIÁVEIS FINAIS */}
         <div className="listagem-header-container">
           <div className="listagem-header-titles">
             <span className="project-name">{nomeProjetoFinal}</span>
@@ -349,7 +410,6 @@ export default function ModalEventoCalendario({
           </button>
         </div>
 
-        {/* Navegação de dias com setas */}
         <div className="dias-navegacao-wrapper">
           <button 
             className="navegacao-seta navegacao-anterior"
@@ -389,14 +449,12 @@ export default function ModalEventoCalendario({
         </div>
 
         <div className="modal-evento-body">
-          {/* Data selecionada */}
           <div className="form-group">
             <div className="data-display-header">
               {dataSelecionada ? formatDateDisplay(dataSelecionada) : ""}
             </div>
           </div>
 
-          {/* Botão para expandir/recolher formulário */}
           {!editingEvent && (
             <button 
               className="btn-toggle-formulario"
@@ -408,7 +466,6 @@ export default function ModalEventoCalendario({
             </button>
           )}
 
-          {/* Formulário de evento (recolhível) */}
           {formularioExpandido && (
             <div className="formulario-evento-container">
               <div className="form-group">
@@ -482,7 +539,6 @@ export default function ModalEventoCalendario({
                 />
               </div>
 
-              {/* Action buttons do formulário */}
               <div className="form-action-buttons">
                 <button
                   className="send-btn"
@@ -514,7 +570,6 @@ export default function ModalEventoCalendario({
             </div>
           )}
 
-          {/* Lista de eventos do dia */}
           {eventosNoDia.length > 0 && (
             <div className="eventos-dia-lista">
               <h4>Eventos neste dia:</h4>
