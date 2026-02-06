@@ -612,14 +612,19 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
       let notaEspelhoId;
       if (notaExistente) {
         notaEspelhoId = notaExistente.id;
+        // ✅ MODIFICADO: Adicionar campos de envio
         await supabase
           .from("notas")
           .update({
             projeto_origem_id: projetoAtual.id,
-            nota_original_id: notaAtual.id
+            nota_original_id: notaAtual.id,
+            data_envio: new Date().toISOString(),
+            enviado_por_id: userIdLogado,
+            enviado_por_nome: remetente,
           })
           .eq("id", notaEspelhoId);
       } else {
+        // ✅ MODIFICADO: Adicionar campos de envio
         const { data: novaNota, error: notaError } = await supabase
           .from("notas")
           .insert({
@@ -629,6 +634,9 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
             projeto_origem_id: projetoAtual.id,
             nota_original_id: notaAtual.id,
             enviada: true,
+            data_envio: new Date().toISOString(),
+            enviado_por_id: userIdLogado,
+            enviado_por_nome: remetente,
           })
           .select("id")
           .single();
@@ -892,7 +900,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                         <span>{row.quantidade || ""}</span>
                       )}
                     </td>
-                    {/* ✅ COLUNA DE LOCAÇÃO ATUALIZADA */}
                     <td>
                       {podeEditarDemais ? (
                         <>

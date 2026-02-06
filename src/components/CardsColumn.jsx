@@ -66,6 +66,9 @@ export default function Column({
 }) {
   const colorTrackRefs = useRef({});
   const columnRef = useRef(null);
+  
+  // ✅ NOVO: Estado para armazenar informações das notas recebidas
+  const [notasRecebidosInfo, setNotasRecebidosInfo] = useState({});
 
   const getDiaSemana = (dataString) => {
     if (!dataString) return "";
@@ -78,6 +81,26 @@ export default function Column({
     if (!dataString) return null;
     const [ano, mes, dia] = dataString.split('-');
     return new Date(ano, mes - 1, dia).toLocaleDateString("pt-BR");
+  };
+
+  // ✅ NOVA: Função para formatar data de envio
+  const formatarDataEnvio = (dataString) => {
+    if (!dataString) return '';
+    try {
+      const data = new Date(dataString);
+      const dataFormatada = data.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+      const horaFormatada = data.toLocaleTimeString('pt-BR', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      return `${dataFormatada} às ${horaFormatada}`;
+    } catch (error) {
+      return '';
+    }
   };
 
   const isRecebidos = col.title === "Recebidos";
@@ -195,6 +218,54 @@ export default function Column({
     if (nota.tipo === "Nota Rápida") return;
     setExpandedNotaView(nota);
   };
+
+  // ✅ NOVO: useEffect para carregar informações de notas recebidas
+  useEffect(() => {
+    if (!isRecebidos || !col.notas.length) return;
+
+    const carregarInfosRecebidos = async () => {
+      const infos = {};
+      
+      for (const nota of col.notas) {
+        if (!nota.projeto_origem_id) continue;
+        
+        try {
+          // Buscar nome do projeto
+          const { data: projeto } = await supabase
+            .from('projects')
+            .select('name')
+            .eq('id', nota.projeto_origem_id)
+            .single();
+          
+          // Buscar nome de quem enviou (se houver enviado_por_id)
+          let enviadoPorNome = nota.enviado_por_nome || 'Usuário';
+          if (nota.enviado_por_id) {
+            const { data: perfil } = await supabase
+              .from('profiles')
+              .select('nickname, nome')
+              .eq('id', nota.enviado_por_id)
+              .single();
+            
+            if (perfil) {
+              enviadoPorNome = perfil.nickname || perfil.nome || 'Usuário';
+            }
+          }
+          
+          infos[nota.id] = {
+            projetoNome: projeto?.name || 'Projeto desconhecido',
+            enviadoPor: enviadoPorNome,
+            dataEnvio: nota.data_envio
+          };
+        } catch (error) {
+          console.error('Erro ao carregar info da nota recebida:', nota.id, error);
+        }
+      }
+      
+      setNotasRecebidosInfo(infos);
+    };
+
+    carregarInfosRecebidos();
+  }, [isRecebidos, col.notas]);
 
   useEffect(() => {
     if (!showColorPicker[col.id]) return;
@@ -601,7 +672,7 @@ export default function Column({
                                   pilhaId={col.id}
                                   usuarioId={usuarioId}
                                   membros={membros || []}
-                                  containerId={donoContainerId}  // ← ADICIONAR ESTA LINHA
+                                  containerId={donoContainerId}
                                   onDelete={() => handleDeleteNota(nota.id, col.id)}
                                 />
                             </div>
@@ -673,6 +744,9 @@ export default function Column({
                     const setDataEdit = usarDataEntrega ? setDataEntregaEdit : setDataConclusaoEdit;
                     const saveData = usarDataEntrega ? saveDataEntrega : saveDataConclusao;
 
+                    // ✅ NOVO: Pegar informações de recebidos se existir
+                    const infoRecebido = notasRecebidosInfo[nota.id];
+
                     return (
                       <Draggable key={String(nota.id)} draggableId={String(nota.id)} index={idx} type="CARD">
                         {(prov, snapshot) => (
@@ -723,62 +797,113 @@ export default function Column({
                                 {nota.tipo === "Atas" && notaProgresso[nota.id] !== undefined && <> - {notaProgresso[nota.id]}%</>}
                               </p>
 
-                              <div
-                                className="data-conclusao-container"
-                                data-nota-id={nota.id}
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                {isEditingDate ? (
-                                  <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "4px" }}>
-                                    <input
-                                      type="date"
-                                      value={dataEdit?.[nota.id] || ""}
-                                      onChange={(e) => setDataEdit(prev => ({ ...prev, [nota.id]: e.target.value }))} 
-                                      onClick={(e) => e.stopPropagation()}
-                                      style={{ fontSize: "0.85em", padding: "2px 4px" }}
-                                    />
-                                    <button
+                              {/* ✅ NOVO BLOCO: Informações de Recebidos OU Data de Entrega */}
+                              {isRecebidos && infoRecebido ? (
+                                // Mostrar informações de origem para notas recebidas
+                                <div style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '3px',
+                                  marginTop: '6px',
+                                  padding: '6px 8px',
+                                  backgroundColor: 'rgba(46, 125, 50, 0.05)',
+                                  borderRadius: '4px',
+                                  alignItems: 'center'
+  
+                                }}>
+                                  {infoRecebido.projetoNome && (
+                                    <div style={{ 
+                                      display: 'flex', 
+                                      alignItems: 'baseline', 
+                                      gap: '4px', 
+                                      fontSize: '11px',
+                                      lineHeight: '1.3'
+                                    }}>
+                                      <span style={{ fontWeight: 600, color: '#2e7d32' }}>{infoRecebido.projetoNome}</span>
+                                    </div>
+                                  )}
+                                  {infoRecebido.dataEnvio && (
+                                    <div style={{ 
+                                      display: 'flex', 
+                                      alignItems: 'baseline', 
+                                      gap: '4px', 
+                                      fontSize: '11px',
+                                      lineHeight: '1.3'
+                                    }}>
+                                      <span style={{ color: '#333' }}>{formatarDataEnvio(infoRecebido.dataEnvio)}</span>
+                                    </div>
+                                  )}
+                                  {infoRecebido.enviadoPor && (
+                                    <div style={{ 
+                                      display: 'flex', 
+                                      alignItems: 'baseline', 
+                                      gap: '4px', 
+                                      fontSize: '11px',
+                                      lineHeight: '1.3'
+                                    }}>
+                                      <span style={{ color: '#333' }}>{infoRecebido.enviadoPor}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : !isRecebidos ? (
+                                // Mostrar data de conclusão/entrega para notas normais
+                                <div
+                                  className="data-conclusao-container"
+                                  data-nota-id={nota.id}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {isEditingDate ? (
+                                    <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "4px" }}>
+                                      <input
+                                        type="date"
+                                        value={dataEdit?.[nota.id] || ""}
+                                        onChange={(e) => setDataEdit(prev => ({ ...prev, [nota.id]: e.target.value }))} 
+                                        onClick={(e) => e.stopPropagation()}
+                                        style={{ fontSize: "0.85em", padding: "2px 4px" }}
+                                      />
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          saveData(nota.id, dataEdit[nota.id]);
+                                        }}
+                                        style={{ fontSize: "0.8em" }}
+                                      >
+                                        ✓
+                                      </button>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setDataEdit(prev => {
+                                            const cp = { ...prev };
+                                            delete cp[nota.id];
+                                            return cp;
+                                          });
+                                        }}
+                                        style={{ fontSize: "0.8em", color: "#e53e3e" }}
+                                      >
+                                        ✖
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        saveData(nota.id, dataEdit[nota.id]);
+                                        setDataEdit(prev => ({ ...prev, [nota.id]: dataAtual?.[nota.id] || "" }));
                                       }}
-                                      style={{ fontSize: "0.8em" }}
-                                    >
-                                      ✓
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setDataEdit(prev => {
-                                          const cp = { ...prev };
-                                          delete cp[nota.id];
-                                          return cp;
-                                        });
+                                      style={{
+                                        marginTop: "4px",
+                                        fontSize: "0.85em",
+                                        color: dataAtual?.[nota.id] ? "#444" : "#999",
+                                        fontStyle: dataAtual?.[nota.id] ? "normal" : "italic",
                                       }}
-                                      style={{ fontSize: "0.8em", color: "#e53e3e" }}
                                     >
-                                      ✖
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setDataEdit(prev => ({ ...prev, [nota.id]: dataAtual?.[nota.id] || "" }));
-                                    }}
-                                    style={{
-                                      marginTop: "4px",
-                                      fontSize: "0.85em",
-                                      color: dataAtual?.[nota.id] ? "#444" : "#999",
-                                      fontStyle: dataAtual?.[nota.id] ? "normal" : "italic",
-                                    }}
-                                  >
-                                    {dataAtual?.[nota.id]
-                                      ? formatarDataLocal(dataAtual[nota.id])
-                                      : usarDataEntrega ? "Data para entrega" : "Data da entrega"}
-                                  </div>
-                                )}
-                              </div>
+                                      {dataAtual?.[nota.id]
+                                        ? formatarDataLocal(dataAtual[nota.id])
+                                        : usarDataEntrega ? "Data para entrega" : "Data da entrega"}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : null}
                             </div>
 
                             {!isConcluida && (
