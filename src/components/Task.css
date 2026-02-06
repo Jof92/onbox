@@ -1434,6 +1434,45 @@
   height: 0.8em;
 }
 
+/* Adicione este CSS ao seu arquivo Task.css existente */
+
+/* Informações de criação da tarefa */
+.task-info-criacao {
+  padding: 1rem;
+  margin-top: 1.5rem;
+  border-top: 1px solid #e0e0e0;
+  background-color: #f9f9f9;
+  border-radius: 0.25rem;
+}
+
+.task-info-criacao p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #666;
+  text-align: center;
+}
+
+.task-info-criacao strong {
+  color: #333;
+  font-weight: 600;
+}
+
+/* Variação para modo escuro (se aplicável) */
+@media (prefers-color-scheme: dark) {
+  .task-info-criacao {
+    background-color: #2a2a2a;
+    border-top-color: #444;
+  }
+
+  .task-info-criacao p {
+    color: #aaa;
+  }
+
+  .task-info-criacao strong {
+    color: #eee;
+  }
+}
+
 
 
 /* ==============================

@@ -170,6 +170,14 @@ export default function ProjectForm({
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 
+  // ✅ Função para remover membro
+  const removerMembro = (membroId) => {
+    setFormData((prev) => ({
+      ...prev,
+      membrosSelecionados: prev.membrosSelecionados.filter((m) => m.id !== membroId),
+    }));
+  };
+
   // === Engenheiro ===
   const buscarSugestoesEngenheiro = async (termo) => {
     const resultados = await buscarMembrosDoContainer(termo);
@@ -408,7 +416,7 @@ export default function ProjectForm({
             )}
           </div>
 
-          {/* Avatares dos membros - centralizados */}
+          {/* Avatares dos membros - centralizados com botão X */}
           {formData.membrosSelecionados.length > 0 && (
             <div className="selected-members">
               {formData.membrosSelecionados.map((membro) => (
@@ -421,6 +429,15 @@ export default function ProjectForm({
                     </div>
                   )}
                   <span>{membro.nickname}</span>
+                  {/* ✅ Botão de remover membro */}
+                  <button
+                    type="button"
+                    className="remove-member-btn"
+                    onClick={() => removerMembro(membro.id)}
+                    title={`Remover ${membro.nickname}`}
+                  >
+                    ×
+                  </button>
                 </div>
               ))}
             </div>

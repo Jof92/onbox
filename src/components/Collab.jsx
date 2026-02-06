@@ -21,13 +21,11 @@ export default function Collab({ onClose, user, onOpenTask }) {
   const [selectedPermissions, setSelectedPermissions] = useState({ projetos: [], setores: [] });
   const [loadingProjectsSetores, setLoadingProjectsSetores] = useState(true);
 
-  // 🆕 Contador de notificações por aba
   const [notifCounts, setNotifCounts] = useState({
     mencoes: 0,
     convitesRecebidos: 0
   });
 
-  // 🆕 Função para formatar data de forma relativa
   const formatarDataRelativa = (dataString) => {
     if (!dataString) return "";
     
@@ -49,7 +47,6 @@ export default function Collab({ onClose, user, onOpenTask }) {
     } else if (diferencaDias < 7) {
       return `${diferencaDias} dias atrás`;
     } else {
-      // Formato: DD/MM/YYYY HH:MM
       return data.toLocaleString('pt-BR', {
         day: '2-digit',
         month: '2-digit',
@@ -68,6 +65,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
       "Tarefas": "tipo-tarefas",
       "Nota rápida": "tipo-nota-rapida",
       "RDO": "tipo-rdo",
+      "Calendário": "tipo-calendario",
     };
     return mapa[tipoNota] || "tipo-lista";
   };
@@ -138,6 +136,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
           mensagem,
           lido,
           tipo,
+          tipo_nota,
           created_at,
           remetente:profiles!notificacoes_remetente_id_fkey(id, nome, avatar_url),
           nota:notas(id, nome, tipo)
@@ -179,17 +178,18 @@ export default function Collab({ onClose, user, onOpenTask }) {
 
           const containerNome = container?.nickname || container?.nome || "Container";
 
-          const caminho = [
-            containerNome,
-            unidade?.name || "Unidade",
-            pilha?.title || "Pilha",
-            n.nota?.nome || "Tarefa"
-          ].join(" / ");
+          // Para calendário, não incluir pilha no caminho
+          const isCalendario = n.tipo_nota === "Calendário" || n.tipo === "evento_calendario";
+          
+          const caminho = isCalendario
+            ? [containerNome, unidade?.name || "Unidade", n.nota?.nome || "Calendário"].join(" / ")
+            : [containerNome, unidade?.name || "Unidade", pilha?.title || "Pilha", n.nota?.nome || "Tarefa"].join(" / ");
 
           return {
             ...n,
             tipo: n.tipo || "menção",
-            caminho
+            caminho,
+            isCalendario
           };
         });
       }
@@ -197,7 +197,6 @@ export default function Collab({ onClose, user, onOpenTask }) {
       setConvitesRecebidos(convitesFormatados);
       setMencoes(mencoesFormatadas);
 
-      // 🆕 Atualizar contadores
       setNotifCounts({
         mencoes: mencoesFormatadas.filter(m => !m.lido).length,
         convitesRecebidos: convitesFormatados.filter(c => c.status === "pendente").length
@@ -296,12 +295,10 @@ export default function Collab({ onClose, user, onOpenTask }) {
     fetchProjectsAndSetores();
   }, [fetchNotificacoes, fetchIntegrantes, fetchProjectsAndSetores]);
 
-  // 🆕 Marcar todas as menções como lidas quando abrir a aba
   const handleTabChange = async (tabName) => {
     setActiveTab(tabName);
 
     if (tabName === "notificacoes") {
-      // Marcar todas as menções não lidas como lidas
       const mencoesNaoLidas = mencoes.filter(m => !m.lido);
       if (mencoesNaoLidas.length > 0) {
         const ids = mencoesNaoLidas.map(m => m.id);
@@ -311,7 +308,6 @@ export default function Collab({ onClose, user, onOpenTask }) {
             .update({ lido: true })
             .in("id", ids);
           
-          // Atualizar estado local
           setMencoes(prev => prev.map(m => ({ ...m, lido: true })));
           setNotifCounts(prev => ({ ...prev, mencoes: 0 }));
         } catch (err) {
@@ -424,12 +420,35 @@ export default function Collab({ onClose, user, onOpenTask }) {
 
       if (!onOpenTask) return;
 
+      // Calendário não tem pilha_id, então ajustar navegação
+      const isCalendario = notificacao.isCalendario;
+
       if (nivel === 0) {
         onOpenTask({ container_id: notificacao.container_id, tipo_navegacao: 'container' });
       } else if (nivel === 1) {
-        onOpenTask({ container_id: notificacao.container_id, projeto_id: notificacao.projeto_id, setor_id: notificacao.setor_id, tipo_navegacao: 'unidade' });
+        onOpenTask({ 
+          container_id: notificacao.container_id, 
+          projeto_id: notificacao.projeto_id, 
+          setor_id: notificacao.setor_id, 
+          tipo_navegacao: 'unidade' 
+        });
+      } else if (isCalendario) {
+        // Para calendário, abrir direto a nota (não tem pilha)
+        onOpenTask({
+          container_id: notificacao.container_id,
+          projeto_id: notificacao.projeto_id,
+          setor_id: notificacao.setor_id,
+          nota_id: notificacao.nota_id,
+          tipo_navegacao: 'nota'
+        });
       } else if (nivel === 2) {
-        onOpenTask({ container_id: notificacao.container_id, projeto_id: notificacao.projeto_id, setor_id: notificacao.setor_id, pilha_id: notificacao.pilha_id, tipo_navegacao: 'pilha' });
+        onOpenTask({ 
+          container_id: notificacao.container_id, 
+          projeto_id: notificacao.projeto_id, 
+          setor_id: notificacao.setor_id, 
+          pilha_id: notificacao.pilha_id, 
+          tipo_navegacao: 'pilha' 
+        });
       } else {
         onOpenTask({
           container_id: notificacao.container_id,
@@ -445,7 +464,6 @@ export default function Collab({ onClose, user, onOpenTask }) {
     }
   };
 
-  // 🆕 Função para excluir notificação
   const excluirNotificacao = async (notificacaoId) => {
     const ok = window.confirm("Deseja excluir esta notificação?");
     if (!ok) return;
@@ -456,10 +474,8 @@ export default function Collab({ onClose, user, onOpenTask }) {
         .delete()
         .eq("id", notificacaoId);
       
-      // Atualizar estado local
       setMencoes(prev => prev.filter(n => n.id !== notificacaoId));
       
-      // Atualizar contador se necessário
       const mencoesRestantes = mencoes.filter(n => n.id !== notificacaoId && !n.lido);
       setNotifCounts(prev => ({ ...prev, mencoes: mencoesRestantes.length }));
       
@@ -607,7 +623,7 @@ export default function Collab({ onClose, user, onOpenTask }) {
             ) : (
               mencoes.map((n) => {
                 const partesCaminho = n.caminho ? n.caminho.split(" / ") : [];
-                const tipoClasse = getTipoClasse(n.nota?.tipo);
+                const tipoClasse = getTipoClasse(n.nota?.tipo || n.tipo_nota);
 
                 return (
                   <div
@@ -635,7 +651,6 @@ export default function Collab({ onClose, user, onOpenTask }) {
                           ))}
                         </div>
 
-                        {/* 🆕 Data da notificação */}
                         {n.created_at && (
                           <span className="notificacao-data">
                             {formatarDataRelativa(n.created_at)}

@@ -40,6 +40,10 @@ export default function Task({
   const [inputResponsavel, setInputResponsavel] = useState({});
   const [sugestoesResponsavel, setSugestoesResponsavel] = useState({});
 
+  // Estados para informações de criação da tarefa
+  const [criadorNome, setCriadorNome] = useState("");
+  const [dataCriacao, setDataCriacao] = useState("");
+
   // Fechar modal e input ao clicar fora
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -133,12 +137,14 @@ export default function Task({
     fetchContainerData();
   }, [notaAtual?.id]);
 
-  // Carregar dados da nota
+  // Carregar dados da nota (incluindo criador e data de criação)
   useEffect(() => {
     if (!notaAtual?.id) {
       setDescricao("");
       setAnexosSalvos([]);
       setDataEntregaTarefa("");
+      setCriadorNome("");
+      setDataCriacao("");
       return;
     }
 
@@ -146,14 +152,55 @@ export default function Task({
     const fetchData = async () => {
       setLoading(true);
       try {
-        const { data: nota } = await supabase
+        // Buscar dados da nota
+        const { data: nota, error: notaError } = await supabase
           .from("notas")
-          .select("descricao, data_entrega")
+          .select("descricao, data_entrega, created_at, created_by, responsavel_id")
           .eq("id", notaAtual.id)
           .single();
-        if (isMounted) {
-          setDescricao(nota?.descricao || "");
-          setDataEntregaTarefa(nota?.data_entrega || "");
+        
+        if (notaError) {
+          console.error("Erro ao buscar nota:", notaError);
+        }
+
+        if (isMounted && nota) {
+          setDescricao(nota.descricao || "");
+          setDataEntregaTarefa(nota.data_entrega || "");
+          setDataCriacao(nota.created_at || "");
+
+          // Determinar o ID do criador
+          // Prioridade: created_by > responsavel_id > primeiro responsável
+          let criadorId = nota.created_by || nota.responsavel_id;
+
+          // Se ainda não tiver criador, buscar primeiro responsável
+          if (!criadorId) {
+            const { data: primeiroResp } = await supabase
+              .from("nota_responsaveis")
+              .select("usuario_id")
+              .eq("nota_id", notaAtual.id)
+              .limit(1)
+              .single();
+            
+            criadorId = primeiroResp?.usuario_id;
+          }
+
+          // Buscar informações do criador
+          if (criadorId) {
+            const { data: criadorProfile } = await supabase
+              .from("profiles")
+              .select("nome, nickname")
+              .eq("id", criadorId)
+              .single();
+            
+            if (criadorProfile) {
+              setCriadorNome(criadorProfile.nickname || criadorProfile.nome || "Usuário");
+            } else {
+              setCriadorNome("Usuário");
+            }
+          } else {
+            // Se não encontrar ninguém, deixa vazio (não mostra a seção)
+            setCriadorNome("");
+          }
         }
 
         const { data: anexos } = await supabase
@@ -466,6 +513,17 @@ const handleSalvarDataEntregaTarefa = async (novaData) => {
   }
 };
 
+  // Função para formatar a data de criação
+  const formatarDataCriacao = (dataISO) => {
+    if (!dataISO) return "";
+    const data = new Date(dataISO);
+    return data.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric"
+    });
+  };
+
   const getNomeProjeto = () => projetoAtual?.nome || projetoAtual?.name || "Sem projeto";
   const getNomeNota = () => notaAtual?.nome || notaAtual?.name || "Sem nota";
 
@@ -626,6 +684,16 @@ const handleSalvarDataEntregaTarefa = async (novaData) => {
           containerId={containerIdValidado}
           supabaseClient={supabase}
         />
+      )}
+
+      {/* Informações de criação da tarefa - só aparece se tiver dados */}
+      {(criadorNome && dataCriacao) && (
+        <div className="task-info-criacao">
+          <p>
+            Tarefa criada por <strong>{criadorNome}</strong> em{" "}
+            <strong>{formatarDataCriacao(dataCriacao)}</strong>
+          </p>
+        </div>
       )}
 
       {imagemAmpliada && (
