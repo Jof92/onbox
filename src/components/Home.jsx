@@ -42,10 +42,21 @@ export default function Home({ onOpenLogin }) {
 
   return (
     <div className="home-new-container">
-      {/* Seção 1: Título e Subtítulo */}
-      <section className="home-section">
-        <div className="home-text-content">
-          <h1 className="home-new-title">Do escritório ao canteiro, tudo conectado.</h1>
+      {/* Seção 1: GIF à esquerda, Título à direita, Subtítulo abaixo */}
+      <section className="home-section home-hero-section">
+        <div className="home-hero-content">
+          <div className="home-hero-gif-side">
+            <img 
+              src="https://res.cloudinary.com/dmecovtmm/image/upload/v1770566047/ongif1_qzdzte.gif" 
+              alt="OnBox em ação" 
+              className="home-hero-gif"
+            />
+          </div>
+          <div className="home-hero-text-side">
+            <h1 className="home-new-title">Do escritório ao canteiro, tudo conectado.</h1>
+          </div>
+        </div>
+        <div className="home-hero-subtitle">
           <p className="home-new-subtitle">
             Suas equipes de campo e de escritório trabalhando de forma colaborativa, em tempo real, tudo em um único aplicativo e com as principais funcionalidades utilizadas no dia a dia da construção civil.
           </p>
@@ -166,7 +177,7 @@ export default function Home({ onOpenLogin }) {
       {/* Seção 5: Call to Action */}
       <section className="home-section home-cta-section">
         <div className="home-cta-content">
-          <h2 className="home-cta-title">Faça parte do OnBox é gratuito!</h2>
+          <h2 className="home-cta-title">Faça parte do OnBox. É gratuito!</h2>
           <button className="home-cta-button" onClick={onOpenLogin}>
             Começar Agora
           </button>

@@ -45,11 +45,46 @@ body {
   padding: 0 20px;
 }
 
-/* Seção 1: Título e Subtítulo */
-.home-text-content {
-  text-align: center;
+/* Seção 1: GIF à esquerda, Título à direita, Subtítulo abaixo */
+.home-hero-section {
+  padding: 80px 20px 40px;
+}
+
+.home-hero-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  align-items: center;
+  margin-bottom: 80px;
+}
+
+.home-hero-gif-side {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.home-hero-gif {
+  max-width: 100%;
+  height: auto;
+  border-radius: 16px;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.home-hero-text-side {
   color: white;
-  padding: 60px 20px 40px;
+  display: flex;
+  align-items: center;
 }
 
 .home-new-title {
@@ -58,6 +93,12 @@ body {
   margin-bottom: 30px;
   line-height: 1.3;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.home-hero-subtitle {
+  text-align: center;
+  color: white;
+  padding: 0 20px;
 }
 
 .home-new-subtitle {
@@ -322,6 +363,24 @@ body {
 
 /* Responsividade */
 @media (max-width: 992px) {
+  .home-hero-content {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+
+  .home-hero-gif-side,
+  .home-hero-text-side {
+    width: 100%;
+  }
+
+  .home-hero-gif {
+    max-width: 80%;
+  }
+
+  .home-hero-text-side {
+    justify-content: center;
+  }
+
   .home-text-image-content {
     grid-template-columns: 1fr;
   }
@@ -341,6 +400,10 @@ body {
 }
 
 @media (max-width: 768px) {
+  .home-hero-section {
+    padding: 40px 20px 30px;
+  }
+
   .home-new-title {
     font-size: 2.2rem;
   }
@@ -348,6 +411,10 @@ body {
   .home-new-subtitle {
     font-size: 1.15rem;
     padding: 0 15px;
+  }
+
+  .home-hero-gif {
+    max-width: 90%;
   }
 
   .home-features-grid {
@@ -397,6 +464,10 @@ body {
 }
 
 @media (max-width: 480px) {
+  .home-hero-section {
+    padding: 30px 15px 20px;
+  }
+
   .home-new-title {
     font-size: 1.9rem;
     padding: 0 10px;
@@ -405,6 +476,10 @@ body {
   .home-new-subtitle {
     font-size: 1.05rem;
     line-height: 1.7;
+  }
+
+  .home-hero-gif {
+    max-width: 100%;
   }
 
   .home-text-side,
