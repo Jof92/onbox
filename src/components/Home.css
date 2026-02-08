@@ -1,195 +1,466 @@
 /* src/components/Home.css */
 
-/* Container principal — NÃO ALTERADO */
-.home-container {
-  display: flex;
-  height: calc(100vh - 80px); /* Ajuste conforme altura do header */
-  position: relative;
-  overflow: hidden; /* 👈 mantido para não quebrar layout, mas a nova imagem estará fora */
+/* Import do Material Symbols */
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
+
+/* RESET BÁSICO PARA GARANTIR ROLAGEM */
+html, body {
+  overflow-x: hidden !important;
+  scroll-behavior: smooth;
 }
 
-.home-left {
-  width: 35%;
-  background: #fff;
+body {
+  overflow-y: auto !important;
+}
+
+/* Estilo global para Material Symbols */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Container principal */
+.home-new-container {
+  width: 100%;
+  background: linear-gradient(135deg, #66ccea 0%, #010e47 100%);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: #333;
+}
+
+/* Seções com padding adequado */
+.home-section {
+  max-width: 1200px;
+  margin: 0 auto 0 auto;
+  padding: 0 20px;
+}
+
+/* Seção 1: Título e Subtítulo */
+.home-text-content {
+  text-align: center;
+  color: white;
+  padding: 60px 20px 40px;
+}
+
+.home-new-title {
+  font-size: 2.8rem;
+  font-weight: 700;
+  margin-bottom: 30px;
+  line-height: 1.3;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.home-new-subtitle {
+  font-size: 1.4rem;
+  font-weight: 300;
+  line-height: 1.8;
+  max-width: 850px;
+  margin: 0 auto;
+  opacity: 0.95;
+}
+
+/* Seção 2: Imagem principal */
+.home-image-wrapper {
   display: flex;
   justify-content: center;
   align-items: center;
   padding: 20px;
 }
 
-.home-left .home-image {
-  max-width: 100%;
-  max-height: 90vh;
-  object-fit: contain;
+.home-main-image {
+  max-width: 95%;
+  height: auto;
+  border-radius: 16px;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+  transition: transform 0.4s ease;
 }
 
-.home-right {
-  width: 65%;
-  background: linear-gradient(135deg, #ffffff, #f0f0f0);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  position: relative;
-  padding: 40px;
+.home-main-image:hover {
+  transform: scale(1.03);
 }
 
-.home-content {
-  max-width: 80%;
-  text-align: left;
-  padding: 30px;
-  background: #dcdaff;
-  border-radius: 10px;
+/* Seção 3: Funcionalidades em quadrados */
+.home-features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 25px;
+  padding: 50px 20px 30px;
 }
 
-.home-title {
-  font-size: 3rem;
-  font-weight: bold;
-  color: #333;
-  margin-bottom: 1rem;
-  line-height: 1.2;
-}
-
-.home-subtitle {
-  font-size: 1.5rem;
-  color: #555;
-  margin-bottom: 2rem;
-  line-height: 1.5;
-}
-
-.home-features {
-  list-style-type: none;
-  padding: 0;
-  margin: 0 0 2rem 0;
-}
-
-.home-features li {
-  font-size: 1.3rem;
-  color: #444;
-  margin: 0.5rem 0;
-  position: relative;
-  padding-left: 1.5rem;
-  cursor: default; /* ❗ não muda o cursor */
-  transition: background-color 0.2s ease, color 0.2s ease;
-  border-radius: 4px;
-}
-
-.home-features li::before {
-  content: "•"; /* marcador visível */
-  color: #007bff;
-  font-weight: bold;
-  position: absolute;
-  left: 0;
-  font-size: 1.4rem;
-  line-height: 1;
-}
-
-.home-features li:hover {
-  background-color: #f0f8ff;
-  color: #007bff;
-}
-
-.home-button {
-  display: block;
-  width: 200px;
-  padding: 12px 24px;
-  font-size: 1rem;
-  font-weight: bold;
+.home-feature-card {
+  background: white;
+  padding: 35px 20px;
+  border-radius: 16px;
   text-align: center;
-  background: #0078ff;
-  color: #fff;
-  border-radius: 50px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  margin: 0 auto;
+  cursor: default;
+  transition: all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
 }
 
-.home-button:hover {
-  background: #64acff;
-  color: #fff;
+.home-feature-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
 }
 
-/* Botão invisível para o logo — dentro do home-right */
-.home-logo-button {
-  background: none;
-  border: none;
+.home-feature-icon {
+  font-size: 2.8rem;
+  display: block;
+  margin-bottom: 15px;
+  color: #66ccea;
+}
+
+.home-feature-text {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
+  display: block;
+  margin-top: 8px;
+}
+
+/* Seção 4: Texto e Carrossel lado a lado */
+.home-text-image-section {
+  background: white;
+  border-radius: 24px;
+  margin: 70px auto;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
   padding: 0;
-  margin: 0;
+}
+
+.home-text-image-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+
+.home-text-side {
+  padding: 70px 60px;
+  background: linear-gradient(135deg, #b6e0ed 0%, #4e65cc 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+}
+
+.home-benefits-text {
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #fff;
+  max-width: 500px;
+}
+
+.home-image-side {
+  padding: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8f9ff;
+}
+
+/* Carrossel */
+.home-carousel {
+  position: relative;
+  width: 100%;
+  max-width: 550px;
+  height: 450px;
+  overflow: hidden;
+  border-radius: 16px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+}
+
+.home-carousel-track {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.home-carousel-slide {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 0.6s ease-in-out;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.home-carousel-slide.active {
+  opacity: 1;
+  z-index: 10;
+}
+
+.home-carousel-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Botões de navegação */
+.home-carousel-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.9);
+  border: none;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
   cursor: pointer;
-  outline: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+  z-index: 20;
+}
+
+.home-carousel-btn:hover {
+  background: white;
+  transform: translateY(-50%) scale(1.1);
+}
+
+.home-carousel-btn-prev {
+  left: 15px;
+}
+
+.home-carousel-btn-next {
+  right: 15px;
+}
+
+.home-carousel-btn .material-symbols-outlined {
+  font-size: 28px;
+  color: #66ccea;
+}
+
+/* Indicadores de dots */
+.home-carousel-dots {
   position: absolute;
   bottom: 20px;
-  right: 20px;
-  width: fit-content;
-  height: fit-content;
-}
-
-.home-logo {
-  width: 150px;
-  height: auto;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
-}
-
-/* Imagem que aparece AO ROLAR PARA BAIXO — fora do container principal */
-.home-scroll-image-container {
-  width: 100%;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
-  justify-content: center;
-  padding: 40px 20px;
-  background: #fafafa;
-  min-height: 100vh; /* garante espaço para rolagem */
-  box-sizing: border-box;
+  gap: 10px;
+  z-index: 20;
 }
 
-.home-scroll-image {
-  max-width: 90%;
-  height: auto;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+.home-carousel-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.7);
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  padding: 0;
 }
 
-/* Responsivo */
+.home-carousel-dot:hover {
+  background: rgba(255, 255, 255, 0.9);
+  transform: scale(1.2);
+}
+
+.home-carousel-dot.active {
+  background: white;
+  width: 30px;
+  border-radius: 6px;
+}
+
+/* Seção 5: Call to Action */
+.home-cta-section {
+  text-align: center;
+  padding: 20px 20px 20px;
+  background: white;
+  margin-top: 40px;
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.08);
+  max-width: 100%;
+}
+
+.home-cta-title {
+  font-size: 2.2rem;
+  color: #010e47;
+  margin-bottom: 40px;
+  font-weight: 700;
+}
+
+.home-cta-button {
+  background: linear-gradient(135deg, #66ccea 0%, #010e47 100%);
+  color: white;
+  padding: 18px 60px;
+  font-size: 1.25rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 55px;
+  cursor: pointer;
+  transition: all 0.35s ease;
+  box-shadow: 0 8px 25px rgba(102, 204, 234, 0.45);
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.home-cta-button:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 30px rgba(102, 204, 234, 0.6);
+}
+
+.home-cta-button:active {
+  transform: translateY(1px);
+}
+
+/* Responsividade */
+@media (max-width: 992px) {
+  .home-text-image-content {
+    grid-template-columns: 1fr;
+  }
+
+  .home-text-side,
+  .home-image-side {
+    padding: 40px;
+  }
+
+  .home-benefits-text {
+    font-size: 1.3rem;
+  }
+
+  .home-carousel {
+    height: 400px;
+  }
+}
+
 @media (max-width: 768px) {
-  .home-container {
-    flex-direction: column;
-    height: auto;
+  .home-new-title {
+    font-size: 2.2rem;
   }
 
-  .home-left,
-  .home-right {
-    width: 100%;
-    height: auto;
-    min-height: 50vh;
-    padding: 20px;
+  .home-new-subtitle {
+    font-size: 1.15rem;
+    padding: 0 15px;
   }
 
-  .home-content {
+  .home-features-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 20px;
+  }
+
+  .home-feature-card {
+    padding: 30px 15px;
+  }
+
+  .home-feature-icon {
+    font-size: 2.4rem;
+  }
+
+  .home-carousel {
+    height: 350px;
     max-width: 100%;
-    padding: 20px;
   }
 
-  .home-title {
-    font-size: 2rem;
+  .home-carousel-btn {
+    width: 40px;
+    height: 40px;
   }
 
-  .home-button {
-    width: 100%;
-    max-width: 300px;
+  .home-carousel-btn .material-symbols-outlined {
+    font-size: 24px;
   }
 
-  .home-logo-button {
-    bottom: 10px;
-    right: 10px;
+  .home-carousel-dot {
+    width: 10px;
+    height: 10px;
   }
 
-  .home-logo {
-    width: 120px;
+  .home-carousel-dot.active {
+    width: 25px;
   }
 
-  .home-scroll-image-container {
-    padding: 30px 10px;
+  .home-cta-title {
+    font-size: 1.8rem;
   }
 
-  .home-scroll-image {
-    max-width: 100%;
+  .home-cta-button {
+    padding: 16px 50px;
+    font-size: 1.15rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .home-new-title {
+    font-size: 1.9rem;
+    padding: 0 10px;
+  }
+
+  .home-new-subtitle {
+    font-size: 1.05rem;
+    line-height: 1.7;
+  }
+
+  .home-text-side,
+  .home-image-side {
+    padding: 30px 20px;
+  }
+
+  .home-benefits-text {
+    font-size: 1.2rem;
+    text-align: center;
+  }
+
+  .home-features-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+
+  .home-feature-icon {
+    font-size: 2.2rem;
+  }
+
+  .home-feature-text {
+    font-size: 1rem;
+  }
+
+  .home-carousel {
+    height: 300px;
+  }
+
+  .home-carousel-btn {
+    width: 35px;
+    height: 35px;
+  }
+
+  .home-carousel-btn .material-symbols-outlined {
+    font-size: 20px;
+  }
+
+  .home-carousel-dots {
+    bottom: 15px;
+  }
+
+  .home-carousel-dot {
+    width: 8px;
+    height: 8px;
+  }
+
+  .home-carousel-dot.active {
+    width: 20px;
+  }
+
+  .home-cta-title {
+    font-size: 1.6rem;
+  }
+
+  .home-cta-button {
+    padding: 15px 45px;
+    font-size: 1.1rem;
   }
 }
