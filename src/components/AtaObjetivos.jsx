@@ -115,6 +115,8 @@ export default function AtaObjetivos({
   const [inputResponsavel, setInputResponsavel] = useState({});
   const verbosSet = React.useMemo(() => new Set(VERBOS), []); // ✅ Mantido para referência apenas
   const isSaving = useRef(false);
+  const lastTextRef = useRef("");
+  const isUpdatingRef = useRef(false);
 
   useEffect(() => {
     const fetchMeuNome = async () => {
@@ -212,18 +214,65 @@ export default function AtaObjetivos({
 
   useEffect(() => {
     carregarObjetivos();
+    // Reset da referência quando carrega objetivos do banco
+    lastTextRef.current = "";
   }, [carregarObjetivos]);
 
   useEffect(() => {
-    if (!criarObjetivos) return;
+    if (!criarObjetivos || isUpdatingRef.current) return;
 
     // ✅ Extrair SOMENTE por aspas simples (não mais por verbos)
     const validos = extrairObjetivosValidos(texto);
+    
+    // Se o texto não mudou desde a última verificação, não fazer nada
+    if (lastTextRef.current === texto) return;
+    lastTextRef.current = texto;
+    
+    // ✅ Função para verificar se um texto é uma edição de um objetivo existente
+    const encontrarObjetivoEditado = (textoNovo, objetivosExistentes) => {
+      // Procura por correspondência exata primeiro
+      const exata = objetivosExistentes.find(o => o.texto === textoNovo);
+      if (exata) return exata;
+      
+      // Se não encontrar exata, procura por objetivos que começam igual
+      // (considera edição se os primeiros 20 caracteres forem iguais)
+      const minLength = Math.min(20, textoNovo.length);
+      if (minLength < 10) return null; // Muito curto para comparar
+      
+      const prefixoNovo = textoNovo.substring(0, minLength).toLowerCase();
+      
+      return objetivosExistentes.find(o => {
+        if (o.texto.length < 10) return false;
+        const prefixoExistente = o.texto.substring(0, minLength).toLowerCase();
+        return prefixoExistente === prefixoNovo;
+      });
+    };
+
+    isUpdatingRef.current = true;
+
     const novosObjetivos = validos.map(txt => {
-      const existente = objetivosList.find(o => o.texto === txt && o.id && !String(o.id).startsWith('temp'));
-      if (existente) return existente;
-      const tempExistente = objetivosList.find(o => o.texto === txt && String(o.id).startsWith('temp'));
-      return tempExistente || {
+      // Verifica se já existe um objetivo salvo com esse texto (exato ou editado)
+      const existente = encontrarObjetivoEditado(txt, objetivosList.filter(o => o.id && !String(o.id).startsWith('temp')));
+      
+      if (existente) {
+        // Se o texto mudou, atualiza o texto do objetivo existente
+        if (existente.texto !== txt) {
+          return { ...existente, texto: txt, _textoAtualizado: true };
+        }
+        return existente;
+      }
+      
+      // Verifica se já existe um objetivo temporário com esse texto
+      const tempExistente = encontrarObjetivoEditado(txt, objetivosList.filter(o => String(o.id).startsWith('temp')));
+      if (tempExistente) {
+        if (tempExistente.texto !== txt) {
+          return { ...tempExistente, texto: txt, _textoAtualizado: true };
+        }
+        return tempExistente;
+      }
+      
+      // Se não existe, cria um novo
+      return {
         id: `temp-${Date.now()}-${Math.random()}`,
         texto: txt,
         responsaveis: [],
@@ -234,24 +283,61 @@ export default function AtaObjetivos({
       };
     });
 
-    // ✅ Manter objetivos existentes + adicionar novos entre aspas
+    // ✅ Manter objetivos existentes + adicionar/atualizar conforme necessário
     const todosObjetivos = [
-      ...objetivosList.filter(o => o.id && !String(o.id).startsWith('temp')), // Mantém os salvos
+      ...objetivosList.filter(o => {
+        // Mantém objetivos salvos que ainda estão no texto (ou foram editados)
+        if (o.id && !String(o.id).startsWith('temp')) {
+          return validos.some(txt => {
+            if (txt === o.texto) return true;
+            
+            const minLength = Math.min(20, txt.length, o.texto.length);
+            if (minLength < 10) return false;
+            
+            const prefixoTexto = txt.substring(0, minLength).toLowerCase();
+            const prefixoObj = o.texto.substring(0, minLength).toLowerCase();
+            return prefixoTexto === prefixoObj;
+          });
+        }
+        return false;
+      }).map(o => {
+        // Atualiza o texto se foi modificado
+        const novoTexto = novosObjetivos.find(n => n.id === o.id);
+        if (novoTexto && novoTexto._textoAtualizado) {
+          return { ...o, texto: novoTexto.texto };
+        }
+        return o;
+      }),
       ...novosObjetivos.filter(novo => 
-        !objetivosList.some(o => o.texto === novo.texto && o.id && !String(o.id).startsWith('temp'))
+        !objetivosList.some(o => {
+          if (o.id === novo.id) return true;
+          
+          if (o.id && !String(o.id).startsWith('temp')) {
+            if (o.texto === novo.texto) return true;
+            
+            const minLength = Math.min(20, novo.texto.length, o.texto.length);
+            if (minLength < 10) return false;
+            
+            return o.texto.substring(0, minLength).toLowerCase() === novo.texto.substring(0, minLength).toLowerCase();
+          }
+          return false;
+        })
       )
     ];
 
-    const textosAtuais = objetivosList.map(o => o.texto).sort();
-    const textosNovos = todosObjetivos.map(o => o.texto).sort();
-    if (JSON.stringify(textosAtuais) !== JSON.stringify(textosNovos)) {
+    const textosAtuais = objetivosList.map(o => o.texto).sort().join('|');
+    const textosNovos = todosObjetivos.map(o => o.texto).sort().join('|');
+    
+    if (textosAtuais !== textosNovos) {
       setObjetivosList(todosObjetivos);
     }
 
     if (validos.length > 0 || objetivosList.length > 0) {
       setCriarObjetivos(true);
     }
-  }, [texto, criarObjetivos, objetivosList]);
+
+    isUpdatingRef.current = false;
+  }, [texto, criarObjetivos]);
 
   useEffect(() => {
     if (!ataId || !criarObjetivos) return;
@@ -263,13 +349,40 @@ export default function AtaObjetivos({
       try {
         // ✅ Extrair SOMENTE por aspas simples
         const validos = extrairObjetivosValidos(texto);
-        const salvos = new Set(objetivosList
+        const salvos = new Map();
+        
+        objetivosList
           .filter(o => o.id && !String(o.id).startsWith('temp'))
-          .map(o => o.texto));
+          .forEach(o => salvos.set(o.id, o.texto));
+
+        // ✅ Atualizar textos modificados
+        for (const obj of objetivosList) {
+          if (obj.id && !String(obj.id).startsWith('temp') && salvos.has(obj.id)) {
+            const textoOriginal = salvos.get(obj.id);
+            if (textoOriginal !== obj.texto) {
+              await supabase
+                .from("ata_objetivos")
+                .update({ texto: obj.texto })
+                .eq("id", obj.id);
+            }
+          }
+        }
 
         // ✅ SOMENTE inserir novos objetivos entre aspas
-        // ✅ NÃO excluir objetivos antigos (mesmo que não estejam mais no texto)
-        const paraInserir = validos.filter(txt => !salvos.has(txt));
+        const textosSalvos = Array.from(salvos.values());
+        const paraInserir = validos.filter(txt => {
+          // Não inserir se já existe exatamente igual
+          if (textosSalvos.includes(txt)) return false;
+          
+          // Não inserir se é uma edição de um existente (prefixo similar)
+          return !textosSalvos.some(salvo => {
+            const minLength = Math.min(20, txt.length, salvo.length);
+            if (minLength < 10) return false;
+            
+            return txt.substring(0, minLength).toLowerCase() === salvo.substring(0, minLength).toLowerCase();
+          });
+        });
+
         if (paraInserir.length > 0) {
           const inserts = paraInserir.map(txt => ({
             ata_id: ataId,
