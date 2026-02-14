@@ -68,19 +68,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
     }
   }, [tooltipVisualizacao]);
 
-  // Fechar modal ao clicar fora
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (onClose && cardRef.current && !cardRef.current.contains(e.target)) {
-        onClose();
-      }
-    };
-
-    if (onClose) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [onClose]);
 
   // Carrega perfil do usuário logado
   useEffect(() => {

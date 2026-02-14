@@ -74,19 +74,6 @@ export default function Metas({
 
   const cardRef = useRef(null);
 
-  // Fechar ao clicar fora
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (onClose && cardRef.current && !cardRef.current.contains(e.target)) {
-        onClose();
-      }
-    };
-
-    if (onClose) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [onClose]);
 
   // Carrega nome do usuário
   useEffect(() => {

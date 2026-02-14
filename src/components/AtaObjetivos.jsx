@@ -1,10 +1,9 @@
-// src/components/AtaObjetivos.jsx
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../supabaseClient";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faUserPlus, faCalendar } from "@fortawesome/free-solid-svg-icons";
+import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 
-// ✅ Mantido apenas para referência histórica (não usado mais para extrair)
 const VERBOS = [
   "verificar", "quantificar", "viabilizar", "cobrar", "fechar", "iniciar", "definir", "reduzir", "alcançar", "acompanhar", "implementar", "analisar",
   "finalizar", "revisar", "enviar", "agendar", "checar", "executar", "conferir", "monitorar", "organizar", "planejar", "informar",
@@ -17,11 +16,9 @@ const VERBOS = [
 
 const PREFIXO_EXCLUIDO = "[EXCLUIDO]";
 
-// ✅ Nova função: extrai SOMENTE objetivos entre aspas simples
 const extrairObjetivosValidos = (texto) => {
   if (!texto?.trim()) return [];
   
-  // Regex para capturar texto entre aspas simples
   const regex = /'([^']+)'/g;
   const matches = [];
   let match;
@@ -113,11 +110,12 @@ export default function AtaObjetivos({
   const [comentarioTemp, setComentarioTemp] = useState({});
   const [meuNome, setMeuNome] = useState("Você");
   const [inputResponsavel, setInputResponsavel] = useState({});
-  const verbosSet = React.useMemo(() => new Set(VERBOS), []); // ✅ Mantido para referência apenas
+  const verbosSet = React.useMemo(() => new Set(VERBOS), []);
   const isSaving = useRef(false);
   const lastTextRef = useRef("");
   const isUpdatingRef = useRef(false);
 
+  // ✅ Carregar nome do usuário
   useEffect(() => {
     const fetchMeuNome = async () => {
       if (!usuarioId) return;
@@ -127,6 +125,7 @@ export default function AtaObjetivos({
     fetchMeuNome();
   }, [usuarioId]);
 
+  // ✅ Enviar notificação
   const sendNotification = useCallback(async (recipientUserId, message, type, objective) => {
     if (!recipientUserId || !usuarioId) return;
 
@@ -152,6 +151,7 @@ export default function AtaObjetivos({
     }
   }, [usuarioId, notaAtual, projetoAtual, containerAtual]);
 
+  // ✅ CORRIGIDO: Carregar objetivos com ordem
   const carregarObjetivos = useCallback(async () => {
     if (!ataId) {
       setObjetivosList([]);
@@ -163,6 +163,7 @@ export default function AtaObjetivos({
       .from("ata_objetivos")
       .select(`*, profiles(id, nome)`)
       .eq("ata_id", ataId)
+      .order("ordem", { ascending: true })
       .order("id", { ascending: true });
 
     if (ataError) {
@@ -214,64 +215,39 @@ export default function AtaObjetivos({
 
   useEffect(() => {
     carregarObjetivos();
-    // Reset da referência quando carrega objetivos do banco
     lastTextRef.current = "";
   }, [carregarObjetivos]);
 
+  // ✅ CORRIGIDO: Sincronizar texto com objetivos (sem duplicação)
   useEffect(() => {
     if (!criarObjetivos || isUpdatingRef.current) return;
 
-    // ✅ Extrair SOMENTE por aspas simples (não mais por verbos)
     const validos = extrairObjetivosValidos(texto);
     
-    // Se o texto não mudou desde a última verificação, não fazer nada
     if (lastTextRef.current === texto) return;
     lastTextRef.current = texto;
-    
-    // ✅ Função para verificar se um texto é uma edição de um objetivo existente
-    const encontrarObjetivoEditado = (textoNovo, objetivosExistentes) => {
-      // Procura por correspondência exata primeiro
-      const exata = objetivosExistentes.find(o => o.texto === textoNovo);
-      if (exata) return exata;
-      
-      // Se não encontrar exata, procura por objetivos que começam igual
-      // (considera edição se os primeiros 20 caracteres forem iguais)
-      const minLength = Math.min(20, textoNovo.length);
-      if (minLength < 10) return null; // Muito curto para comparar
-      
-      const prefixoNovo = textoNovo.substring(0, minLength).toLowerCase();
-      
-      return objetivosExistentes.find(o => {
-        if (o.texto.length < 10) return false;
-        const prefixoExistente = o.texto.substring(0, minLength).toLowerCase();
-        return prefixoExistente === prefixoNovo;
-      });
-    };
 
     isUpdatingRef.current = true;
 
+    // Map com textos já salvos
+    const textosSalvos = new Map();
+    objetivosList
+      .filter(o => o.id && !String(o.id).startsWith('temp'))
+      .forEach(o => {
+        textosSalvos.set(o.texto.toLowerCase().trim(), o.id);
+      });
+
+    // Mapear objetivos válidos
     const novosObjetivos = validos.map(txt => {
-      // Verifica se já existe um objetivo salvo com esse texto (exato ou editado)
-      const existente = encontrarObjetivoEditado(txt, objetivosList.filter(o => o.id && !String(o.id).startsWith('temp')));
+      const txtNormalizado = txt.toLowerCase().trim();
+      const idExistente = textosSalvos.get(txtNormalizado);
       
-      if (existente) {
-        // Se o texto mudou, atualiza o texto do objetivo existente
-        if (existente.texto !== txt) {
-          return { ...existente, texto: txt, _textoAtualizado: true };
-        }
-        return existente;
+      if (idExistente) {
+        // Objetivo já existe, retorna como está
+        return objetivosList.find(o => o.id === idExistente);
       }
       
-      // Verifica se já existe um objetivo temporário com esse texto
-      const tempExistente = encontrarObjetivoEditado(txt, objetivosList.filter(o => String(o.id).startsWith('temp')));
-      if (tempExistente) {
-        if (tempExistente.texto !== txt) {
-          return { ...tempExistente, texto: txt, _textoAtualizado: true };
-        }
-        return tempExistente;
-      }
-      
-      // Se não existe, cria um novo
+      // Novo objetivo
       return {
         id: `temp-${Date.now()}-${Math.random()}`,
         texto: txt,
@@ -283,54 +259,7 @@ export default function AtaObjetivos({
       };
     });
 
-    // ✅ Manter objetivos existentes + adicionar/atualizar conforme necessário
-    const todosObjetivos = [
-      ...objetivosList.filter(o => {
-        // Mantém objetivos salvos que ainda estão no texto (ou foram editados)
-        if (o.id && !String(o.id).startsWith('temp')) {
-          return validos.some(txt => {
-            if (txt === o.texto) return true;
-            
-            const minLength = Math.min(20, txt.length, o.texto.length);
-            if (minLength < 10) return false;
-            
-            const prefixoTexto = txt.substring(0, minLength).toLowerCase();
-            const prefixoObj = o.texto.substring(0, minLength).toLowerCase();
-            return prefixoTexto === prefixoObj;
-          });
-        }
-        return false;
-      }).map(o => {
-        // Atualiza o texto se foi modificado
-        const novoTexto = novosObjetivos.find(n => n.id === o.id);
-        if (novoTexto && novoTexto._textoAtualizado) {
-          return { ...o, texto: novoTexto.texto };
-        }
-        return o;
-      }),
-      ...novosObjetivos.filter(novo => 
-        !objetivosList.some(o => {
-          if (o.id === novo.id) return true;
-          
-          if (o.id && !String(o.id).startsWith('temp')) {
-            if (o.texto === novo.texto) return true;
-            
-            const minLength = Math.min(20, novo.texto.length, o.texto.length);
-            if (minLength < 10) return false;
-            
-            return o.texto.substring(0, minLength).toLowerCase() === novo.texto.substring(0, minLength).toLowerCase();
-          }
-          return false;
-        })
-      )
-    ];
-
-    const textosAtuais = objetivosList.map(o => o.texto).sort().join('|');
-    const textosNovos = todosObjetivos.map(o => o.texto).sort().join('|');
-    
-    if (textosAtuais !== textosNovos) {
-      setObjetivosList(todosObjetivos);
-    }
+    setObjetivosList(novosObjetivos);
 
     if (validos.length > 0 || objetivosList.length > 0) {
       setCriarObjetivos(true);
@@ -339,6 +268,7 @@ export default function AtaObjetivos({
     isUpdatingRef.current = false;
   }, [texto, criarObjetivos]);
 
+  // ✅ Auto-salvar objetivos novos
   useEffect(() => {
     if (!ataId || !criarObjetivos) return;
 
@@ -347,19 +277,24 @@ export default function AtaObjetivos({
       isSaving.current = true;
 
       try {
-        // ✅ Extrair SOMENTE por aspas simples
         const validos = extrairObjetivosValidos(texto);
         const salvos = new Map();
         
         objetivosList
           .filter(o => o.id && !String(o.id).startsWith('temp'))
-          .forEach(o => salvos.set(o.id, o.texto));
+          .forEach(o => {
+            salvos.set(o.texto.toLowerCase().trim(), {
+              id: o.id,
+              texto: o.texto
+            });
+          });
 
-        // ✅ Atualizar textos modificados
+        // Atualizar textos modificados
         for (const obj of objetivosList) {
-          if (obj.id && !String(obj.id).startsWith('temp') && salvos.has(obj.id)) {
-            const textoOriginal = salvos.get(obj.id);
-            if (textoOriginal !== obj.texto) {
+          if (obj.id && !String(obj.id).startsWith('temp') && salvos.has(obj.texto.toLowerCase().trim())) {
+            const txtNormalizado = obj.texto.toLowerCase().trim();
+            const salvo = salvos.get(txtNormalizado);
+            if (salvo.texto !== obj.texto) {
               await supabase
                 .from("ata_objetivos")
                 .update({ texto: obj.texto })
@@ -368,29 +303,21 @@ export default function AtaObjetivos({
           }
         }
 
-        // ✅ SOMENTE inserir novos objetivos entre aspas
-        const textosSalvos = Array.from(salvos.values());
+        // Inserir novos objetivos
         const paraInserir = validos.filter(txt => {
-          // Não inserir se já existe exatamente igual
-          if (textosSalvos.includes(txt)) return false;
-          
-          // Não inserir se é uma edição de um existente (prefixo similar)
-          return !textosSalvos.some(salvo => {
-            const minLength = Math.min(20, txt.length, salvo.length);
-            if (minLength < 10) return false;
-            
-            return txt.substring(0, minLength).toLowerCase() === salvo.substring(0, minLength).toLowerCase();
-          });
+          const txtNormalizado = txt.toLowerCase().trim();
+          return !salvos.has(txtNormalizado);
         });
 
         if (paraInserir.length > 0) {
-          const inserts = paraInserir.map(txt => ({
+          const inserts = paraInserir.map((txt, idx) => ({
             ata_id: ataId,
             texto: txt,
             concluido: false,
             comentario: "",
             data_entrega: null,
             concluido_em: null,
+            ordem: objetivosList.length + idx,
           }));
 
           const { data: inseridos, error } = await supabase
@@ -404,29 +331,17 @@ export default function AtaObjetivos({
               inseridos.forEach((novo, idx) => {
                 const txt = paraInserir[idx];
                 const tempIndex = atualizado.findIndex(o => 
-                  o.texto === txt && String(o.id).startsWith('temp')
+                  o.texto.toLowerCase().trim() === txt.toLowerCase().trim() && 
+                  String(o.id).startsWith('temp')
                 );
                 if (tempIndex !== -1) {
                   atualizado[tempIndex] = { ...atualizado[tempIndex], id: novo.id };
-                } else {
-                  atualizado.push({
-                    id: novo.id,
-                    texto: txt,
-                    responsaveis: [],
-                    dataEntrega: null,
-                    concluido: false,
-                    concluidoEm: null,
-                    comentario: "",
-                  });
                 }
               });
               return atualizado;
             });
           }
         }
-
-        // ✅ REMOVIDO: Não exclui mais objetivos antigos
-        // Os objetivos criados por verbos anteriormente permanecem salvos
 
       } finally {
         isSaving.current = false;
@@ -436,6 +351,7 @@ export default function AtaObjetivos({
     return () => clearTimeout(timer);
   }, [texto, ataId, criarObjetivos, objetivosList]);
 
+  // ✅ Calcular progresso
   const progressoPercent = objetivosList.length
     ? Math.round((objetivosList.filter(o => o.concluido).length / objetivosList.length) * 100)
     : 0;
@@ -446,6 +362,7 @@ export default function AtaObjetivos({
     }
   }, [progressoPercent, onProgressoChange]);
 
+  // ✅ Toggle objetivo
   const toggleObjetivo = async (i) => {
     const objetivo = objetivosList[i];
     if (!objetivo?.id || !ataId || String(objetivo.id).startsWith('temp')) return;
@@ -474,10 +391,12 @@ export default function AtaObjetivos({
 
       const novoProgresso = Math.round((novos.filter(o => o.concluido).length / novos.length) * 100);
       if (typeof onProgressoChange === "function") onProgressoChange(novoProgresso);
+      
       if (notaAtual?.id) {
         await supabase.from("notas").update({ progresso: novoProgresso }).eq("id", notaAtual.id);
       }
 
+      // Notificar responsáveis
       if (novoConcluido) {
         for (const resp of objetivo.responsaveis) {
           if (resp.usuario_id) {
@@ -493,6 +412,7 @@ export default function AtaObjetivos({
     }
   };
 
+  // ✅ Responsável - Input Change
   const handleResponsavelInputChange = (e, i) => {
     const valor = e.target.value;
     setInputResponsavel(prev => ({ ...prev, [i]: valor }));
@@ -557,6 +477,7 @@ export default function AtaObjetivos({
     }
   };
 
+  // ✅ Adicionar responsável externo
   const adicionarResponsavelExterno = async (nome, i) => {
     const objetivo = objetivosList[i];
     if (objetivo?.concluido) return;
@@ -589,6 +510,7 @@ export default function AtaObjetivos({
     }
   };
 
+  // ✅ Adicionar responsável interno
   const adicionarResponsavelInterno = async (item, i) => {
     const objetivo = objetivosList[i];
     if (objetivo?.concluido) return;
@@ -625,6 +547,7 @@ export default function AtaObjetivos({
     }
   };
 
+  // ✅ Remover responsável
   const removerResponsavel = async (responsavel, i) => {
     const objetivo = objetivosList[i];
     if (objetivo?.concluido) return;
@@ -638,6 +561,7 @@ export default function AtaObjetivos({
     }
   };
 
+  // ✅ Remover objetivo
   const removerObjetivo = async (i) => {
     const objetivo = objetivosList[i];
     if (objetivo?.concluido) {
@@ -657,6 +581,7 @@ export default function AtaObjetivos({
     }
   };
 
+  // ✅ Iniciar edição de comentário
   const iniciarEdicaoComentario = (i, comentarioAtual) => {
     let comentarioPuro = comentarioAtual || "";
     if (comentarioPuro.includes(" — Comentário por ")) {
@@ -667,6 +592,7 @@ export default function AtaObjetivos({
     setComentarioTemp(prev => ({ ...prev, [i]: comentarioPuro }));
   };
 
+  // ✅ Salvar comentário
   const salvarComentario = async (i) => {
     const comentario = comentarioTemp[i] || "";
     const objetivo = objetivosList[i];
@@ -679,11 +605,13 @@ export default function AtaObjetivos({
         .update({ comentario: comentarioComAutor, comentario_por: usuarioId })
         .eq("id", objetivo.id);
       if (error) throw error;
+      
       const novos = [...objetivosList];
       novos[i].comentario = comentarioComAutor;
       setObjetivosList(novos);
       setEditandoComentario(prev => ({ ...prev, [i]: false }));
 
+      // Notificar responsáveis
       for (const resp of objetivo.responsaveis) {
         if (resp.usuario_id) {
           await sendNotification(resp.usuario_id, `Novo comentário em objetivo: ${objetivo.texto}`, "objetivo_comentario", objetivo);
@@ -696,10 +624,12 @@ export default function AtaObjetivos({
     }
   };
 
+  // ✅ Cancelar edição de comentário
   const cancelarComentario = (i) => {
     setEditandoComentario(prev => ({ ...prev, [i]: false }));
   };
 
+  // ✅ Toggle criar objetivos
   const handleCriarObjetivosChange = (e) => {
     const novaEscolha = e.target.checked;
     const temObjetivosSalvos = objetivosList.some(o => o.id && !String(o.id).startsWith('temp'));
@@ -710,6 +640,37 @@ export default function AtaObjetivos({
     setCriarObjetivos(novaEscolha);
     if (!novaEscolha) {
       setObjetivosList([]);
+    }
+  };
+
+  // ✅ CORRIGIDO: Handle drag end com ordem
+  const handleDragEnd = async (result) => {
+    if (!result.destination) return;
+    
+    const sourceIndex = result.source.index;
+    const destIndex = result.destination.index;
+    
+    if (sourceIndex === destIndex) return;
+    
+    const novosObjetivos = Array.from(objetivosList);
+    const [moved] = novosObjetivos.splice(sourceIndex, 1);
+    novosObjetivos.splice(destIndex, 0, moved);
+    
+    setObjetivosList(novosObjetivos);
+    
+    try {
+      // ✅ Atualizar ordem de TODOS os objetivos
+      for (let i = 0; i < novosObjetivos.length; i++) {
+        const objetivo = novosObjetivos[i];
+        if (objetivo.id && !String(objetivo.id).startsWith('temp')) {
+          await supabase
+            .from("ata_objetivos")
+            .update({ ordem: i })
+            .eq("id", objetivo.id);
+        }
+      }
+    } catch (err) {
+      console.error("Erro ao salvar ordem dos objetivos:", err);
     }
   };
 
@@ -728,203 +689,235 @@ export default function AtaObjetivos({
 
       {criarObjetivos && (
         <div className="ata-section">
-          <div className="ata-objectives">
-            {objetivosList.map((o, i) => {
-              const textoCapitalizado = o.texto.charAt(0).toUpperCase() + o.texto.slice(1);
-              const numeroObjetivo = `${i + 1}.`;
-              const isEditing = editandoComentario[i];
-              const isConcluido = o.concluido;
-              const podeDesmarcar = podeDesmarcarConclusao(o.concluidoEm);
-              const comentarioPreview = comentarioTemp[i] || "";
-              const comentarioComAutorPreview = comentarioPreview
-                ? `${comentarioPreview} — Comentário feito por ${meuNome}`
-                : "";
-
-              return (
-                <div
-                  key={o.id}
-                  className={`objetivo-item ${isConcluido ? 'objetivo-concluido' : ''}`}
+          <DragDropContext onDragEnd={handleDragEnd}>
+            <Droppable droppableId="objetivos-list">
+              {(provided) => (
+                <div 
+                  className="ata-objectives"
+                  ref={provided.innerRef}
+                  {...provided.droppableProps}
                 >
-                  <input
-                    type="checkbox"
-                    checked={isConcluido}
-                    onChange={() => toggleObjetivo(i)}
-                    disabled={isConcluido && !podeDesmarcar}
-                  />
-                  <span><strong>{numeroObjetivo}</strong> {textoCapitalizado}</span>
+                  {objetivosList.map((o, i) => {
+                    const textoCapitalizado = o.texto.charAt(0).toUpperCase() + o.texto.slice(1);
+                    const numeroObjetivo = `${i + 1}.`;
+                    const isEditing = editandoComentario[i];
+                    const isConcluido = o.concluido;
+                    const podeDesmarcar = podeDesmarcarConclusao(o.concluidoEm);
+                    const comentarioPreview = comentarioTemp[i] || "";
+                    const comentarioComAutorPreview = comentarioPreview
+                      ? `${comentarioPreview} — Comentário feito por ${meuNome}`
+                      : "";
 
-                  <div className="objetivo-responsaveis-chips">
-                    {o.responsaveis.map(resp => (
-                      <ChipResponsavel
-                        key={resp.id}
-                        responsavel={resp}
-                        onRemove={(r) => removerResponsavel(r, i)}
-                        disabled={isConcluido}
-                      />
-                    ))}
-                  </div>
-
-                  <div className="objetivo-acao-direita">
-                    {!isConcluido && (
-                      <span
-                        className="icone-add-resp"
-                        title="Adicionar responsável"
-                        onClick={() => {
-                          setEditandoComentario(prev => ({ ...prev, [`resp-${i}`]: true }));
-                        }}
+                    return (
+                      <Draggable 
+                        key={String(o.id)} 
+                        draggableId={String(o.id)} 
+                        index={i}
+                        isDragDisabled={isConcluido}
                       >
-                        <FontAwesomeIcon icon={faUserPlus} />
-                      </span>
-                    )}
-
-                    {editandoComentario[`resp-${i}`] && !isConcluido && (
-                      <div className="input-responsavel-flutuante">
-                        <input
-                          type="text"
-                          autoFocus
-                          placeholder="Nome ou @menção"
-                          value={inputResponsavel[i] || ""}
-                          onChange={(e) => handleResponsavelInputChange(e, i)}
-                          onBlur={() => {
-                            setTimeout(() => setEditandoComentario(prev => ({ ...prev, [`resp-${i}`]: false })), 200);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              const valor = inputResponsavel[i] || "";
-                              if (!valor.startsWith("@")) {
-                                adicionarResponsavelExterno(valor, i);
-                                setEditandoComentario(prev => ({ ...prev, [`resp-${i}`]: false }));
-                              }
-                            } else if (e.key === "Escape") {
-                              setEditandoComentario(prev => ({ ...prev, [`resp-${i}`]: false }));
-                            }
-                          }}
-                        />
-                        {sugestoesResponsavel[i]?.length > 0 && (
-                          <div className="sugestoes-list-flutuante">
-                            {sugestoesResponsavel[i].map(item => (
-                              <div
-                                key={item.id}
-                                className="sugestao-item"
-                                onClick={() => {
-                                  adicionarResponsavelInterno(item, i);
-                                  setEditandoComentario(prev => ({ ...prev, [`resp-${i}`]: false }));
-                                }}
-                              >
-                                @{item.nickname || item.nome}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="objetivo-acao">
-                    {!isConcluido && (
-                      <label
-                        className="objetivo-data-entrega"
-                        style={{ 
-                          cursor: 'pointer', 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: '4px',
-                          position: 'relative'
-                        }}
-                      >
-                        {o.dataEntrega ? (
-                          <>
-                            {o.dataEntrega.split('-').reverse().join('/')}
-                            <FontAwesomeIcon icon={faCalendar} style={{ fontSize: '12px', color: '#555' }} />
-                          </>
-                        ) : (
-                          <FontAwesomeIcon icon={faCalendar} style={{ fontSize: '14px', color: '#555' }} />
-                        )}
-                        <input
-                          type="date"
-                          style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            width: '100%',
-                            height: '100%',
-                            opacity: 0,
-                            cursor: 'pointer'
-                          }}
-                          value={o.dataEntrega || ''}
-                          onChange={async (e) => {
-                            const valorData = e.target.value || null;
-                            const novos = [...objetivosList];
-                            novos[i].dataEntrega = valorData;
-                            setObjetivosList(novos);
-                            if (o.id && !String(o.id).startsWith('temp')) {
-                              try {
-                                const { error } = await supabase
-                                  .from("ata_objetivos")
-                                  .update({ data_entrega: valorData })
-                                  .eq("id", o.id);
-                                if (error) {
-                                  console.error("Erro ao salvar data de entrega:", error);
-                                }
-                              } catch (err) {
-                                console.error("Erro inesperado ao salvar data de entrega:", err);
-                              }
-                            }
-                          }}
-                        />
-                      </label>
-                    )}
-
-                    {isConcluido && (
-                      <div style={{ position: "relative" }}>
-                        {isEditing ? (
-                          <div className="comentario-editor">
-                            <textarea
-                              value={comentarioTemp[i] || ""}
-                              onChange={e => setComentarioTemp(prev => ({ ...prev, [i]: e.target.value }))}
-                              placeholder="Descreva como o objetivo foi concluído..."
-                              rows={2}
-                              className="comentario-textarea"
+                        {(provided, snapshot) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                            className={`objetivo-item ${isConcluido ? 'objetivo-concluido' : ''} ${snapshot.isDragging ? 'objetivo-dragging' : ''}`}
+                            style={{
+                              ...provided.draggableProps.style,
+                              opacity: snapshot.isDragging ? 0.85 : 1,
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isConcluido}
+                              onChange={() => toggleObjetivo(i)}
+                              disabled={isConcluido && !podeDesmarcar}
+                              onClick={(e) => e.stopPropagation()}
                             />
-                            {comentarioTemp[i] && (
-                              <div className="comentario-preview">
-                                <small style={{ color: "#666", fontStyle: "italic" }}>
-                                  {comentarioComAutorPreview}
-                                </small>
-                              </div>
-                            )}
-                            <div className="comentario-actions">
-                              <button onClick={() => salvarComentario(i)} className="btn-comentario-salvar">
-                                Salvar
-                              </button>
-                              <button onClick={() => cancelarComentario(i)} className="btn-comentario-cancelar">
-                                Cancelar
-                              </button>
+                            <span><strong>{numeroObjetivo}</strong> {textoCapitalizado}</span>
+
+                            <div className="objetivo-responsaveis-chips">
+                              {o.responsaveis.map(resp => (
+                                <ChipResponsavel
+                                  key={resp.id}
+                                  responsavel={resp}
+                                  onRemove={(r) => removerResponsavel(r, i)}
+                                  disabled={isConcluido}
+                                />
+                              ))}
+                            </div>
+
+                            <div className="objetivo-acao-direita">
+                              {!isConcluido && (
+                                <span
+                                  className="icone-add-resp"
+                                  title="Adicionar responsável"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditandoComentario(prev => ({ ...prev, [`resp-${i}`]: true }));
+                                  }}
+                                >
+                                  <FontAwesomeIcon icon={faUserPlus} />
+                                </span>
+                              )}
+
+                              {editandoComentario[`resp-${i}`] && !isConcluido && (
+                                <div className="input-responsavel-flutuante">
+                                  <input
+                                    type="text"
+                                    autoFocus
+                                    placeholder="Nome ou @menção"
+                                    value={inputResponsavel[i] || ""}
+                                    onChange={(e) => handleResponsavelInputChange(e, i)}
+                                    onBlur={() => {
+                                      setTimeout(() => setEditandoComentario(prev => ({ ...prev, [`resp-${i}`]: false })), 200);
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        e.preventDefault();
+                                        const valor = inputResponsavel[i] || "";
+                                        if (!valor.startsWith("@")) {
+                                          adicionarResponsavelExterno(valor, i);
+                                          setEditandoComentario(prev => ({ ...prev, [`resp-${i}`]: false }));
+                                        }
+                                      } else if (e.key === "Escape") {
+                                        setEditandoComentario(prev => ({ ...prev, [`resp-${i}`]: false }));
+                                      }
+                                    }}
+                                  />
+                                  {sugestoesResponsavel[i]?.length > 0 && (
+                                    <div className="sugestoes-list-flutuante">
+                                      {sugestoesResponsavel[i].map(item => (
+                                        <div
+                                          key={item.id}
+                                          className="sugestao-item"
+                                          onClick={() => {
+                                            adicionarResponsavelInterno(item, i);
+                                            setEditandoComentario(prev => ({ ...prev, [`resp-${i}`]: false }));
+                                          }}
+                                        >
+                                          @{item.nickname || item.nome}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="objetivo-acao">
+                              {!isConcluido && (
+                                <label
+                                  className="objetivo-data-entrega"
+                                  style={{ 
+                                    cursor: 'pointer', 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: '4px',
+                                    position: 'relative'
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {o.dataEntrega ? (
+                                    <>
+                                      {o.dataEntrega.split('-').reverse().join('/')}
+                                      <FontAwesomeIcon icon={faCalendar} style={{ fontSize: '12px', color: '#555' }} />
+                                    </>
+                                  ) : (
+                                    <FontAwesomeIcon icon={faCalendar} style={{ fontSize: '14px', color: '#555' }} />
+                                  )}
+                                  <input
+                                    type="date"
+                                    style={{
+                                      position: 'absolute',
+                                      top: 0,
+                                      left: 0,
+                                      width: '100%',
+                                      height: '100%',
+                                      opacity: 0,
+                                      cursor: 'pointer'
+                                    }}
+                                    value={o.dataEntrega || ''}
+                                    onChange={async (e) => {
+                                      const valorData = e.target.value || null;
+                                      const novos = [...objetivosList];
+                                      novos[i].dataEntrega = valorData;
+                                      setObjetivosList(novos);
+                                      if (o.id && !String(o.id).startsWith('temp')) {
+                                        try {
+                                          const { error } = await supabase
+                                            .from("ata_objetivos")
+                                            .update({ data_entrega: valorData })
+                                            .eq("id", o.id);
+                                          if (error) {
+                                            console.error("Erro ao salvar data de entrega:", error);
+                                          }
+                                        } catch (err) {
+                                          console.error("Erro inesperado ao salvar data de entrega:", err);
+                                        }
+                                      }
+                                    }}
+                                  />
+                                </label>
+                              )}
+
+                              {isConcluido && (
+                                <div style={{ position: "relative" }}>
+                                  {isEditing ? (
+                                    <div className="comentario-editor">
+                                      <textarea
+                                        value={comentarioTemp[i] || ""}
+                                        onChange={e => setComentarioTemp(prev => ({ ...prev, [i]: e.target.value }))}
+                                        placeholder="Descreva como o objetivo foi concluído..."
+                                        rows={2}
+                                        className="comentario-textarea"
+                                      />
+                                      {comentarioTemp[i] && (
+                                        <div className="comentario-preview">
+                                          <small style={{ color: "#666", fontStyle: "italic" }}>
+                                            {comentarioComAutorPreview}
+                                          </small>
+                                        </div>
+                                      )}
+                                      <div className="comentario-actions">
+                                        <button onClick={() => salvarComentario(i)} className="btn-comentario-salvar">
+                                          Salvar
+                                        </button>
+                                        <button onClick={() => cancelarComentario(i)} className="btn-comentario-cancelar">
+                                          Cancelar
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <ComentarioIcon
+                                      onClick={() => iniciarEdicaoComentario(i, o.comentario)}
+                                      title={o.comentario ? "Editar comentário" : "Adicionar comentário"}
+                                    />
+                                  )}
+                                </div>
+                              )}
+
+                              {!isConcluido && (
+                                <span
+                                  className="botao-excluir"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    removerObjetivo(i);
+                                  }}
+                                >
+                                  ×
+                                </span>
+                              )}
                             </div>
                           </div>
-                        ) : (
-                          <ComentarioIcon
-                            onClick={() => iniciarEdicaoComentario(i, o.comentario)}
-                            title={o.comentario ? "Editar comentário" : "Adicionar comentário"}
-                          />
                         )}
-                      </div>
-                    )}
-
-                    {!isConcluido && (
-                      <span
-                        className="botao-excluir"
-                        onClick={() => removerObjetivo(i)}
-                      >
-                        ×
-                      </span>
-                    )}
-                  </div>
+                      </Draggable>
+                    );
+                  })}
+                  {provided.placeholder}
                 </div>
-              );
-            })}
-          </div>
+              )}
+            </Droppable>
+          </DragDropContext>
 
           <div className="progress-container">
             <div className="progress-bar" style={{ width: `${progressoPercent}%` }}></div>

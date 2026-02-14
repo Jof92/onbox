@@ -41,20 +41,18 @@ export default function AtaCard({
   const cardRef = useRef(null);
   const pdfDropdownRef = useRef(null);
 
-  useEffect(() => {
+    useEffect(() => {
     const handleClickOutside = (e) => {
       if (pdfDropdownRef.current && !pdfDropdownRef.current.contains(e.target)) {
         setPdfDropdownOpen(false);
       }
-      
-      if (onClose && cardRef.current && !cardRef.current.contains(e.target)) {
-        onClose();
-      }
     };
 
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [onClose]);
+    if (pdfDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [pdfDropdownOpen]);
 
   const fetchProjeto = useCallback(async () => {
     if (!projetoAtual?.id) return;

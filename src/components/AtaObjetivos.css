@@ -161,5 +161,22 @@
   color: #000;
 }
 
+.objetivo-dragging {
+  background: #f0f4ff !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  transform: rotate(2deg) !important;
+}
 
+.objetivo-item {
+  transition: background 0.2s ease;
+  cursor: grab;
+}
+
+.objetivo-item:active {
+  cursor: grabbing;
+}
+
+.objetivo-concluido {
+  cursor: default !important;
+}
 
