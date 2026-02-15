@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../supabaseClient";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faUserPlus, faCalendar } from "@fortawesome/free-solid-svg-icons";
+import { faUserPlus, faCalendar, faShareFromSquare } from "@fortawesome/free-solid-svg-icons";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 
 const VERBOS = [
@@ -110,12 +110,14 @@ export default function AtaObjetivos({
   const [comentarioTemp, setComentarioTemp] = useState({});
   const [meuNome, setMeuNome] = useState("Você");
   const [inputResponsavel, setInputResponsavel] = useState({});
+  const [mostrarAtasDisponiveis, setMostrarAtasDisponiveis] = useState({});
+  const [atasDisponiveis, setAtasDisponiveis] = useState([]);
+  const [atasOrigemNomes, setAtasOrigemNomes] = useState({});
   const verbosSet = React.useMemo(() => new Set(VERBOS), []);
   const isSaving = useRef(false);
   const lastTextRef = useRef("");
   const isUpdatingRef = useRef(false);
 
-  // ✅ Carregar nome do usuário
   useEffect(() => {
     const fetchMeuNome = async () => {
       if (!usuarioId) return;
@@ -125,7 +127,6 @@ export default function AtaObjetivos({
     fetchMeuNome();
   }, [usuarioId]);
 
-  // ✅ Enviar notificação
   const sendNotification = useCallback(async (recipientUserId, message, type, objective) => {
     if (!recipientUserId || !usuarioId) return;
 
@@ -151,7 +152,6 @@ export default function AtaObjetivos({
     }
   }, [usuarioId, notaAtual, projetoAtual, containerAtual]);
 
-  // ✅ CORRIGIDO: Carregar objetivos com ordem
   const carregarObjetivos = useCallback(async () => {
     if (!ataId) {
       setObjetivosList([]);
@@ -199,18 +199,66 @@ export default function AtaObjetivos({
 
     const objetivos = lista
       .filter(o => !o.texto?.startsWith(PREFIXO_EXCLUIDO))
-      .map(o => ({
-        id: o.id,
-        texto: o.texto || "",
-        responsaveis: respPorObj[o.id] || [],
-        dataEntrega: o.data_entrega,
-        concluido: o.concluido || false,
-        concluidoEm: o.concluido_em ? new Date(o.concluido_em) : null,
-        comentario: o.comentario || "",
-      }));
+      .map(o => {
+        // Detectar se foi enviado pelo padrão do comentário
+        const foiEnviado = o.comentario?.startsWith('Objetivo enviado para:');
+        const ataDestinoNome = foiEnviado 
+          ? o.comentario.replace('Objetivo enviado para:', '').trim()
+          : null;
+        
+        // Detectar se veio de outra ata pelo padrão [ORIGEM:id]
+        const matchOrigem = o.comentario?.match(/\[ORIGEM:(\d+)\]/);
+        const foiRecebido = matchOrigem !== null;
+        const ataOrigemId = matchOrigem ? parseInt(matchOrigem[1]) : null;
+        
+        return {
+          id: o.id,
+          texto: o.texto || "",
+          responsaveis: respPorObj[o.id] || [],
+          dataEntrega: o.data_entrega,
+          concluido: o.concluido || false,
+          concluidoEm: o.concluido_em ? new Date(o.concluido_em) : null,
+          comentario: o.comentario || "",
+          enviado: foiEnviado,
+          ataDestinoNome: ataDestinoNome,
+          recebido: foiRecebido,
+          ataOrigemId: ataOrigemId,
+        };
+      });
 
     setObjetivosList(objetivos);
     setCriarObjetivos(objetivos.length > 0);
+
+    // Buscar nomes das atas de origem para objetivos recebidos
+    const atasOrigemIds = [...new Set(objetivos
+      .filter(o => o.recebido && o.ataOrigemId)
+      .map(o => o.ataOrigemId))];
+
+    if (atasOrigemIds.length > 0) {
+      const { data: atasOrigem } = await supabase
+        .from("atas")
+        .select("id, nota_id")
+        .in("id", atasOrigemIds);
+
+      if (atasOrigem && atasOrigem.length > 0) {
+        const notasIds = atasOrigem.map(a => a.nota_id);
+        const { data: notas } = await supabase
+          .from("notas")
+          .select("id, nome")
+          .in("id", notasIds);
+
+        if (notas) {
+          const nomesMap = {};
+          atasOrigem.forEach(ata => {
+            const nota = notas.find(n => n.id === ata.nota_id);
+            if (nota) {
+              nomesMap[ata.id] = nota.nome;
+            }
+          });
+          setAtasOrigemNomes(nomesMap);
+        }
+      }
+    }
   }, [ataId]);
 
   useEffect(() => {
@@ -218,7 +266,6 @@ export default function AtaObjetivos({
     lastTextRef.current = "";
   }, [carregarObjetivos]);
 
-  // ✅ CORRIGIDO: Sincronizar texto com objetivos (sem duplicação)
   useEffect(() => {
     if (!criarObjetivos || isUpdatingRef.current) return;
 
@@ -229,7 +276,6 @@ export default function AtaObjetivos({
 
     isUpdatingRef.current = true;
 
-    // Map com textos já salvos
     const textosSalvos = new Map();
     objetivosList
       .filter(o => o.id && !String(o.id).startsWith('temp'))
@@ -237,17 +283,14 @@ export default function AtaObjetivos({
         textosSalvos.set(o.texto.toLowerCase().trim(), o.id);
       });
 
-    // Mapear objetivos válidos
     const novosObjetivos = validos.map(txt => {
       const txtNormalizado = txt.toLowerCase().trim();
       const idExistente = textosSalvos.get(txtNormalizado);
       
       if (idExistente) {
-        // Objetivo já existe, retorna como está
         return objetivosList.find(o => o.id === idExistente);
       }
       
-      // Novo objetivo
       return {
         id: `temp-${Date.now()}-${Math.random()}`,
         texto: txt,
@@ -268,7 +311,6 @@ export default function AtaObjetivos({
     isUpdatingRef.current = false;
   }, [texto, criarObjetivos]);
 
-  // ✅ Auto-salvar objetivos novos
   useEffect(() => {
     if (!ataId || !criarObjetivos) return;
 
@@ -289,7 +331,6 @@ export default function AtaObjetivos({
             });
           });
 
-        // Atualizar textos modificados
         for (const obj of objetivosList) {
           if (obj.id && !String(obj.id).startsWith('temp') && salvos.has(obj.texto.toLowerCase().trim())) {
             const txtNormalizado = obj.texto.toLowerCase().trim();
@@ -303,7 +344,6 @@ export default function AtaObjetivos({
           }
         }
 
-        // Inserir novos objetivos
         const paraInserir = validos.filter(txt => {
           const txtNormalizado = txt.toLowerCase().trim();
           return !salvos.has(txtNormalizado);
@@ -351,7 +391,6 @@ export default function AtaObjetivos({
     return () => clearTimeout(timer);
   }, [texto, ataId, criarObjetivos, objetivosList]);
 
-  // ✅ Calcular progresso
   const progressoPercent = objetivosList.length
     ? Math.round((objetivosList.filter(o => o.concluido).length / objetivosList.length) * 100)
     : 0;
@@ -362,7 +401,6 @@ export default function AtaObjetivos({
     }
   }, [progressoPercent, onProgressoChange]);
 
-  // ✅ Toggle objetivo
   const toggleObjetivo = async (i) => {
     const objetivo = objetivosList[i];
     if (!objetivo?.id || !ataId || String(objetivo.id).startsWith('temp')) return;
@@ -396,7 +434,6 @@ export default function AtaObjetivos({
         await supabase.from("notas").update({ progresso: novoProgresso }).eq("id", notaAtual.id);
       }
 
-      // Notificar responsáveis
       if (novoConcluido) {
         for (const resp of objetivo.responsaveis) {
           if (resp.usuario_id) {
@@ -412,7 +449,6 @@ export default function AtaObjetivos({
     }
   };
 
-  // ✅ Responsável - Input Change
   const handleResponsavelInputChange = (e, i) => {
     const valor = e.target.value;
     setInputResponsavel(prev => ({ ...prev, [i]: valor }));
@@ -477,7 +513,6 @@ export default function AtaObjetivos({
     }
   };
 
-  // ✅ Adicionar responsável externo
   const adicionarResponsavelExterno = async (nome, i) => {
     const objetivo = objetivosList[i];
     if (objetivo?.concluido) return;
@@ -510,7 +545,6 @@ export default function AtaObjetivos({
     }
   };
 
-  // ✅ Adicionar responsável interno
   const adicionarResponsavelInterno = async (item, i) => {
     const objetivo = objetivosList[i];
     if (objetivo?.concluido) return;
@@ -547,7 +581,6 @@ export default function AtaObjetivos({
     }
   };
 
-  // ✅ Remover responsável
   const removerResponsavel = async (responsavel, i) => {
     const objetivo = objetivosList[i];
     if (objetivo?.concluido) return;
@@ -561,7 +594,6 @@ export default function AtaObjetivos({
     }
   };
 
-  // ✅ Remover objetivo
   const removerObjetivo = async (i) => {
     const objetivo = objetivosList[i];
     if (objetivo?.concluido) {
@@ -581,7 +613,179 @@ export default function AtaObjetivos({
     }
   };
 
-  // ✅ Iniciar edição de comentário
+  const buscarAtasDisponiveis = useCallback(async (objetivoIndex) => {
+    if (!ataId || !projetoAtual?.id) return;
+
+    try {
+      // 1. Buscar todas as pilhas do projeto/setor atual
+      const campoPilha = projetoAtual.tipo === 'projeto' ? 'project_id' : 'setor_id';
+      
+      const { data: pilhas, error: erroPilhas } = await supabase
+        .from("pilhas")
+        .select("id")
+        .eq(campoPilha, projetoAtual.id);
+
+      if (erroPilhas) throw erroPilhas;
+      
+      if (!pilhas || pilhas.length === 0) {
+        setAtasDisponiveis([]);
+        alert("Não há pilhas disponíveis neste projeto/setor.");
+        return;
+      }
+
+      const pilhaIds = pilhas.map(p => p.id);
+
+      // 2. Buscar todas as notas do tipo "Atas" nessas pilhas
+      const { data: notasAtas, error: erroNotas } = await supabase
+        .from("notas")
+        .select("id, nome, pilha_id, progresso")
+        .eq("tipo", "Atas")
+        .in("pilha_id", pilhaIds);
+
+      if (erroNotas) throw erroNotas;
+
+      // 3. Filtrar para excluir a nota atual E notas com 100% de progresso
+      const notasDisponiveis = (notasAtas || [])
+        .filter(n => 
+          n.id !== notaAtual?.id && 
+          (n.progresso === null || n.progresso === undefined || n.progresso < 100)
+        );
+      
+      if (notasDisponiveis.length === 0) {
+        setAtasDisponiveis([]);
+        alert("Não há outras atas disponíveis neste projeto/setor (todas estão 100% concluídas ou não existem).");
+        return;
+      }
+
+      const notasIds = notasDisponiveis.map(n => n.id);
+
+      // 4. Buscar atas correspondentes
+      const { data: atas, error: atasError } = await supabase
+        .from("atas")
+        .select("id, pauta, nota_id")
+        .in("nota_id", notasIds);
+
+      if (atasError) throw atasError;
+
+      // 5. Combinar informações de notas e atas
+      const atasComNome = (atas || []).map(ata => {
+        const nota = notasDisponiveis.find(n => n.id === ata.nota_id);
+        return {
+          ataId: ata.id,
+          notaId: ata.nota_id,
+          nome: nota?.nome || "Ata sem nome",
+          pauta: ata.pauta || "Sem pauta",
+          progresso: nota?.progresso || 0,
+        };
+      });
+
+      setAtasDisponiveis(atasComNome);
+      setMostrarAtasDisponiveis(prev => ({ ...prev, [objetivoIndex]: true }));
+    } catch (err) {
+      console.error("Erro ao buscar atas disponíveis:", err);
+      alert("Erro ao carregar atas disponíveis.");
+    }
+  }, [ataId, projetoAtual, notaAtual]);
+
+  const realocarObjetivo = async (objetivoIndex, ataDestinoId, ataDestinoNome) => {
+    const objetivo = objetivosList[objetivoIndex];
+    if (!objetivo?.id || String(objetivo.id).startsWith('temp')) {
+      alert("Não é possível realocar um objetivo não salvo.");
+      return;
+    }
+
+    if (objetivo.concluido) {
+      alert("Não é possível realocar um objetivo já concluído.");
+      return;
+    }
+
+    try {
+      // 1. Criar cópia do objetivo na ata de destino com marcação de origem
+      const comentarioOrigem = `[ORIGEM:${ataId}]`; // Marca invisível da origem
+      
+      const novoObjetivo = {
+        ata_id: ataDestinoId,
+        texto: objetivo.texto,
+        concluido: false,
+        comentario: comentarioOrigem,
+        data_entrega: objetivo.dataEntrega,
+        concluido_em: null,
+        ordem: 0, // Será inserido no início
+      };
+
+      const { data: objetivoInserido, error: erroInsert } = await supabase
+        .from("ata_objetivos")
+        .insert([novoObjetivo])
+        .select()
+        .single();
+
+      if (erroInsert) throw erroInsert;
+
+      // 2. Copiar responsáveis para o novo objetivo
+      if (objetivo.responsaveis.length > 0) {
+        const responsaveisParaInserir = objetivo.responsaveis.map(r => ({
+          ata_objetivo_id: objetivoInserido.id,
+          usuario_id: r.usuario_id || null,
+          nome_externo: r.nome_externo || null,
+        }));
+
+        const { error: erroResp } = await supabase
+          .from("ata_objetivos_responsaveis")
+          .insert(responsaveisParaInserir);
+
+        if (erroResp) console.error("Erro ao copiar responsáveis:", erroResp);
+      }
+
+      // 3. Marcar objetivo original como concluído/enviado
+      const agora = new Date();
+      const comentarioEnviado = `Objetivo enviado para: ${ataDestinoNome}`;
+      
+      const { error: erroUpdate } = await supabase
+        .from("ata_objetivos")
+        .update({ 
+          concluido: true,
+          concluido_em: agora.toISOString(),
+          comentario: comentarioEnviado
+        })
+        .eq("id", objetivo.id);
+
+      if (erroUpdate) throw erroUpdate;
+
+      // 4. Atualizar na lista local
+      const novosObjetivos = [...objetivosList];
+      novosObjetivos[objetivoIndex] = {
+        ...objetivo,
+        concluido: true,
+        concluidoEm: agora,
+        comentario: comentarioEnviado,
+        enviado: true,
+        ataDestinoNome: ataDestinoNome
+      };
+      setObjetivosList(novosObjetivos);
+
+      // 5. Atualizar progresso da ata
+      const novoProgresso = Math.round(
+        (novosObjetivos.filter(o => o.concluido).length / novosObjetivos.length) * 100
+      );
+      
+      if (typeof onProgressoChange === "function") {
+        onProgressoChange(novoProgresso);
+      }
+      
+      if (notaAtual?.id) {
+        await supabase.from("notas").update({ progresso: novoProgresso }).eq("id", notaAtual.id);
+      }
+
+      // 6. Fechar menu
+      setMostrarAtasDisponiveis(prev => ({ ...prev, [objetivoIndex]: false }));
+
+      alert("Objetivo realocado com sucesso!");
+    } catch (err) {
+      console.error("Erro ao realocar objetivo:", err);
+      alert("Erro ao realocar objetivo. Tente novamente.");
+    }
+  };
+
   const iniciarEdicaoComentario = (i, comentarioAtual) => {
     let comentarioPuro = comentarioAtual || "";
     if (comentarioPuro.includes(" — Comentário por ")) {
@@ -592,7 +796,6 @@ export default function AtaObjetivos({
     setComentarioTemp(prev => ({ ...prev, [i]: comentarioPuro }));
   };
 
-  // ✅ Salvar comentário
   const salvarComentario = async (i) => {
     const comentario = comentarioTemp[i] || "";
     const objetivo = objetivosList[i];
@@ -611,7 +814,6 @@ export default function AtaObjetivos({
       setObjetivosList(novos);
       setEditandoComentario(prev => ({ ...prev, [i]: false }));
 
-      // Notificar responsáveis
       for (const resp of objetivo.responsaveis) {
         if (resp.usuario_id) {
           await sendNotification(resp.usuario_id, `Novo comentário em objetivo: ${objetivo.texto}`, "objetivo_comentario", objetivo);
@@ -624,12 +826,10 @@ export default function AtaObjetivos({
     }
   };
 
-  // ✅ Cancelar edição de comentário
   const cancelarComentario = (i) => {
     setEditandoComentario(prev => ({ ...prev, [i]: false }));
   };
 
-  // ✅ Toggle criar objetivos
   const handleCriarObjetivosChange = (e) => {
     const novaEscolha = e.target.checked;
     const temObjetivosSalvos = objetivosList.some(o => o.id && !String(o.id).startsWith('temp'));
@@ -643,7 +843,6 @@ export default function AtaObjetivos({
     }
   };
 
-  // ✅ CORRIGIDO: Handle drag end com ordem
   const handleDragEnd = async (result) => {
     if (!result.destination) return;
     
@@ -659,7 +858,6 @@ export default function AtaObjetivos({
     setObjetivosList(novosObjetivos);
     
     try {
-      // ✅ Atualizar ordem de TODOS os objetivos
       for (let i = 0; i < novosObjetivos.length; i++) {
         const objetivo = novosObjetivos[i];
         if (objetivo.id && !String(objetivo.id).startsWith('temp')) {
@@ -720,7 +918,11 @@ export default function AtaObjetivos({
                             ref={provided.innerRef}
                             {...provided.draggableProps}
                             {...provided.dragHandleProps}
-                            className={`objetivo-item ${isConcluido ? 'objetivo-concluido' : ''} ${snapshot.isDragging ? 'objetivo-dragging' : ''}`}
+                            className={`objetivo-item ${
+                              isConcluido 
+                                ? (o.enviado ? 'objetivo-enviado' : 'objetivo-concluido')
+                                : (o.recebido ? 'objetivo-recebido' : '')
+                            } ${snapshot.isDragging ? 'objetivo-dragging' : ''}`}
                             style={{
                               ...provided.draggableProps.style,
                               opacity: snapshot.isDragging ? 0.85 : 1,
@@ -733,7 +935,31 @@ export default function AtaObjetivos({
                               disabled={isConcluido && !podeDesmarcar}
                               onClick={(e) => e.stopPropagation()}
                             />
-                            <span><strong>{numeroObjetivo}</strong> {textoCapitalizado}</span>
+                            <span>
+                              <strong>{numeroObjetivo}</strong> {textoCapitalizado}
+                              {o.enviado && o.ataDestinoNome && (
+                                <div style={{
+                                  fontSize: '12px',
+                                  color: '#f59e0b',
+                                  fontStyle: 'italic',
+                                  marginTop: '4px',
+                                  fontWeight: '500'
+                                }}>
+                                  📤 Objetivo enviado para: {o.ataDestinoNome}
+                                </div>
+                              )}
+                              {o.recebido && o.ataOrigemId && atasOrigemNomes[o.ataOrigemId] && (
+                                <div style={{
+                                  fontSize: '12px',
+                                  color: '#3b82f6',
+                                  fontStyle: 'italic',
+                                  marginTop: '4px',
+                                  fontWeight: '500'
+                                }}>
+                                  📥 Vindo da ata: {atasOrigemNomes[o.ataOrigemId]}
+                                </div>
+                              )}
+                            </span>
 
                             <div className="objetivo-responsaveis-chips">
                               {o.responsaveis.map(resp => (
@@ -806,58 +1032,204 @@ export default function AtaObjetivos({
 
                             <div className="objetivo-acao">
                               {!isConcluido && (
-                                <label
-                                  className="objetivo-data-entrega"
-                                  style={{ 
-                                    cursor: 'pointer', 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    gap: '4px',
-                                    position: 'relative'
-                                  }}
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  {o.dataEntrega ? (
-                                    <>
-                                      {o.dataEntrega.split('-').reverse().join('/')}
-                                      <FontAwesomeIcon icon={faCalendar} style={{ fontSize: '12px', color: '#555' }} />
-                                    </>
-                                  ) : (
-                                    <FontAwesomeIcon icon={faCalendar} style={{ fontSize: '14px', color: '#555' }} />
-                                  )}
-                                  <input
-                                    type="date"
-                                    style={{
-                                      position: 'absolute',
-                                      top: 0,
-                                      left: 0,
-                                      width: '100%',
-                                      height: '100%',
-                                      opacity: 0,
-                                      cursor: 'pointer'
+                                <>
+                                  <label
+                                    className="objetivo-data-entrega"
+                                    style={{ 
+                                      cursor: 'pointer', 
+                                      display: 'flex', 
+                                      alignItems: 'center', 
+                                      gap: '4px',
+                                      position: 'relative'
                                     }}
-                                    value={o.dataEntrega || ''}
-                                    onChange={async (e) => {
-                                      const valorData = e.target.value || null;
-                                      const novos = [...objetivosList];
-                                      novos[i].dataEntrega = valorData;
-                                      setObjetivosList(novos);
-                                      if (o.id && !String(o.id).startsWith('temp')) {
-                                        try {
-                                          const { error } = await supabase
-                                            .from("ata_objetivos")
-                                            .update({ data_entrega: valorData })
-                                            .eq("id", o.id);
-                                          if (error) {
-                                            console.error("Erro ao salvar data de entrega:", error);
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {o.dataEntrega ? (
+                                      <>
+                                        {o.dataEntrega.split('-').reverse().join('/')}
+                                        <FontAwesomeIcon icon={faCalendar} style={{ fontSize: '12px', color: '#555' }} />
+                                      </>
+                                    ) : (
+                                      <FontAwesomeIcon icon={faCalendar} style={{ fontSize: '14px', color: '#555' }} />
+                                    )}
+                                    <input
+                                      type="date"
+                                      style={{
+                                        position: 'absolute',
+                                        top: 0,
+                                        left: 0,
+                                        width: '100%',
+                                        height: '100%',
+                                        opacity: 0,
+                                        cursor: 'pointer'
+                                      }}
+                                      value={o.dataEntrega || ''}
+                                      onChange={async (e) => {
+                                        const valorData = e.target.value || null;
+                                        const novos = [...objetivosList];
+                                        novos[i].dataEntrega = valorData;
+                                        setObjetivosList(novos);
+                                        if (o.id && !String(o.id).startsWith('temp')) {
+                                          try {
+                                            const { error } = await supabase
+                                              .from("ata_objetivos")
+                                              .update({ data_entrega: valorData })
+                                              .eq("id", o.id);
+                                            if (error) {
+                                              console.error("Erro ao salvar data de entrega:", error);
+                                            }
+                                          } catch (err) {
+                                            console.error("Erro inesperado ao salvar data de entrega:", err);
                                           }
-                                        } catch (err) {
-                                          console.error("Erro inesperado ao salvar data de entrega:", err);
                                         }
-                                      }
-                                    }}
-                                  />
-                                </label>
+                                      }}
+                                    />
+                                  </label>
+                                  
+                                  {/* ✅ BOTÃO DE REALOCAR OBJETIVO */}
+                                  <div style={{ position: 'relative' }}>
+                                    <span
+                                      className="icone-share"
+                                      title="Realocar objetivo para outra ata"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        buscarAtasDisponiveis(i);
+                                      }}
+                                      style={{ 
+                                        cursor: 'pointer', 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                      }}
+                                    >
+                                      <FontAwesomeIcon icon={faShareFromSquare} style={{ fontSize: '14px', color: '#555' }} />
+                                    </span>
+
+                                    {/* Menu flutuante de atas disponíveis */}
+                                    {mostrarAtasDisponiveis[i] && (
+                                      <div 
+                                        className="menu-atas-disponiveis"
+                                        style={{
+                                          position: 'absolute',
+                                          top: '100%',
+                                          right: 0,
+                                          marginTop: '4px',
+                                          background: 'white',
+                                          border: '1px solid #ddd',
+                                          borderRadius: '6px',
+                                          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                          minWidth: '220px',
+                                          maxWidth: '300px',
+                                          maxHeight: '300px',
+                                          overflowY: 'auto',
+                                          zIndex: 1000,
+                                          padding: '8px',
+                                        }}
+                                      >
+                                        <div style={{
+                                          padding: '8px',
+                                          borderBottom: '1px solid #eee',
+                                          marginBottom: '4px',
+                                          fontSize: '13px',
+                                          fontWeight: '600',
+                                          color: '#666',
+                                          display: 'flex',
+                                          justifyContent: 'space-between',
+                                          alignItems: 'center'
+                                        }}>
+                                          <span>Realocar para:</span>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setMostrarAtasDisponiveis(prev => ({ ...prev, [i]: false }));
+                                            }}
+                                            style={{
+                                              background: 'none',
+                                              border: 'none',
+                                              cursor: 'pointer',
+                                              fontSize: '18px',
+                                              color: '#999',
+                                              padding: '0 4px'
+                                            }}
+                                          >
+                                            ×
+                                          </button>
+                                        </div>
+                                        
+                                        {atasDisponiveis.length === 0 ? (
+                                          <div style={{
+                                            padding: '12px',
+                                            textAlign: 'center',
+                                            color: '#999',
+                                            fontSize: '13px',
+                                            fontStyle: 'italic'
+                                          }}>
+                                            Nenhuma outra ata disponível
+                                          </div>
+                                        ) : (
+                                          atasDisponiveis.map(ata => (
+                                            <div
+                                              key={ata.ataId}
+                                              className="item-ata-disponivel"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (window.confirm(`Realocar este objetivo para "${ata.nome}"?`)) {
+                                                  realocarObjetivo(i, ata.ataId, ata.nome);
+                                                }
+                                              }}
+                                              style={{
+                                                padding: '10px',
+                                                cursor: 'pointer',
+                                                borderRadius: '4px',
+                                                transition: 'background 0.2s',
+                                                marginBottom: '4px',
+                                                fontSize: '13px'
+                                              }}
+                                              onMouseEnter={(e) => e.currentTarget.style.background = '#f5f5f5'}
+                                              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                                            >
+                                              <div style={{ fontWeight: '600', color: '#333', marginBottom: '2px' }}>
+                                                {ata.nome}
+                                              </div>
+                                              <div style={{ fontSize: '12px', color: '#666', fontStyle: 'italic', marginBottom: '4px' }}>
+                                                {ata.pauta}
+                                              </div>
+                                              {/* Barra de progresso */}
+                                              <div style={{ 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                gap: '6px',
+                                                marginTop: '6px'
+                                              }}>
+                                                <div style={{
+                                                  flex: 1,
+                                                  height: '6px',
+                                                  background: '#e5e7eb',
+                                                  borderRadius: '3px',
+                                                  overflow: 'hidden'
+                                                }}>
+                                                  <div style={{
+                                                    height: '100%',
+                                                    width: `${ata.progresso || 0}%`,
+                                                    background: ata.progresso >= 75 ? '#10b981' : ata.progresso >= 50 ? '#f59e0b' : '#3b82f6',
+                                                    transition: 'width 0.3s ease'
+                                                  }} />
+                                                </div>
+                                                <span style={{ 
+                                                  fontSize: '11px', 
+                                                  color: '#666',
+                                                  minWidth: '35px',
+                                                  textAlign: 'right'
+                                                }}>
+                                                  {ata.progresso || 0}%
+                                                </span>
+                                              </div>
+                                            </div>
+                                          ))
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </>
                               )}
 
                               {isConcluido && (
@@ -903,6 +1275,7 @@ export default function AtaObjetivos({
                                     e.stopPropagation();
                                     removerObjetivo(i);
                                   }}
+                                  style={{ marginLeft: '8px' }}
                                 >
                                   ×
                                 </span>

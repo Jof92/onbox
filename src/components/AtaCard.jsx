@@ -1,4 +1,3 @@
-// AtaCard.jsx
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
@@ -6,7 +5,7 @@ import "./loader.css";
 import "./AtaCard.css";
 import AtaObjetivos from "./AtaObjetivos";
 import AtaPdf from "./AtaPdf";
-import { FaTimes } from "react-icons/fa";
+import { FaTimes, FaUserPlus } from "react-icons/fa";
 
 export default function AtaCard({ 
   projetoAtual, 
@@ -37,11 +36,31 @@ export default function AtaCard({
   const [salvando, setSalvando] = useState(false);
   const [salvoComSucesso, setSalvoComSucesso] = useState(false);
   const [pdfDropdownOpen, setPdfDropdownOpen] = useState(false);
+  const [showParticipanteInput, setShowParticipanteInput] = useState(false);
 
   const cardRef = useRef(null);
   const pdfDropdownRef = useRef(null);
+  const participantesSectionRef = useRef(null);
 
-    useEffect(() => {
+  // Função para formatar nome: apenas 2 primeiros nomes com primeira letra maiúscula
+  const formatarNomeExibicao = (nomeCompleto) => {
+    if (!nomeCompleto || typeof nomeCompleto !== 'string') return "";
+    
+    // Remove espaços extras e divide em palavras
+    const palavras = nomeCompleto.trim().split(/\s+/);
+    
+    // Pega apenas as 2 primeiras palavras
+    const duasPrimeiras = palavras.slice(0, 2);
+    
+    // Capitaliza primeira letra de cada palavra, resto minúsculo
+    return duasPrimeiras
+      .map(palavra => 
+        palavra.charAt(0).toUpperCase() + palavra.slice(1).toLowerCase()
+      )
+      .join(' ');
+  };
+
+  useEffect(() => {
     const handleClickOutside = (e) => {
       if (pdfDropdownRef.current && !pdfDropdownRef.current.contains(e.target)) {
         setPdfDropdownOpen(false);
@@ -53,6 +72,21 @@ export default function AtaCard({
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [pdfDropdownOpen]);
+
+  useEffect(() => {
+    const handleClickOutsideParticipantes = (e) => {
+      if (participantesSectionRef.current && !participantesSectionRef.current.contains(e.target)) {
+        setShowParticipanteInput(false);
+        setParticipanteInput("");
+        setSugestoesParticipantes([]);
+      }
+    };
+
+    if (showParticipanteInput) {
+      document.addEventListener("mousedown", handleClickOutsideParticipantes);
+      return () => document.removeEventListener("mousedown", handleClickOutsideParticipantes);
+    }
+  }, [showParticipanteInput]);
 
   const fetchProjeto = useCallback(async () => {
     if (!projetoAtual?.id) return;
@@ -72,9 +106,51 @@ export default function AtaCard({
     }
 
     try {
-      const { data: ata } = await supabase.from("atas").select("*").eq("nota_id", notaAtual.id).single();
+      const { data: ata, error } = await supabase
+        .from("atas")
+        .select("*")
+        .eq("nota_id", notaAtual.id)
+        .maybeSingle();
+
+      if (error) {
+        console.error("Erro ao carregar ata:", error);
+        setLoading(false);
+        return;
+      }
 
       if (!ata) {
+        // ✅ NÃO HÁ ATA SALVA - tentar carregar rascunho
+        const key = `rascunho_ata_${notaAtual.id}`;
+        const rascunhoSalvo = localStorage.getItem(key);
+        
+        if (rascunhoSalvo) {
+          try {
+            const rascunho = JSON.parse(rascunhoSalvo);
+            
+            const seteDias = 7 * 24 * 60 * 60 * 1000;
+            const idadeRascunho = Date.now() - (rascunho.timestamp || 0);
+            
+            if (idadeRascunho < seteDias) {
+              setAtaId(null);
+              setPauta(rascunho.pauta || "");
+              setLocal(rascunho.local || "");
+              setTexto(rascunho.texto || "");
+              setProxima(rascunho.proxima || "");
+              setDataLocal(rascunho.dataLocal || "");
+              setParticipantes(rascunho.participantes || []);
+              setAlteradoPorNome("");
+              setAlteradoEm("");
+              setAutorNome("Rascunho local");
+              setLoading(false);
+              return; // ✅ IMPORTANTE: retorna aqui para não continuar
+            }
+          } catch (e) {
+            console.warn("Rascunho corrompido, ignorando", e);
+            localStorage.removeItem(key);
+          }
+        }
+        
+        // Se não houver rascunho válido, inicia vazio
         setAtaId(null);
         setPauta("");
         setLocal("");
@@ -86,8 +162,13 @@ export default function AtaCard({
         setAlteradoEm("");
         setAutorNome("Ainda não redigida");
         setLoading(false);
-        return;
+        return; // ✅ IMPORTANTE: retorna aqui
       }
+
+      // ✅ ATA ENCONTRADA - carregar do banco (NÃO carregar rascunho)
+      // Limpar rascunho se houver ata salva
+      const key = `rascunho_ata_${notaAtual.id}`;
+      localStorage.removeItem(key);
 
       setAtaId(ata.id);
       setPauta(ata.pauta || "");
@@ -115,7 +196,7 @@ export default function AtaCard({
             if (perfilValido) {
               return {
                 id: p.profiles.id || p.profile_id,
-                nome: (p.profiles.nome?.trim() || "Usuário sem nome"),
+                nome: formatarNomeExibicao(p.profiles.nome?.trim() || "Usuário sem nome"),
                 funcao: (p.profiles.funcao?.trim() || "Membro")
               };
             } else {
@@ -128,7 +209,7 @@ export default function AtaCard({
           } else {
             return {
               id: `ext-${p.id}`,
-              nome: (p.nome_externo?.trim() || "Convidado"),
+              nome: formatarNomeExibicao(p.nome_externo?.trim() || "Convidado"),
               funcao: (p.funcao_externa?.trim() || "Externo")
             };
           }
@@ -147,7 +228,7 @@ export default function AtaCard({
           .single();
 
         if (perfil1?.nome) {
-          nomeAutor = perfil1.nome;
+          nomeAutor = formatarNomeExibicao(perfil1.nome);
         } else {
           const { data: perfil2 } = await supabase
             .from("profiles")
@@ -155,14 +236,14 @@ export default function AtaCard({
             .eq("user_id", ata.redigido_por)
             .single();
           if (perfil2?.nome) {
-            nomeAutor = perfil2.nome;
+            nomeAutor = formatarNomeExibicao(perfil2.nome);
           } else if (usuarioId) {
             const { data: meuPerfil } = await supabase
               .from("profiles")
               .select("nome")
               .eq("id", usuarioId)
               .single();
-            nomeAutor = meuPerfil?.nome || "Você";
+            nomeAutor = formatarNomeExibicao(meuPerfil?.nome) || "Você";
           } else {
             nomeAutor = "Você";
           }
@@ -173,14 +254,14 @@ export default function AtaCard({
           .select("nome")
           .eq("id", usuarioId)
           .single();
-        nomeAutor = meuPerfil?.nome || "Você";
+        nomeAutor = formatarNomeExibicao(meuPerfil?.nome) || "Você";
       } else if (usuarioId) {
         const { data: meuPerfil } = await supabase
           .from("profiles")
           .select("nome")
           .eq("id", usuarioId)
           .single();
-        nomeAutor = meuPerfil?.nome || "Você";
+        nomeAutor = formatarNomeExibicao(meuPerfil?.nome) || "Você";
       }
 
       setAutorNome(nomeAutor);
@@ -192,10 +273,11 @@ export default function AtaCard({
           .eq("id", ata.alterado_por)
           .single();
 
-        const nome = perfilAlterador?.nome ||
+        let nome = perfilAlterador?.nome ||
           (await supabase.from("profiles").select("nome").eq("user_id", ata.alterado_por).single())?.data?.nome ||
           "Usuário desconhecido";
 
+        nome = formatarNomeExibicao(nome);
         setAlteradoPorNome(nome);
 
         if (ata.alterado_em) {
@@ -214,7 +296,7 @@ export default function AtaCard({
       console.error("Erro ao carregar ata:", err);
       setLoading(false);
     }
-  }, [notaAtual, usuarioId]);
+  }, [notaAtual?.id, usuarioId, formatarNomeExibicao]);
 
   useEffect(() => {
     fetchProjeto();
@@ -222,8 +304,32 @@ export default function AtaCard({
   }, [fetchProjeto, fetchUsuarioLogado]);
 
   useEffect(() => {
-    if (projetoAtual?.id && notaAtual?.id) fetchAta();
+    if (projetoAtual?.id && notaAtual?.id) {
+      fetchAta();
+    }
   }, [projetoAtual?.id, notaAtual?.id, fetchAta]);
+
+  useEffect(() => {
+    if (!notaAtual?.id) return;
+    
+    const key = `rascunho_ata_${notaAtual.id}`;
+    
+    const timer = setTimeout(() => {
+      const rascunho = {
+        pauta,
+        local,
+        texto,
+        proxima,
+        dataLocal,
+        participantes,
+        timestamp: Date.now()
+      };
+      
+      localStorage.setItem(key, JSON.stringify(rascunho));
+    }, 500);
+    
+    return () => clearTimeout(timer);
+  }, [pauta, local, texto, proxima, dataLocal, participantes, notaAtual?.id]);
 
   const handleParticipanteChange = async (e) => {
     const v = e.target.value;
@@ -291,12 +397,26 @@ export default function AtaCard({
     if (!participantes.some(p => p.id === item.id)) {
       setParticipantes([...participantes, {
         id: item.id,
-        nome: item.nickname || item.nome,
+        nome: formatarNomeExibicao(item.nome), // ✅ Usa nome real (não nickname) formatado para 2 nomes
         funcao: item.funcao || "Membro"
       }]);
     }
     setParticipanteInput("");
     setSugestoesParticipantes([]);
+    setShowParticipanteInput(false);
+  };
+
+  const adicionarParticipanteExterno = () => {
+    if (participanteInput.trim()) {
+      setParticipantes(prev => [...prev, {
+        id: `ext-${extIdCounter}`,
+        nome: formatarNomeExibicao(participanteInput.trim()), // ✅ Formata para 2 nomes
+        funcao: "Externo"
+      }]);
+      setParticipanteInput("");
+      setExtIdCounter(prev => prev + 1);
+      setShowParticipanteInput(false);
+    }
   };
 
   const removerParticipante = (id) => setParticipantes(participantes.filter(p => p.id !== id));
@@ -316,6 +436,7 @@ export default function AtaCard({
           .from("ata_objetivos")
           .select(`*, profiles(id, nome)`)
           .eq("ata_id", ataId)
+          .order("ordem", { ascending: true })
           .order("id", { ascending: true });
 
         if (objetivosData?.length) {
@@ -448,6 +569,10 @@ export default function AtaCard({
       }
 
       setSalvoComSucesso(true);
+      
+      const key = `rascunho_ata_${notaAtual.id}`;
+      localStorage.removeItem(key);
+      
       setTimeout(() => setSalvoComSucesso(false), 2000);
     } catch (e) {
       console.error(e);
@@ -456,7 +581,7 @@ export default function AtaCard({
       setSalvando(false);
     }
   }, [
-    ataId, usuarioId, notaAtual, projetoAtual, pauta, local, texto, proxima, dataLocal, participantes, containerAtual
+    ataId, usuarioId, notaAtual, projetoAtual, pauta, local, texto, proxima, dataLocal, participantes
   ]);
 
   if (loading) {
@@ -494,82 +619,148 @@ export default function AtaCard({
         </div>
       </div>
 
-      <div className="ata-body">
-        {["pauta", "local"].map(campo => (
-          <div key={campo} className="ata-section">
-            {editing[campo] ? (
+      <div className="ata-header">
+        <div className="ata-header-left">
+          <div className="ata-section pauta-section">
+            {editing.pauta ? (
               <input
-                className={`${campo}-input`}
-                value={campo === "pauta" ? pauta : local}
-                onChange={e => campo === "pauta" ? setPauta(e.target.value) : setLocal(e.target.value)}
-                onBlur={() => setEditing({ ...editing, [campo]: false })}
-                onKeyDown={e => e.key === "Enter" && setEditing({ ...editing, [campo]: false })}
+                className="pauta-input"
+                value={pauta}
+                onChange={e => setPauta(e.target.value)}
+                onBlur={() => setEditing({ ...editing, pauta: false })}
+                onKeyDown={e => e.key === "Enter" && setEditing({ ...editing, pauta: false })}
                 autoFocus
               />
             ) : (
               <span
-                className={`${campo}-text`}
-                onDoubleClick={() => setEditing({ ...editing, [campo]: true })}
-                style={{ cursor: "pointer" }}
+                className="pauta-text"
+                onDoubleClick={() => setEditing({ ...editing, pauta: true })}
               >
-                {campo === "pauta" ? pauta || "Pauta da reunião" : local || "Local"}
+                {pauta || "Pauta da reunião"}
               </span>
             )}
           </div>
-        ))}
 
-        <div className="ata-section">
-          <input
-            type="text"
-            value={participanteInput}
-            onChange={handleParticipanteChange}
-            placeholder="@nickname ou nome (externo) + enter"
-            className="participante-input"
-            onKeyDown={e => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                if (sugestoesParticipantes.length > 0) {
-                  selecionarSugestao(sugestoesParticipantes[0]);
-                } else if (participanteInput.trim()) {
-                  setParticipantes(prev => [...prev, {
-                    id: `ext-${extIdCounter}`,
-                    nome: participanteInput.trim(),
-                    funcao: "Externo"
-                  }]);
-                  setParticipanteInput("");
-                  setExtIdCounter(prev => prev + 1);
-                }
-              }
-            }}
-          />
-          {sugestoesParticipantes.length > 0 && (
-            <div className="sugestoes-list1">
-              {sugestoesParticipantes.map(item => (
-                <div key={item.id} className="sugestao-item" onClick={() => selecionarSugestao(item)}>
-                  <span>@{item.nickname || item.nome}</span>
-                  <span className="sugestao-funcao">{item.funcao}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="participantes-list">
-            {participantes
-              .filter(p => p && typeof p === 'object')
-              .map(p => (
-                <div key={p.id} className="participante-item">
-                  <span>{p.nome || "Nome não informado"} ({p.funcao || "Função não informada"})</span>
-                  <span className="remover-participante" onClick={() => removerParticipante(p.id)}>×</span>
-                </div>
-              ))}
+          <div className="ata-section local-section">
+            {editing.local ? (
+              <input
+                className="local-input"
+                value={local}
+                onChange={e => setLocal(e.target.value)}
+                onBlur={() => setEditing({ ...editing, local: false })}
+                onKeyDown={e => e.key === "Enter" && setEditing({ ...editing, local: false })}
+              />
+            ) : (
+              <span
+                className="local-text"
+                onDoubleClick={() => setEditing({ ...editing, local: true })}
+              >
+                {local || "Local"}
+              </span>
+            )}
+          </div>
+
+          <div className="ata-section data-section">
+            {editingDataLocal ? (
+              <input
+                type="text"
+                value={dataLocal}
+                placeholder="Cidade, DD de Mês de AAAA"
+                onChange={e => setDataLocal(e.target.value)}
+                onBlur={() => setEditingDataLocal(false)}
+                onKeyDown={e => e.key === "Enter" && setEditingDataLocal(false)}
+                autoFocus
+              />
+            ) : (
+              <span
+                className="data-local-text"
+                onDoubleClick={() => setEditingDataLocal(true)}
+              >
+                {dataLocal || "cidade e data"}
+              </span>
+            )}
           </div>
         </div>
 
+        <div className="ata-header-right">
+          <div className="participantes-header">
+            <span className="participantes-title">Integrantes</span>
+            <button 
+              className="btn-add-participante"
+              onClick={() => setShowParticipanteInput(true)}
+            >
+              <FaUserPlus />
+            </button>
+          </div>
+
+          <div ref={participantesSectionRef} className="participantes-section">
+            {showParticipanteInput && (
+              <input
+                type="text"
+                value={participanteInput}
+                onChange={handleParticipanteChange}
+                placeholder="@nickname ou nome (externo) + enter"
+                className="participante-input"
+                autoFocus
+                onKeyDown={e => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    if (sugestoesParticipantes.length > 0) {
+                      selecionarSugestao(sugestoesParticipantes[0]);
+                    } else {
+                      adicionarParticipanteExterno();
+                    }
+                  }
+                }}
+                onBlur={() => {
+                  // Delay para permitir clique nas sugestões
+                  setTimeout(() => {
+                    if (!sugestoesParticipantes.length) {
+                      setShowParticipanteInput(false);
+                      setParticipanteInput("");
+                    }
+                  }, 200);
+                }}
+              />
+            )}
+            {showParticipanteInput && sugestoesParticipantes.length > 0 && (
+              <div className="sugestoes-list1">
+                {sugestoesParticipantes.map(item => (
+                  <div key={item.id} className="sugestao-item" onClick={() => selecionarSugestao(item)}>
+                    <span>@{item.nickname || item.nome}</span>
+                    <span className="sugestao-funcao">{item.funcao}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="participantes-list">
+              {participantes
+                .filter(p => p && typeof p === 'object')
+                .map(p => (
+                  <div key={p.id} className="participante-item">
+                    <span className="participante-nome">{p.nome || "Nome não informado"}</span>
+                    <span className="participante-funcao">{p.funcao || "Função não informada"}</span>
+                    <span className="remover-participante" onClick={() => removerParticipante(p.id)}>×</span>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="ata-body">
         <div className="ata-section">
+          {/* ✅ Título "Texto" acima da textarea com mesma formatação de "Integrantes" */}
+          <div className="participantes-header">
+            <span className="participantes-title">Texto</span>
+          </div>
+          
           <textarea
             value={texto}
             onChange={e => setTexto(e.target.value)}
             rows={6}
             placeholder="Digite o texto da ata..."
+            className="ata-textarea"
           />
         </div>
 
@@ -589,28 +780,6 @@ export default function AtaCard({
           <div className="proxima-reuniao-linha">
             <label>Próxima reunião em:</label>
             <input type="date" value={proxima} onChange={e => setProxima(e.target.value)} className="proxima-data-input" />
-          </div>
-
-          <div className="ata-data-local">
-            {editingDataLocal ? (
-              <input
-                type="text"
-                value={dataLocal}
-                placeholder="Cidade, DD de Mês de AAAA"
-                onChange={e => setDataLocal(e.target.value)}
-                onBlur={() => setEditingDataLocal(false)}
-                onKeyDown={e => e.key === "Enter" && setEditingDataLocal(false)}
-                autoFocus
-              />
-            ) : (
-              <span
-                className="data-local-text"
-                onDoubleClick={() => setEditingDataLocal(true)}
-                style={{ cursor: "pointer" }}
-              >
-                {dataLocal || "Clique duas vezes para inserir cidade e data"}
-              </span>
-            )}
           </div>
 
           <div className="ata-autor">
