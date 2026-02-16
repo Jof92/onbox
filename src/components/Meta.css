@@ -213,18 +213,6 @@
   margin-bottom: 4px;
 }
 
-.chip-responsavel {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-size: 12px;
-  max-width: 140px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-weight: 500;
-}
 
 .chip-responsavel.interno {
   background: #e0f2fe;
@@ -236,16 +224,6 @@
   background: #fde68a;
   color: #854d0e;
   border: 1px solid #fcd34d;
-}
-
-.chip-remove {
-  margin-left: 6px;
-  cursor: pointer;
-  font-weight: bold;
-  font-size: 14px;
-  color: inherit;
-  opacity: 0.7;
-  transition: opacity 0.2s;
 }
 
 .chip-remove:hover {

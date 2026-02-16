@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../supabaseClient";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faUserPlus, faCalendar, faShareFromSquare } from "@fortawesome/free-solid-svg-icons";
+import { faUserPlus, faCalendar, faShareFromSquare, faPaperPlane } from "@fortawesome/free-solid-svg-icons";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 
 const VERBOS = [
@@ -33,10 +33,11 @@ const extrairObjetivosValidos = (texto) => {
   return matches;
 };
 
-const ComentarioIcon = ({ onClick, title }) => (
+const ComentarioIcon = ({ onClick, title, hasComments }) => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
     strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-    style={{ cursor: 'pointer' }} onClick={onClick} title={title}>
+    style={{ cursor: 'pointer', color: hasComments ? '#10b981' : 'currentColor' }} 
+    onClick={onClick} title={title}>
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
   </svg>
 );
@@ -52,6 +53,7 @@ const podeDesmarcarConclusao = (concluidoEm) => {
 const ChipResponsavel = ({ responsavel, onRemove, disabled }) => {
   const nomeExibicao = responsavel.nome_exibicao || "Usuário";
   const isExterno = !responsavel.usuario_id;
+  const avatarUrl = responsavel.avatar_url;
 
   const gerarAbreviacao = (nome) => {
     if (!nome) return "U";
@@ -76,7 +78,25 @@ const ChipResponsavel = ({ responsavel, onRemove, disabled }) => {
       className={`chip-responsavel ${isExterno ? 'chip-externo' : ''}`}
       title={nomeExibicao}
     >
-      {abreviacao}
+      <div className="chip-responsavel-avatar-container">
+        {avatarUrl && !isExterno ? (
+          <img 
+            src={avatarUrl} 
+            alt={nomeExibicao}
+            className="chip-responsavel-avatar"
+            onError={(e) => {
+              e.target.style.display = 'none';
+              e.target.nextSibling.style.display = 'flex';
+            }}
+          />
+        ) : null}
+        <div 
+          className="chip-responsavel-iniciais"
+          style={{ display: avatarUrl && !isExterno ? 'none' : 'flex' }}
+        >
+          {abreviacao}
+        </div>
+      </div>
       {!disabled && (
         <span
           onClick={(e) => {
@@ -108,6 +128,8 @@ export default function AtaObjetivos({
   const [sugestoesResponsavel, setSugestoesResponsavel] = useState({});
   const [editandoComentario, setEditandoComentario] = useState({});
   const [comentarioTemp, setComentarioTemp] = useState({});
+  const [comentariosObjetivo, setComentariosObjetivo] = useState({});
+  const [enviandoComentario, setEnviandoComentario] = useState({});
   const [meuNome, setMeuNome] = useState("Você");
   const [inputResponsavel, setInputResponsavel] = useState({});
   const [mostrarAtasDisponiveis, setMostrarAtasDisponiveis] = useState({});
@@ -152,6 +174,41 @@ export default function AtaObjetivos({
     }
   }, [usuarioId, notaAtual, projetoAtual, containerAtual]);
 
+  const carregarComentarios = useCallback(async (objetivoId) => {
+    if (!objetivoId || String(objetivoId).startsWith('temp')) return [];
+
+    const { data, error } = await supabase
+      .from("ata_objetivos_comentarios")
+      .select("*")
+      .eq("ata_objetivo_id", objetivoId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("Erro ao carregar comentários:", error);
+      return [];
+    }
+
+    if (!data || data.length === 0) return [];
+
+    // Buscar nomes dos usuários
+    const userIds = [...new Set(data.map(c => c.usuario_id))];
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, nome")
+      .in("id", userIds);
+
+    // Mapear profiles aos comentários
+    const profilesMap = (profiles || []).reduce((acc, p) => {
+      acc[p.id] = p.nome;
+      return acc;
+    }, {});
+
+    return data.map(c => ({
+      ...c,
+      profiles: { nome: profilesMap[c.usuario_id] || "Usuário" }
+    }));
+  }, []);
+
   const carregarObjetivos = useCallback(async () => {
     if (!ataId) {
       setObjetivosList([]);
@@ -184,13 +241,31 @@ export default function AtaObjetivos({
         .in("ata_objetivo_id", objetivoIds);
 
       if (!respErr && Array.isArray(respData)) {
+        // ✅ NOVO: Buscar avatares dos usuários
+        const userIds = [...new Set(respData.filter(r => r.usuario_id).map(r => r.usuario_id))];
+        
+        let avatarMap = {};
+        if (userIds.length > 0) {
+          const { data: profilesData } = await supabase
+            .from("profiles")
+            .select("id, avatar_url")
+            .in("id", userIds);
+          
+          avatarMap = (profilesData || []).reduce((acc, p) => {
+            acc[p.id] = p.avatar_url;
+            return acc;
+          }, {});
+        }
+
+        // ✅ MODIFICADO: Incluir avatar_url
         respPorObj = respData.reduce((acc, r) => {
           if (!acc[r.ata_objetivo_id]) acc[r.ata_objetivo_id] = [];
           acc[r.ata_objetivo_id].push({
             id: r.id,
             usuario_id: r.usuario_id,
             nome_externo: r.nome_externo,
-            nome_exibicao: r.nome_exibicao
+            nome_exibicao: r.nome_exibicao,
+            avatar_url: avatarMap[r.usuario_id] || null
           });
           return acc;
         }, {});
@@ -200,13 +275,11 @@ export default function AtaObjetivos({
     const objetivos = lista
       .filter(o => !o.texto?.startsWith(PREFIXO_EXCLUIDO))
       .map(o => {
-        // Detectar se foi enviado pelo padrão do comentário
         const foiEnviado = o.comentario?.startsWith('Objetivo enviado para:');
         const ataDestinoNome = foiEnviado 
           ? o.comentario.replace('Objetivo enviado para:', '').trim()
           : null;
         
-        // Detectar se veio de outra ata pelo padrão [ORIGEM:id]
         const matchOrigem = o.comentario?.match(/\[ORIGEM:(\d+)\]/);
         const foiRecebido = matchOrigem !== null;
         const ataOrigemId = matchOrigem ? parseInt(matchOrigem[1]) : null;
@@ -228,6 +301,16 @@ export default function AtaObjetivos({
 
     setObjetivosList(objetivos);
     setCriarObjetivos(objetivos.length > 0);
+
+    // Carregar comentários para cada objetivo
+    const comentariosMap = {};
+    for (const obj of objetivos) {
+      if (obj.id && !String(obj.id).startsWith('temp')) {
+        const comentarios = await carregarComentarios(obj.id);
+        comentariosMap[obj.id] = comentarios;
+      }
+    }
+    setComentariosObjetivo(comentariosMap);
 
     // Buscar nomes das atas de origem para objetivos recebidos
     const atasOrigemIds = [...new Set(objetivos
@@ -259,7 +342,7 @@ export default function AtaObjetivos({
         }
       }
     }
-  }, [ataId]);
+  }, [ataId, carregarComentarios]);
 
   useEffect(() => {
     carregarObjetivos();
@@ -550,6 +633,13 @@ export default function AtaObjetivos({
     if (objetivo?.concluido) return;
     if (objetivo?.responsaveis.some(r => r.usuario_id === item.id)) return;
 
+    // ✅ NOVO: Buscar avatar do usuário
+    const { data: profileData } = await supabase
+      .from("profiles")
+      .select("avatar_url")
+      .eq("id", item.id)
+      .single();
+
     const novos = [...objetivosList];
     const novoResp = {
       id: Date.now() + Math.random(),
@@ -557,6 +647,7 @@ export default function AtaObjetivos({
       nome: item.nome,
       nickname: item.nickname,
       nome_exibicao: item.nome,
+      avatar_url: profileData?.avatar_url || null,
     };
     novos[i] = { ...novos[i], responsaveis: [...novos[i].responsaveis, novoResp] };
     setObjetivosList(novos);
@@ -617,7 +708,6 @@ export default function AtaObjetivos({
     if (!ataId || !projetoAtual?.id) return;
 
     try {
-      // 1. Buscar todas as pilhas do projeto/setor atual
       const campoPilha = projetoAtual.tipo === 'projeto' ? 'project_id' : 'setor_id';
       
       const { data: pilhas, error: erroPilhas } = await supabase
@@ -635,7 +725,6 @@ export default function AtaObjetivos({
 
       const pilhaIds = pilhas.map(p => p.id);
 
-      // 2. Buscar todas as notas do tipo "Atas" nessas pilhas
       const { data: notasAtas, error: erroNotas } = await supabase
         .from("notas")
         .select("id, nome, pilha_id, progresso")
@@ -644,7 +733,6 @@ export default function AtaObjetivos({
 
       if (erroNotas) throw erroNotas;
 
-      // 3. Filtrar para excluir a nota atual E notas com 100% de progresso
       const notasDisponiveis = (notasAtas || [])
         .filter(n => 
           n.id !== notaAtual?.id && 
@@ -659,7 +747,6 @@ export default function AtaObjetivos({
 
       const notasIds = notasDisponiveis.map(n => n.id);
 
-      // 4. Buscar atas correspondentes
       const { data: atas, error: atasError } = await supabase
         .from("atas")
         .select("id, pauta, nota_id")
@@ -667,7 +754,6 @@ export default function AtaObjetivos({
 
       if (atasError) throw atasError;
 
-      // 5. Combinar informações de notas e atas
       const atasComNome = (atas || []).map(ata => {
         const nota = notasDisponiveis.find(n => n.id === ata.nota_id);
         return {
@@ -700,8 +786,7 @@ export default function AtaObjetivos({
     }
 
     try {
-      // 1. Criar cópia do objetivo na ata de destino com marcação de origem
-      const comentarioOrigem = `[ORIGEM:${ataId}]`; // Marca invisível da origem
+      const comentarioOrigem = `[ORIGEM:${ataId}]`;
       
       const novoObjetivo = {
         ata_id: ataDestinoId,
@@ -710,7 +795,7 @@ export default function AtaObjetivos({
         comentario: comentarioOrigem,
         data_entrega: objetivo.dataEntrega,
         concluido_em: null,
-        ordem: 0, // Será inserido no início
+        ordem: 0,
       };
 
       const { data: objetivoInserido, error: erroInsert } = await supabase
@@ -721,7 +806,6 @@ export default function AtaObjetivos({
 
       if (erroInsert) throw erroInsert;
 
-      // 2. Copiar responsáveis para o novo objetivo
       if (objetivo.responsaveis.length > 0) {
         const responsaveisParaInserir = objetivo.responsaveis.map(r => ({
           ata_objetivo_id: objetivoInserido.id,
@@ -736,7 +820,6 @@ export default function AtaObjetivos({
         if (erroResp) console.error("Erro ao copiar responsáveis:", erroResp);
       }
 
-      // 3. Marcar objetivo original como concluído/enviado
       const agora = new Date();
       const comentarioEnviado = `Objetivo enviado para: ${ataDestinoNome}`;
       
@@ -751,7 +834,6 @@ export default function AtaObjetivos({
 
       if (erroUpdate) throw erroUpdate;
 
-      // 4. Atualizar na lista local
       const novosObjetivos = [...objetivosList];
       novosObjetivos[objetivoIndex] = {
         ...objetivo,
@@ -763,7 +845,6 @@ export default function AtaObjetivos({
       };
       setObjetivosList(novosObjetivos);
 
-      // 5. Atualizar progresso da ata
       const novoProgresso = Math.round(
         (novosObjetivos.filter(o => o.concluido).length / novosObjetivos.length) * 100
       );
@@ -776,7 +857,6 @@ export default function AtaObjetivos({
         await supabase.from("notas").update({ progresso: novoProgresso }).eq("id", notaAtual.id);
       }
 
-      // 6. Fechar menu
       setMostrarAtasDisponiveis(prev => ({ ...prev, [objetivoIndex]: false }));
 
       alert("Objetivo realocado com sucesso!");
@@ -786,48 +866,99 @@ export default function AtaObjetivos({
     }
   };
 
-  const iniciarEdicaoComentario = (i, comentarioAtual) => {
-    let comentarioPuro = comentarioAtual || "";
-    if (comentarioPuro.includes(" — Comentário por ")) {
-      const ultimaOcorrencia = comentarioPuro.lastIndexOf(" — Comentário por ");
-      comentarioPuro = comentarioPuro.substring(0, ultimaOcorrencia);
-    }
-    setEditandoComentario(prev => ({ ...prev, [i]: true }));
-    setComentarioTemp(prev => ({ ...prev, [i]: comentarioPuro }));
-  };
+  const enviarComentario = async (i) => {
+    const comentario = comentarioTemp[i]?.trim();
+    if (!comentario) return;
 
-  const salvarComentario = async (i) => {
-    const comentario = comentarioTemp[i] || "";
     const objetivo = objetivosList[i];
     if (!objetivo?.id || !usuarioId || String(objetivo.id).startsWith('temp')) return;
 
-    const comentarioComAutor = `${comentario} — Comentário por ${meuNome}`;
-    try {
-      const { error } = await supabase
-        .from("ata_objetivos")
-        .update({ comentario: comentarioComAutor, comentario_por: usuarioId })
-        .eq("id", objetivo.id);
-      if (error) throw error;
-      
-      const novos = [...objetivosList];
-      novos[i].comentario = comentarioComAutor;
-      setObjetivosList(novos);
-      setEditandoComentario(prev => ({ ...prev, [i]: false }));
+    // Prevenir múltiplos envios
+    if (enviandoComentario[i]) return;
+    setEnviandoComentario(prev => ({ ...prev, [i]: true }));
 
+    try {
+      // Criar comentário temporário para update otimista (mostra imediatamente)
+      const tempId = `temp-${Date.now()}`;
+      const comentarioOtimista = {
+        id: tempId,
+        ata_objetivo_id: objetivo.id,
+        usuario_id: usuarioId,
+        comentario: comentario,
+        created_at: new Date().toISOString(),
+        profiles: { nome: meuNome }
+      };
+
+      // Atualizar UI imediatamente (update otimista)
+      setComentariosObjetivo(prev => ({
+        ...prev,
+        [objetivo.id]: [...(prev[objetivo.id] || []), comentarioOtimista]
+      }));
+
+      // Limpar input imediatamente
+      setComentarioTemp(prev => ({ ...prev, [i]: "" }));
+
+      // Salvar no banco em background
+      const { data, error } = await supabase
+        .from("ata_objetivos_comentarios")
+        .insert({
+          ata_objetivo_id: objetivo.id,
+          usuario_id: usuarioId,
+          comentario: comentario
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Buscar nome do usuário
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("nome")
+        .eq("id", usuarioId)
+        .single();
+
+      // Substituir comentário temporário pelo real
+      const comentarioReal = {
+        ...data,
+        profiles: { nome: profile?.nome || meuNome }
+      };
+
+      setComentariosObjetivo(prev => ({
+        ...prev,
+        [objetivo.id]: prev[objetivo.id].map(c => 
+          c.id === tempId ? comentarioReal : c
+        )
+      }));
+
+      // Notificar responsáveis
       for (const resp of objetivo.responsaveis) {
-        if (resp.usuario_id) {
-          await sendNotification(resp.usuario_id, `Novo comentário em objetivo: ${objetivo.texto}`, "objetivo_comentario", objetivo);
+        if (resp.usuario_id && resp.usuario_id !== usuarioId) {
+          await sendNotification(
+            resp.usuario_id, 
+            `Novo comentário em objetivo: ${objetivo.texto}`, 
+            "objetivo_comentario", 
+            objetivo
+          );
         }
       }
 
     } catch (err) {
-      console.error("Erro ao salvar comentário:", err);
-      alert("Erro ao salvar comentário.");
+      console.error("Erro ao enviar comentário:", err);
+      
+      // Remover comentário otimista em caso de erro
+      setComentariosObjetivo(prev => ({
+        ...prev,
+        [objetivo.id]: prev[objetivo.id].filter(c => !String(c.id).startsWith('temp-'))
+      }));
+      
+      // Restaurar texto no input
+      setComentarioTemp(prev => ({ ...prev, [i]: comentario }));
+      
+      alert("Erro ao enviar comentário. Tente novamente.");
+    } finally {
+      setEnviandoComentario(prev => ({ ...prev, [i]: false }));
     }
-  };
-
-  const cancelarComentario = (i) => {
-    setEditandoComentario(prev => ({ ...prev, [i]: false }));
   };
 
   const handleCriarObjetivosChange = (e) => {
@@ -898,13 +1029,10 @@ export default function AtaObjetivos({
                   {objetivosList.map((o, i) => {
                     const textoCapitalizado = o.texto.charAt(0).toUpperCase() + o.texto.slice(1);
                     const numeroObjetivo = `${i + 1}.`;
-                    const isEditing = editandoComentario[i];
                     const isConcluido = o.concluido;
                     const podeDesmarcar = podeDesmarcarConclusao(o.concluidoEm);
-                    const comentarioPreview = comentarioTemp[i] || "";
-                    const comentarioComAutorPreview = comentarioPreview
-                      ? `${comentarioPreview} — Comentário feito por ${meuNome}`
-                      : "";
+                    const comentarios = comentariosObjetivo[o.id] || [];
+                    const hasComments = comentarios.length > 0;
 
                     return (
                       <Draggable 
@@ -945,7 +1073,7 @@ export default function AtaObjetivos({
                                   marginTop: '4px',
                                   fontWeight: '500'
                                 }}>
-                                  📤 Objetivo enviado para: {o.ataDestinoNome}
+                                  Objetivo enviado para: {o.ataDestinoNome}
                                 </div>
                               )}
                               {o.recebido && o.ataOrigemId && atasOrigemNomes[o.ataOrigemId] && (
@@ -956,15 +1084,15 @@ export default function AtaObjetivos({
                                   marginTop: '4px',
                                   fontWeight: '500'
                                 }}>
-                                  📥 Vindo da ata: {atasOrigemNomes[o.ataOrigemId]}
+                                  Vindo da ata {atasOrigemNomes[o.ataOrigemId]}
                                 </div>
                               )}
                             </span>
 
                             <div className="objetivo-responsaveis-chips">
-                              {o.responsaveis.map(resp => (
+                              {o.responsaveis.map((resp, respIdx) => (
                                 <ChipResponsavel
-                                  key={resp.id}
+                                  key={`${o.id}-${resp.id}-${respIdx}`}
                                   responsavel={resp}
                                   onRemove={(r) => removerResponsavel(r, i)}
                                   disabled={isConcluido}
@@ -1086,7 +1214,6 @@ export default function AtaObjetivos({
                                     />
                                   </label>
                                   
-                                  {/* ✅ BOTÃO DE REALOCAR OBJETIVO */}
                                   <div style={{ position: 'relative' }}>
                                     <span
                                       className="icone-share"
@@ -1104,7 +1231,6 @@ export default function AtaObjetivos({
                                       <FontAwesomeIcon icon={faShareFromSquare} style={{ fontSize: '14px', color: '#555' }} />
                                     </span>
 
-                                    {/* Menu flutuante de atas disponíveis */}
                                     {mostrarAtasDisponiveis[i] && (
                                       <div 
                                         className="menu-atas-disponiveis"
@@ -1193,7 +1319,6 @@ export default function AtaObjetivos({
                                               <div style={{ fontSize: '12px', color: '#666', fontStyle: 'italic', marginBottom: '4px' }}>
                                                 {ata.pauta}
                                               </div>
-                                              {/* Barra de progresso */}
                                               <div style={{ 
                                                 display: 'flex', 
                                                 alignItems: 'center', 
@@ -1234,36 +1359,78 @@ export default function AtaObjetivos({
 
                               {isConcluido && (
                                 <div style={{ position: "relative" }}>
-                                  {isEditing ? (
-                                    <div className="comentario-editor">
-                                      <textarea
-                                        value={comentarioTemp[i] || ""}
-                                        onChange={e => setComentarioTemp(prev => ({ ...prev, [i]: e.target.value }))}
-                                        placeholder="Descreva como o objetivo foi concluído..."
-                                        rows={2}
-                                        className="comentario-textarea"
-                                      />
-                                      {comentarioTemp[i] && (
-                                        <div className="comentario-preview">
-                                          <small style={{ color: "#666", fontStyle: "italic" }}>
-                                            {comentarioComAutorPreview}
-                                          </small>
-                                        </div>
-                                      )}
-                                      <div className="comentario-actions">
-                                        <button onClick={() => salvarComentario(i)} className="btn-comentario-salvar">
-                                          Salvar
-                                        </button>
-                                        <button onClick={() => cancelarComentario(i)} className="btn-comentario-cancelar">
-                                          Cancelar
+                                  <ComentarioIcon
+                                    onClick={() => setEditandoComentario(prev => ({ ...prev, [i]: !prev[i] }))}
+                                    title={hasComments ? "Ver comentários" : "Adicionar comentário"}
+                                    hasComments={hasComments}
+                                  />
+                                  
+                                  {editandoComentario[i] && (
+                                    <div className="comentario-chat-container">
+                                      <div className="comentario-input-area">
+                                        <input
+                                          type="text"
+                                          value={comentarioTemp[i] || ""}
+                                          onChange={e => setComentarioTemp(prev => ({ ...prev, [i]: e.target.value }))}
+                                          placeholder="Adicionar comentário..."
+                                          className="comentario-input"
+                                          disabled={enviandoComentario[i]}
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter" && !e.shiftKey && !enviandoComentario[i]) {
+                                              e.preventDefault();
+                                              enviarComentario(i);
+                                            }
+                                          }}
+                                        />
+                                        <button 
+                                          onClick={() => enviarComentario(i)} 
+                                          className="btn-enviar-comentario"
+                                          disabled={!comentarioTemp[i]?.trim() || enviandoComentario[i]}
+                                        >
+                                          {enviandoComentario[i] ? (
+                                            <span className="spinner-comentario"></span>
+                                          ) : (
+                                            <FontAwesomeIcon icon={faPaperPlane} />
+                                          )}
                                         </button>
                                       </div>
+                                      
+                                      {comentarios.length > 0 && (
+                                        <div className="comentarios-lista">
+                                          {comentarios.map((c, idx) => {
+                                            const isTemp = String(c.id).startsWith('temp-');
+                                            return (
+                                              <div 
+                                                key={`${c.id}-${c.created_at}-${idx}`} 
+                                                className={`comentario-item ${isTemp ? 'comentario-temporario' : ''}`}
+                                              >
+                                                <div className="comentario-autor">
+                                                  {c.profiles?.nome || "Usuário"}:
+                                                </div>
+                                                <div className="comentario-texto">
+                                                  {c.comentario}
+                                                </div>
+                                                <div className="comentario-data">
+                                                  {isTemp ? (
+                                                    <span style={{ fontStyle: 'italic', color: '#9ca3af' }}>
+                                                      Enviando...
+                                                    </span>
+                                                  ) : (
+                                                    new Date(c.created_at).toLocaleDateString('pt-BR', {
+                                                      day: '2-digit',
+                                                      month: '2-digit',
+                                                      year: 'numeric',
+                                                      hour: '2-digit',
+                                                      minute: '2-digit'
+                                                    })
+                                                  )}
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
                                     </div>
-                                  ) : (
-                                    <ComentarioIcon
-                                      onClick={() => iniciarEdicaoComentario(i, o.comentario)}
-                                      title={o.comentario ? "Editar comentário" : "Adicionar comentário"}
-                                    />
                                   )}
                                 </div>
                               )}
