@@ -44,9 +44,6 @@
   margin-top: 2px;
 }
 
-/* ==============================
-   ℹ️ Barra de info (gerador/envio)
-   ============================== */
 .listagem-info-bar {
   display: flex;
   align-items: center;
@@ -54,7 +51,7 @@
   padding: 8px 24px;
   background: #f0f7ff;
   border-bottom: 1px solid #d0e8ff;
-  font-size: 13px;
+  font-size: 12px;
   color: #4a6080;
   min-height: 36px;
 }
@@ -69,7 +66,6 @@
    ============================== */
 .action-buttons {
   padding: 12px 24px;
-  background: #f6f8fa;
   display: flex;
   gap: 12px;
   flex-wrap: wrap;

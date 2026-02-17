@@ -806,7 +806,7 @@ export default function Column({
                                   gap: '3px',
                                   marginTop: '6px',
                                   padding: '6px 8px',
-                                  backgroundColor: 'rgba(46, 125, 50, 0.05)',
+                                  backgroundColor: 'rgba(136, 32, 6, 0.02)',
                                   borderRadius: '4px',
                                   alignItems: 'center'
   
@@ -819,7 +819,7 @@ export default function Column({
                                       fontSize: '11px',
                                       lineHeight: '1.3'
                                     }}>
-                                      <span style={{ fontWeight: 600, color: '#2e7d32' }}>{infoRecebido.projetoNome}</span>
+                                      <span style={{ fontWeight: 600, color: '#6d0206' }}>{infoRecebido.projetoNome}</span>
                                     </div>
                                   )}
                                   {infoRecebido.dataEnvio && (
