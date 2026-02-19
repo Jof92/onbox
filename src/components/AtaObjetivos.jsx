@@ -345,36 +345,41 @@ export default function AtaObjetivos({
     lastTextRef.current = "";
   }, [carregarObjetivos]);
 
-  // ✅ CORREÇÃO: Sincronização do texto com objetivos — só age se o texto usar aspas simples (formato novo)
+  // ✅ CORREÇÃO COMPLETA: Sincronização do texto com objetivos
+  // Regra principal: objetivos já salvos no banco (com ID real) NUNCA são removidos pelo texto.
+  // O texto só serve para ADICIONAR novos objetivos temporários (ainda não salvos).
+  // Objetivos só são removidos quando o usuário clica explicitamente no "×".
   useEffect(() => {
     if (!criarObjetivos || isUpdatingRef.current) return;
-
-    // ✅ Se o texto NÃO usa aspas simples, são atas antigas cujos objetivos já vieram do banco — não sobrescrever
-    if (!textoUsaAspasSimples(texto)) return;
-
-    const validos = extrairObjetivosValidos(texto);
 
     if (lastTextRef.current === texto) return;
     lastTextRef.current = texto;
 
     isUpdatingRef.current = true;
 
-    const textosSalvos = new Map();
-    objetivosList
-      .filter(o => o.id && !String(o.id).startsWith('temp'))
-      .forEach(o => {
-        textosSalvos.set(o.texto.toLowerCase().trim(), o.id);
-      });
+    // Separar objetivos já salvos no banco (IDs reais) dos temporários
+    const objetivosSalvos = objetivosList.filter(
+      o => o.id && !String(o.id).startsWith('temp')
+    );
+    const textosSalvosSet = new Set(
+      objetivosSalvos.map(o => o.texto.toLowerCase().trim())
+    );
 
-    const novosObjetivos = validos.map(txt => {
-      const txtNormalizado = txt.toLowerCase().trim();
-      const idExistente = textosSalvos.get(txtNormalizado);
+    // Se o texto não usa aspas simples (formato antigo ou texto apagado),
+    // apenas garantir que os objetivos salvos continuem visíveis — sem adicionar temporários
+    if (!textoUsaAspasSimples(texto)) {
+      setObjetivosList(objetivosSalvos);
+      isUpdatingRef.current = false;
+      return;
+    }
 
-      if (idExistente) {
-        return objetivosList.find(o => o.id === idExistente);
-      }
+    // Formato novo (aspas simples): extrair objetivos do texto
+    const validos = extrairObjetivosValidos(texto);
 
-      return {
+    // Montar lista: primeiro os já salvos (preservados), depois os novos do texto que ainda não existem
+    const novosDoTexto = validos
+      .filter(txt => !textosSalvosSet.has(txt.toLowerCase().trim()))
+      .map(txt => ({
         id: `temp-${Date.now()}-${Math.random()}`,
         texto: txt,
         responsaveis: [],
@@ -382,12 +387,23 @@ export default function AtaObjetivos({
         concluido: false,
         concluidoEm: null,
         comentario: "",
-      };
-    });
+      }));
 
-    setObjetivosList(novosObjetivos);
+    // Reordenar os salvos conforme a ordem do texto, mantendo os que não estão mais no texto
+    const salvosNoTexto = validos
+      .map(txt => objetivosSalvos.find(o => o.texto.toLowerCase().trim() === txt.toLowerCase().trim()))
+      .filter(Boolean);
 
-    if (validos.length > 0 || objetivosList.length > 0) {
+    const salvosForaDoTexto = objetivosSalvos.filter(
+      o => !validos.some(txt => txt.toLowerCase().trim() === o.texto.toLowerCase().trim())
+    );
+
+    // Ordem final: salvos do texto (na ordem do texto) + salvos fora do texto + novos temporários
+    const listaFinal = [...salvosNoTexto, ...salvosForaDoTexto, ...novosDoTexto];
+
+    setObjetivosList(listaFinal);
+
+    if (listaFinal.length > 0) {
       setCriarObjetivos(true);
     }
 

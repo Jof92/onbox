@@ -974,7 +974,7 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: rgb(16, 16, 16);
   font-weight: 700;
   font-size: 11px;
   text-transform: uppercase;
