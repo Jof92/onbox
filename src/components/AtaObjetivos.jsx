@@ -16,27 +16,33 @@ const VERBOS = [
 
 const PREFIXO_EXCLUIDO = "[EXCLUIDO]";
 
+// ✅ Verifica se o texto usa o formato novo (aspas simples)
+const textoUsaAspasSimples = (texto) => {
+  return /'([^']+)'/.test(texto);
+};
+
+// ✅ Extrai objetivos do formato novo (aspas simples): 'objetivo aqui'
 const extrairObjetivosValidos = (texto) => {
   if (!texto?.trim()) return [];
-  
+
   const regex = /'([^']+)'/g;
   const matches = [];
   let match;
-  
+
   while ((match = regex.exec(texto)) !== null) {
     const objetivo = match[1].trim();
     if (objetivo) {
       matches.push(objetivo);
     }
   }
-  
+
   return matches;
 };
 
 const ComentarioIcon = ({ onClick, title, hasComments }) => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
     strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-    style={{ cursor: 'pointer', color: hasComments ? '#10b981' : 'currentColor' }} 
+    style={{ cursor: 'pointer', color: hasComments ? '#10b981' : 'currentColor' }}
     onClick={onClick} title={title}>
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
   </svg>
@@ -57,31 +63,28 @@ const ChipResponsavel = ({ responsavel, onRemove, disabled }) => {
 
   const gerarAbreviacao = (nome) => {
     if (!nome) return "U";
-    
     if (nome.includes('_')) {
       const partes = nome.split('_');
       return partes.map(p => p.charAt(0).toUpperCase()).join('_');
     }
-    
     if (nome.includes(' ')) {
       const partes = nome.split(' ').filter(p => p.length > 0);
       return partes.map(p => p.charAt(0).toUpperCase()).join('');
     }
-    
     return nome.substring(0, 2).charAt(0).toUpperCase() + nome.substring(1, 2).toLowerCase();
   };
 
   const abreviacao = gerarAbreviacao(nomeExibicao);
 
   return (
-    <span 
+    <span
       className={`chip-responsavel ${isExterno ? 'chip-externo' : ''}`}
       title={nomeExibicao}
     >
       <div className="chip-responsavel-avatar-container">
         {avatarUrl && !isExterno ? (
-          <img 
-            src={avatarUrl} 
+          <img
+            src={avatarUrl}
             alt={nomeExibicao}
             className="chip-responsavel-avatar"
             onError={(e) => {
@@ -90,7 +93,7 @@ const ChipResponsavel = ({ responsavel, onRemove, disabled }) => {
             }}
           />
         ) : null}
-        <div 
+        <div
           className="chip-responsavel-iniciais"
           style={{ display: avatarUrl && !isExterno ? 'none' : 'flex' }}
         >
@@ -135,6 +138,7 @@ export default function AtaObjetivos({
   const [mostrarAtasDisponiveis, setMostrarAtasDisponiveis] = useState({});
   const [atasDisponiveis, setAtasDisponiveis] = useState([]);
   const [atasOrigemNomes, setAtasOrigemNomes] = useState({});
+
   const verbosSet = React.useMemo(() => new Set(VERBOS), []);
   const isSaving = useRef(false);
   const lastTextRef = useRef("");
@@ -190,14 +194,12 @@ export default function AtaObjetivos({
 
     if (!data || data.length === 0) return [];
 
-    // Buscar nomes dos usuários
     const userIds = [...new Set(data.map(c => c.usuario_id))];
     const { data: profiles } = await supabase
       .from("profiles")
       .select("id, nome")
       .in("id", userIds);
 
-    // Mapear profiles aos comentários
     const profilesMap = (profiles || []).reduce((acc, p) => {
       acc[p.id] = p.nome;
       return acc;
@@ -241,23 +243,21 @@ export default function AtaObjetivos({
         .in("ata_objetivo_id", objetivoIds);
 
       if (!respErr && Array.isArray(respData)) {
-        // ✅ NOVO: Buscar avatares dos usuários
         const userIds = [...new Set(respData.filter(r => r.usuario_id).map(r => r.usuario_id))];
-        
+
         let avatarMap = {};
         if (userIds.length > 0) {
           const { data: profilesData } = await supabase
             .from("profiles")
             .select("id, avatar_url")
             .in("id", userIds);
-          
+
           avatarMap = (profilesData || []).reduce((acc, p) => {
             acc[p.id] = p.avatar_url;
             return acc;
           }, {});
         }
 
-        // ✅ MODIFICADO: Incluir avatar_url
         respPorObj = respData.reduce((acc, r) => {
           if (!acc[r.ata_objetivo_id]) acc[r.ata_objetivo_id] = [];
           acc[r.ata_objetivo_id].push({
@@ -276,14 +276,14 @@ export default function AtaObjetivos({
       .filter(o => !o.texto?.startsWith(PREFIXO_EXCLUIDO))
       .map(o => {
         const foiEnviado = o.comentario?.startsWith('Objetivo enviado para:');
-        const ataDestinoNome = foiEnviado 
+        const ataDestinoNome = foiEnviado
           ? o.comentario.replace('Objetivo enviado para:', '').trim()
           : null;
-        
+
         const matchOrigem = o.comentario?.match(/\[ORIGEM:(\d+)\]/);
         const foiRecebido = matchOrigem !== null;
         const ataOrigemId = matchOrigem ? parseInt(matchOrigem[1]) : null;
-        
+
         return {
           id: o.id,
           texto: o.texto || "",
@@ -302,7 +302,6 @@ export default function AtaObjetivos({
     setObjetivosList(objetivos);
     setCriarObjetivos(objetivos.length > 0);
 
-    // Carregar comentários para cada objetivo
     const comentariosMap = {};
     for (const obj of objetivos) {
       if (obj.id && !String(obj.id).startsWith('temp')) {
@@ -312,7 +311,6 @@ export default function AtaObjetivos({
     }
     setComentariosObjetivo(comentariosMap);
 
-    // Buscar nomes das atas de origem para objetivos recebidos
     const atasOrigemIds = [...new Set(objetivos
       .filter(o => o.recebido && o.ataOrigemId)
       .map(o => o.ataOrigemId))];
@@ -334,9 +332,7 @@ export default function AtaObjetivos({
           const nomesMap = {};
           atasOrigem.forEach(ata => {
             const nota = notas.find(n => n.id === ata.nota_id);
-            if (nota) {
-              nomesMap[ata.id] = nota.nome;
-            }
+            if (nota) nomesMap[ata.id] = nota.nome;
           });
           setAtasOrigemNomes(nomesMap);
         }
@@ -349,11 +345,15 @@ export default function AtaObjetivos({
     lastTextRef.current = "";
   }, [carregarObjetivos]);
 
+  // ✅ CORREÇÃO: Sincronização do texto com objetivos — só age se o texto usar aspas simples (formato novo)
   useEffect(() => {
     if (!criarObjetivos || isUpdatingRef.current) return;
 
+    // ✅ Se o texto NÃO usa aspas simples, são atas antigas cujos objetivos já vieram do banco — não sobrescrever
+    if (!textoUsaAspasSimples(texto)) return;
+
     const validos = extrairObjetivosValidos(texto);
-    
+
     if (lastTextRef.current === texto) return;
     lastTextRef.current = texto;
 
@@ -369,11 +369,11 @@ export default function AtaObjetivos({
     const novosObjetivos = validos.map(txt => {
       const txtNormalizado = txt.toLowerCase().trim();
       const idExistente = textosSalvos.get(txtNormalizado);
-      
+
       if (idExistente) {
         return objetivosList.find(o => o.id === idExistente);
       }
-      
+
       return {
         id: `temp-${Date.now()}-${Math.random()}`,
         texto: txt,
@@ -394,8 +394,12 @@ export default function AtaObjetivos({
     isUpdatingRef.current = false;
   }, [texto, criarObjetivos]);
 
+  // ✅ CORREÇÃO: Auto-save — só age se o texto usar aspas simples (formato novo)
   useEffect(() => {
     if (!ataId || !criarObjetivos) return;
+
+    // ✅ Se o texto NÃO usa aspas simples, os objetivos já existem no banco pelo formato antigo — não re-salvar automaticamente
+    if (!textoUsaAspasSimples(texto)) return;
 
     const timer = setTimeout(async () => {
       if (isSaving.current) return;
@@ -404,7 +408,7 @@ export default function AtaObjetivos({
       try {
         const validos = extrairObjetivosValidos(texto);
         const salvos = new Map();
-        
+
         objetivosList
           .filter(o => o.id && !String(o.id).startsWith('temp'))
           .forEach(o => {
@@ -453,8 +457,8 @@ export default function AtaObjetivos({
               const atualizado = [...prev];
               inseridos.forEach((novo, idx) => {
                 const txt = paraInserir[idx];
-                const tempIndex = atualizado.findIndex(o => 
-                  o.texto.toLowerCase().trim() === txt.toLowerCase().trim() && 
+                const tempIndex = atualizado.findIndex(o =>
+                  o.texto.toLowerCase().trim() === txt.toLowerCase().trim() &&
                   String(o.id).startsWith('temp')
                 );
                 if (tempIndex !== -1) {
@@ -465,7 +469,6 @@ export default function AtaObjetivos({
             });
           }
         }
-
       } finally {
         isSaving.current = false;
       }
@@ -512,7 +515,7 @@ export default function AtaObjetivos({
 
       const novoProgresso = Math.round((novos.filter(o => o.concluido).length / novos.length) * 100);
       if (typeof onProgressoChange === "function") onProgressoChange(novoProgresso);
-      
+
       if (notaAtual?.id) {
         await supabase.from("notas").update({ progresso: novoProgresso }).eq("id", notaAtual.id);
       }
@@ -524,7 +527,6 @@ export default function AtaObjetivos({
           }
         }
       }
-
     } catch (err) {
       console.error("Erro ao salvar conclusão:", err);
       setObjetivosList([...objetivosList]);
@@ -553,9 +555,7 @@ export default function AtaObjetivos({
             return;
           }
 
-          const userIds = convites
-            .map(c => c.user_id)
-            .filter(id => id);
+          const userIds = convites.map(c => c.user_id).filter(id => id);
 
           if (userIds.length === 0) {
             setSugestoesResponsavel(prev => ({ ...prev, [i]: [] }));
@@ -633,7 +633,6 @@ export default function AtaObjetivos({
     if (objetivo?.concluido) return;
     if (objetivo?.responsaveis.some(r => r.usuario_id === item.id)) return;
 
-    // ✅ NOVO: Buscar avatar do usuário
     const { data: profileData } = await supabase
       .from("profiles")
       .select("avatar_url")
@@ -709,14 +708,14 @@ export default function AtaObjetivos({
 
     try {
       const campoPilha = projetoAtual.tipo === 'projeto' ? 'project_id' : 'setor_id';
-      
+
       const { data: pilhas, error: erroPilhas } = await supabase
         .from("pilhas")
         .select("id")
         .eq(campoPilha, projetoAtual.id);
 
       if (erroPilhas) throw erroPilhas;
-      
+
       if (!pilhas || pilhas.length === 0) {
         setAtasDisponiveis([]);
         alert("Não há pilhas disponíveis neste projeto/setor.");
@@ -734,11 +733,11 @@ export default function AtaObjetivos({
       if (erroNotas) throw erroNotas;
 
       const notasDisponiveis = (notasAtas || [])
-        .filter(n => 
-          n.id !== notaAtual?.id && 
+        .filter(n =>
+          n.id !== notaAtual?.id &&
           (n.progresso === null || n.progresso === undefined || n.progresso < 100)
         );
-      
+
       if (notasDisponiveis.length === 0) {
         setAtasDisponiveis([]);
         alert("Não há outras atas disponíveis neste projeto/setor (todas estão 100% concluídas ou não existem).");
@@ -787,7 +786,7 @@ export default function AtaObjetivos({
 
     try {
       const comentarioOrigem = `[ORIGEM:${ataId}]`;
-      
+
       const novoObjetivo = {
         ata_id: ataDestinoId,
         texto: objetivo.texto,
@@ -822,10 +821,10 @@ export default function AtaObjetivos({
 
       const agora = new Date();
       const comentarioEnviado = `Objetivo enviado para: ${ataDestinoNome}`;
-      
+
       const { error: erroUpdate } = await supabase
         .from("ata_objetivos")
-        .update({ 
+        .update({
           concluido: true,
           concluido_em: agora.toISOString(),
           comentario: comentarioEnviado
@@ -848,11 +847,11 @@ export default function AtaObjetivos({
       const novoProgresso = Math.round(
         (novosObjetivos.filter(o => o.concluido).length / novosObjetivos.length) * 100
       );
-      
+
       if (typeof onProgressoChange === "function") {
         onProgressoChange(novoProgresso);
       }
-      
+
       if (notaAtual?.id) {
         await supabase.from("notas").update({ progresso: novoProgresso }).eq("id", notaAtual.id);
       }
@@ -873,12 +872,10 @@ export default function AtaObjetivos({
     const objetivo = objetivosList[i];
     if (!objetivo?.id || !usuarioId || String(objetivo.id).startsWith('temp')) return;
 
-    // Prevenir múltiplos envios
     if (enviandoComentario[i]) return;
     setEnviandoComentario(prev => ({ ...prev, [i]: true }));
 
     try {
-      // Criar comentário temporário para update otimista (mostra imediatamente)
       const tempId = `temp-${Date.now()}`;
       const comentarioOtimista = {
         id: tempId,
@@ -889,16 +886,13 @@ export default function AtaObjetivos({
         profiles: { nome: meuNome }
       };
 
-      // Atualizar UI imediatamente (update otimista)
       setComentariosObjetivo(prev => ({
         ...prev,
         [objetivo.id]: [...(prev[objetivo.id] || []), comentarioOtimista]
       }));
 
-      // Limpar input imediatamente
       setComentarioTemp(prev => ({ ...prev, [i]: "" }));
 
-      // Salvar no banco em background
       const { data, error } = await supabase
         .from("ata_objetivos_comentarios")
         .insert({
@@ -911,14 +905,12 @@ export default function AtaObjetivos({
 
       if (error) throw error;
 
-      // Buscar nome do usuário
       const { data: profile } = await supabase
         .from("profiles")
         .select("nome")
         .eq("id", usuarioId)
         .single();
 
-      // Substituir comentário temporário pelo real
       const comentarioReal = {
         ...data,
         profiles: { nome: profile?.nome || meuNome }
@@ -926,35 +918,31 @@ export default function AtaObjetivos({
 
       setComentariosObjetivo(prev => ({
         ...prev,
-        [objetivo.id]: prev[objetivo.id].map(c => 
+        [objetivo.id]: prev[objetivo.id].map(c =>
           c.id === tempId ? comentarioReal : c
         )
       }));
 
-      // Notificar responsáveis
       for (const resp of objetivo.responsaveis) {
         if (resp.usuario_id && resp.usuario_id !== usuarioId) {
           await sendNotification(
-            resp.usuario_id, 
-            `Novo comentário em objetivo: ${objetivo.texto}`, 
-            "objetivo_comentario", 
+            resp.usuario_id,
+            `Novo comentário em objetivo: ${objetivo.texto}`,
+            "objetivo_comentario",
             objetivo
           );
         }
       }
-
     } catch (err) {
       console.error("Erro ao enviar comentário:", err);
-      
-      // Remover comentário otimista em caso de erro
+
       setComentariosObjetivo(prev => ({
         ...prev,
         [objetivo.id]: prev[objetivo.id].filter(c => !String(c.id).startsWith('temp-'))
       }));
-      
-      // Restaurar texto no input
+
       setComentarioTemp(prev => ({ ...prev, [i]: comentario }));
-      
+
       alert("Erro ao enviar comentário. Tente novamente.");
     } finally {
       setEnviandoComentario(prev => ({ ...prev, [i]: false }));
@@ -976,18 +964,18 @@ export default function AtaObjetivos({
 
   const handleDragEnd = async (result) => {
     if (!result.destination) return;
-    
+
     const sourceIndex = result.source.index;
     const destIndex = result.destination.index;
-    
+
     if (sourceIndex === destIndex) return;
-    
+
     const novosObjetivos = Array.from(objetivosList);
     const [moved] = novosObjetivos.splice(sourceIndex, 1);
     novosObjetivos.splice(destIndex, 0, moved);
-    
+
     setObjetivosList(novosObjetivos);
-    
+
     try {
       for (let i = 0; i < novosObjetivos.length; i++) {
         const objetivo = novosObjetivos[i];
@@ -1021,7 +1009,7 @@ export default function AtaObjetivos({
           <DragDropContext onDragEnd={handleDragEnd}>
             <Droppable droppableId="objetivos-list">
               {(provided) => (
-                <div 
+                <div
                   className="ata-objectives"
                   ref={provided.innerRef}
                   {...provided.droppableProps}
@@ -1035,9 +1023,9 @@ export default function AtaObjetivos({
                     const hasComments = comentarios.length > 0;
 
                     return (
-                      <Draggable 
-                        key={String(o.id)} 
-                        draggableId={String(o.id)} 
+                      <Draggable
+                        key={String(o.id)}
+                        draggableId={String(o.id)}
                         index={i}
                         isDragDisabled={isConcluido}
                       >
@@ -1047,7 +1035,7 @@ export default function AtaObjetivos({
                             {...provided.draggableProps}
                             {...provided.dragHandleProps}
                             className={`objetivo-item ${
-                              isConcluido 
+                              isConcluido
                                 ? (o.enviado ? 'objetivo-enviado' : 'objetivo-concluido')
                                 : (o.recebido ? 'objetivo-recebido' : '')
                             } ${snapshot.isDragging ? 'objetivo-dragging' : ''}`}
@@ -1163,10 +1151,10 @@ export default function AtaObjetivos({
                                 <>
                                   <label
                                     className="objetivo-data-entrega"
-                                    style={{ 
-                                      cursor: 'pointer', 
-                                      display: 'flex', 
-                                      alignItems: 'center', 
+                                    style={{
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
                                       gap: '4px',
                                       position: 'relative'
                                     }}
@@ -1213,7 +1201,7 @@ export default function AtaObjetivos({
                                       }}
                                     />
                                   </label>
-                                  
+
                                   <div style={{ position: 'relative' }}>
                                     <span
                                       className="icone-share"
@@ -1222,17 +1210,17 @@ export default function AtaObjetivos({
                                         e.stopPropagation();
                                         buscarAtasDisponiveis(i);
                                       }}
-                                      style={{ 
-                                        cursor: 'pointer', 
-                                        display: 'flex', 
-                                        alignItems: 'center', 
+                                      style={{
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
                                       }}
                                     >
                                       <FontAwesomeIcon icon={faShareFromSquare} style={{ fontSize: '14px', color: '#555' }} />
                                     </span>
 
                                     {mostrarAtasDisponiveis[i] && (
-                                      <div 
+                                      <div
                                         className="menu-atas-disponiveis"
                                         style={{
                                           position: 'absolute',
@@ -1280,7 +1268,7 @@ export default function AtaObjetivos({
                                             ×
                                           </button>
                                         </div>
-                                        
+
                                         {atasDisponiveis.length === 0 ? (
                                           <div style={{
                                             padding: '12px',
@@ -1319,9 +1307,9 @@ export default function AtaObjetivos({
                                               <div style={{ fontSize: '12px', color: '#666', fontStyle: 'italic', marginBottom: '4px' }}>
                                                 {ata.pauta}
                                               </div>
-                                              <div style={{ 
-                                                display: 'flex', 
-                                                alignItems: 'center', 
+                                              <div style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
                                                 gap: '6px',
                                                 marginTop: '6px'
                                               }}>
@@ -1339,8 +1327,8 @@ export default function AtaObjetivos({
                                                     transition: 'width 0.3s ease'
                                                   }} />
                                                 </div>
-                                                <span style={{ 
-                                                  fontSize: '11px', 
+                                                <span style={{
+                                                  fontSize: '11px',
                                                   color: '#666',
                                                   minWidth: '35px',
                                                   textAlign: 'right'
@@ -1364,7 +1352,7 @@ export default function AtaObjetivos({
                                     title={hasComments ? "Ver comentários" : "Adicionar comentário"}
                                     hasComments={hasComments}
                                   />
-                                  
+
                                   {editandoComentario[i] && (
                                     <div className="comentario-chat-container">
                                       <div className="comentario-input-area">
@@ -1382,8 +1370,8 @@ export default function AtaObjetivos({
                                             }
                                           }}
                                         />
-                                        <button 
-                                          onClick={() => enviarComentario(i)} 
+                                        <button
+                                          onClick={() => enviarComentario(i)}
                                           className="btn-enviar-comentario"
                                           disabled={!comentarioTemp[i]?.trim() || enviandoComentario[i]}
                                         >
@@ -1394,14 +1382,14 @@ export default function AtaObjetivos({
                                           )}
                                         </button>
                                       </div>
-                                      
+
                                       {comentarios.length > 0 && (
                                         <div className="comentarios-lista">
                                           {comentarios.map((c, idx) => {
                                             const isTemp = String(c.id).startsWith('temp-');
                                             return (
-                                              <div 
-                                                key={`${c.id}-${c.created_at}-${idx}`} 
+                                              <div
+                                                key={`${c.id}-${c.created_at}-${idx}`}
                                                 className={`comentario-item ${isTemp ? 'comentario-temporario' : ''}`}
                                               >
                                                 <div className="comentario-autor">
