@@ -636,6 +636,7 @@ export default function ProjectManager({ containerAtual, user, onSidebarUpdate }
         background: background.startsWith("#")
           ? background
           : `url(${background}) center/300px auto repeat`,
+          
       }}
     >
       <div
