@@ -707,30 +707,6 @@ export default function ProjectManager({ containerAtual, user, onSidebarUpdate }
           onEdit={() => handleEditProject(selectedProject)}
           canEdit={canEditEntity(selectedProject)}
         >
-          {(selectedProject.pavimentos?.length > 0 || selectedProject.eap?.length > 0) && (
-            <div className="project-sections">
-              {selectedProject.pavimentos?.length > 0 && (
-                <div className="project-section">
-                  <h3>Pavimentos</h3>
-                  <ul>
-                    {selectedProject.pavimentos.map((p) => (
-                      <li key={p.id}>{p.name || ""}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {selectedProject.eap?.length > 0 && (
-                <div className="project-section">
-                  <h3>EAP</h3>
-                  <ul>
-                    {selectedProject.eap.map((e) => (
-                      <li key={e.id}>{e.name || ""}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
         </EntityDetails>
       ) : (
         <ContainerGrid

@@ -1,0 +1,461 @@
+/* ===== Toolbar do INCC ===== */
+.incc-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+.incc-calc-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #d0d9f0;
+  border-radius: 8px;
+  background: #f0f4ff;
+  color: #3a56a5;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+
+.incc-calc-btn:hover {
+  background: #3a56a5;
+  color: #fff;
+}
+
+.incc-calc-btn--active {
+  background: #3a56a5 !important;
+  color: #fff !important;
+  border-color: #2c4080 !important;
+}
+
+/* ===== Badge Wrapper ===== */
+.incc-badge-wrapper {
+  position: relative;
+}
+
+/* ===== INCC Badge ===== */
+.incc-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  background: #f0f4ff;
+  border: 1px solid #d0d9f0;
+  border-radius: 8px;
+  line-height: 1.3;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s, border-color 0.15s;
+  height: 34px;
+  padding: 2px;
+}
+
+.incc-badge:hover,
+.incc-badge--active {
+  background: #e2eaff;
+  border-color: #3a56a5;
+}
+
+.incc-badge__label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #8895b3;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.incc-badge__values {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.incc-badge__value {
+  font-size: 10px;
+  font-weight: 700;
+  color: #3a56a5;
+}
+
+.incc-badge__sub-label {
+  font-size: 10px;
+  font-weight: 400;
+  color: #8895b3;
+  margin-left: 4px;
+}
+
+.incc-badge__separator {
+  color: #d0d9f0;
+  font-size: 12px;
+}
+
+.incc-badge__chevron {
+  font-size: 10px;
+  color: #8895b3;
+  margin-left: 2px;
+  transition: transform 0.2s;
+}
+
+.incc-badge__chevron--open {
+  transform: rotate(180deg);
+}
+
+/* ===== Dropdown Histórico ===== */
+.incc-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 560px;
+  max-height: 420px;
+  background: #fff;
+  border: 1px solid #d0d9f0;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.incc-dropdown__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #eef0f6;
+  font-size: 13px;
+  font-weight: 600;
+  color: #3a56a5;
+  flex-shrink: 0;
+}
+
+.incc-dropdown__total {
+  font-size: 11px;
+  font-weight: 400;
+  color: #aaa;
+}
+
+.incc-dropdown__table-wrap {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.incc-dropdown__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.incc-dropdown__table thead th {
+  position: sticky;
+  top: 0;
+  background: #fafbff;
+  padding: 9px 12px;
+  text-align: right;
+  font-weight: 600;
+  color: #3a56a5;
+  border-bottom: 1px solid #eef0f6;
+  white-space: nowrap;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.incc-dropdown__table thead th:first-child {
+  text-align: left;
+}
+
+.incc-dropdown__table tbody td {
+  padding: 7px 12px;
+  text-align: right;
+  border-bottom: 1px solid #f4f5f9;
+  color: #444;
+}
+
+.incc-dropdown__table tbody td:first-child {
+  text-align: left;
+  font-weight: 500;
+  color: #555;
+  white-space: nowrap;
+}
+
+.incc-dropdown__table tbody tr:hover td {
+  background: #f5f8ff;
+}
+
+.incc-dropdown__fonte {
+  font-size: 10px;
+  color: #bbb;
+  text-align: right;
+  padding: 7px 14px;
+  margin: 0;
+  border-top: 1px solid #f0f0f0;
+  flex-shrink: 0;
+}
+
+.incc-pos { color: #2e7d32; font-weight: 600; }
+.incc-neg { color: #e53935; font-weight: 600; }
+
+/* ===== Overlay + Modal (calculadora antiga) ===== */
+.incc-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.incc-modal {
+  background: #fff;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 700px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.incc-modal--calc {
+  max-width: 480px;
+}
+
+.incc-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px;
+  border-bottom: 1px solid #eee;
+}
+
+.incc-modal__header h2 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin: 0;
+}
+
+.incc-modal__close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #8895b3;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+
+.incc-modal__close:hover { color: #e53935; }
+
+.incc-modal__fonte {
+  font-size: 11px;
+  color: #aaa;
+  text-align: right;
+  padding: 10px 24px;
+  margin: 0;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* ===== Calculadora ===== */
+.incc-calc__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.incc-calc__field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #8895b3;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.incc-calc__input {
+  padding: 9px 12px;
+  border: 1px solid #d0d9f0;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #333;
+  outline: none;
+  background: #fafbff;
+  transition: border-color 0.15s;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.incc-calc__input:focus {
+  border-color: #3a56a5;
+  background: #fff;
+}
+
+.incc-calc__row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.incc-calc__arrow {
+  color: #8895b3;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+
+.incc-calc__erro {
+  font-size: 13px;
+  color: #e53935;
+  margin: 0;
+  padding: 8px 12px;
+  background: #fff5f5;
+  border-radius: 6px;
+  border: 1px solid #ffcdd2;
+}
+
+.incc-calc__btn {
+  padding: 11px;
+  background: #3a56a5;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.incc-calc__btn:hover {
+  background: #2c4080;
+}
+
+.incc-calc__resultado {
+  background: #f5f8ff;
+  border: 1px solid #d0d9f0;
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.incc-calc__resultado-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: #555;
+}
+
+.incc-calc__resultado-row strong {
+  color: #333;
+  font-size: 13px;
+}
+
+.incc-calc__resultado-destaque {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 12px;
+  border-top: 2px solid #d0d9f0;
+  font-size: 14px;
+  color: #3a56a5;
+  font-weight: 600;
+}
+
+.incc-calc__resultado-destaque strong {
+  font-size: 18px;
+  color: #3a56a5;
+}
+
+.incc-calc__pos { color: #2e7d32; }
+.incc-calc__neg { color: #e53935; }
+
+/* ===== Janela Flutuante — Calculadora INCC ===== */
+.calc-window {
+  position: fixed;
+  z-index: 2000;
+  width: 440px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.22), 0 2px 8px rgba(0, 0, 0, 0.10);
+  border: 1px solid #d0d9f0;
+  overflow: hidden;
+  user-select: none;
+}
+
+.calc-window__titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #3a56a5, #2c4080);
+  color: #fff;
+  cursor: grab;
+}
+
+.calc-window__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.calc-window__grip {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.calc-window__close {
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  color: #fff;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.calc-window__close:hover {
+  background: rgba(229, 57, 53, 0.85);
+}
+
+.calc-window__body {
+  padding: 16px 18px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: 75vh;
+  overflow-y: auto;
+}
+
+/* ===== Responsividade INCC ===== */
+@media (max-width: 768px) {
+  .incc-toolbar {
+    display: none !important;
+  }
+  
+  .incc-badge {
+    align-items: flex-start;
+    padding: 4px 10px;
+  }
+  
+  .incc-badge__value {
+    font-size: 12px;
+  }
+}

@@ -8,6 +8,7 @@ import ThinSidebar from "../components/ThinSidebar";
 import Sidebar from "../components/Sidebar";
 import ProjectManager from "./ProjectManager";
 import "./Containers.css";
+import "./ContainerIncc.css";
 
 const INCC_API_URL = "https://incc-api.onrender.com";
 
