@@ -704,7 +704,10 @@ export default function ProjectManager({ containerAtual, user, onSidebarUpdate }
           entityType="project"
           entity={selectedProject}
           onBack={() => setSelectedProject(null)}
-          onEdit={() => handleEditProject(selectedProject)}
+          onEdit={(updated) => {
+            setSelectedProject(updated);
+            setProjects(prev => prev.map(p => p.id === updated.id ? { ...p, ...updated } : p));
+          }}
           canEdit={canEditEntity(selectedProject)}
         >
         </EntityDetails>
