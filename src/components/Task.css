@@ -325,7 +325,6 @@
 
 .comentario-header span {
   color: #777;
-  margin-right: 5px;
 }
 
 .comentario-menu-btn {
@@ -852,9 +851,7 @@
 .chip-responsavel {
   display: inline-flex;
   align-items: center;
-  background: #e0f2fe;
   color: #0369a1;
-  padding: 2px 8px;
   border-radius: 12px;
   font-size: 12px;
   border: 1px solid #bae6fd;

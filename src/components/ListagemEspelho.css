@@ -6,7 +6,75 @@
   display: block;
 }
 
-/* Ícone de comentário clicável */
+/* Destaque visual para linha selecionada */
+.linha-selecionada {
+  background-color: #d4edda !important;
+}
+
+/* Fechar */
+.listagem-close-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.listagem-close-btn svg {
+  color: #fff;
+  font-size: 1.4rem;
+  transition: color 0.2s ease;
+}
+
+.listagem-close-btn:hover svg {
+  color: #ffd0d0;
+}
+
+/* Botão de adicionar item (isCriar) */
+.add-supabase-btn {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  background: #3498db;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.add-supabase-btn:hover {
+  background: #2980b9;
+}
+
+/* Tooltip de locação — herdado do Listagem.css mas sobrescrito aqui se necessário */
+.locacao-tooltip {
+  position: absolute;
+  z-index: 1001;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  padding: 6px;
+  font-size: 0.85em;
+  max-width: 200px;
+  margin-top: 4px;
+}
+
+.locacao-tooltip-item {
+  padding: 2px;
+  text-align: left;
+}
+
+/* Icone de comentário (legado, mantido por segurança) */
 .icone-comentario-clicavel {
   display: flex;
   align-items: center;
@@ -18,11 +86,6 @@
   height: 24px;
 }
 
-.icone-comentario-clicavel svg {
-  font-size: 16px;
-}
-
-/* Indicador de que há comentário */
 .icone-comentario-clicavel .indicador-comentario {
   position: absolute;
   top: -4px;
@@ -32,7 +95,6 @@
   font-weight: bold;
 }
 
-/* Container do comentário em edição */
 .comentario-editavel {
   width: 100%;
   padding: 4px;
@@ -73,69 +135,4 @@
 .btn-comentario-cancelar {
   background: #95a5a6;
   color: white;
-}
-
-/* Botão de adicionar item ("+") — mantido para isCriar */
-.add-supabase-btn {
-  width: 24px;
-  height: 24px;
-  min-width: 24px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: 4px;
-  background: #3498db;
-  color: white;
-  border: none;
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-.add-supabase-btn:hover {
-  background: #2980b9;
-}
-
-/* Destaque visual para linha selecionada */
-.linha-selecionada {
-  background-color: #d4edda !important; /* verde claro */
-}
-
-.listagem-close-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px;
-  border-radius: 4px;
-}
-
-.listagem-close-btn svg {
-  color: #666;
-  font-size: 1.4rem;
-  transition: color 0.2s ease;
-}
-
-.listagem-close-btn:hover svg {
-  color: #ff4d4d; /* vermelho (ou a cor que preferir) */
-}
-
-.locacao-tooltip {
-  position: absolute;
-  z-index: 1001;
-  background: white;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-  padding: 6px;
-  font-size: 0.85em;
-  max-width: 200px;
-  margin-top: 4px;
-}
-
-.inside-tooltip{
-  padding: 2px;
-  text-align: left;
 }

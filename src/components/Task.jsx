@@ -47,19 +47,18 @@ export default function Task({
   // Fechar modal e input ao clicar fora
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (onClose && modalRef.current && !modalRef.current.contains(e.target)) {
-        onClose();
-        return;
-      }
       if (showInputResponsaveis && inputRef.current && !inputRef.current.contains(e.target)) {
         setShowInputResponsaveis(false);
         setInputResponsavelTarefa("");
         setSugestoesMembros([]);
       }
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [onClose, showInputResponsaveis]);
+    
+    if (showInputResponsaveis) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showInputResponsaveis]);
 
   // Carregar usuário logado
   useEffect(() => {

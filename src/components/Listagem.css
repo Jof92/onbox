@@ -3,13 +3,11 @@
    ============================== */
 .listagem-card {
   background: #fff;
-  height: auto ;
+  height: auto;
   box-shadow: 0 6px 18px rgba(20, 20, 30, 0.06);
   padding: 0;
   font-family: Inter, "Segoe UI", Helvetica, Arial, sans-serif;
   color: #222;
-  
-  
 }
 
 /* ==============================
@@ -46,9 +44,46 @@
   margin-top: 2px;
 }
 
+.listagem-info-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 24px;
+  background: #f0f7ff;
+  border-bottom: 1px solid #d0e8ff;
+  font-size: 12px;
+  color: #4a6080;
+  min-height: 36px;
+}
+
+.listagem-info-bar strong {
+  color: #0066cc;
+  font-weight: 600;
+}
+
 /* ==============================
    🟢 Botões de Ação
    ============================== */
+
+.action-buttons {
+  padding: 12px 24px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.action-buttons > * {
+  display: flex;
+  align-items: center;
+}
+
+.action-buttons select,
+.action-buttons button {
+  min-height: 40px;
+}
 
 .add-row-btn,
 .save-btn1 {
@@ -61,13 +96,18 @@
 }
 
 .add-row-btn {
-  background: #0066cc;
-  color: #fff;
+  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(52, 152, 219, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .add-row-btn:hover {
-  background: #0052a3;
-  transform: scale(1.05);
+  background: linear-gradient(135deg, #2980b9 0%, #1f618d 100%);
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+  transform: translateY(-2px);
 }
 
 .save-btn1 {
@@ -80,8 +120,65 @@
   transform: scale(1.05);
 }
 
-.head-list{
+.head-list {
   text-align: center;
+}
+
+/* ==============================
+   🔍 Filtros ativos
+   ============================== */
+.filtros-ativos-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 24px;
+  background: #fffbeb;
+  border-bottom: 1px solid #fde68a;
+  font-size: 13px;
+}
+
+.filtro-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #fef3c7;
+  border: 1px solid #fbbf24;
+  border-radius: 20px;
+  padding: 2px 10px 2px 10px;
+  font-size: 12px;
+  color: #92400e;
+  font-weight: 500;
+}
+
+.filtro-tag button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: #b45309;
+  padding: 0 0 0 2px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+
+.filtro-tag button:hover {
+  color: #78350f;
+}
+
+.filtro-limpar-todos {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: #6b7280;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.filtro-limpar-todos:hover {
+  color: #374151;
 }
 
 /* ==============================
@@ -94,14 +191,16 @@
 .listagem-table {
   width: 100%;
   border-collapse: collapse;
-  input, select {
-    padding: 4px 6px;
-    border-radius: 4px;
-  }
-      .descri{
-  width: 25em;
 }
 
+.listagem-table input, 
+.listagem-table select {
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+
+.listagem-table .descri {
+  width: 25em;
 }
 
 .listagem-table th {
@@ -118,10 +217,80 @@
   vertical-align: middle;
   text-align: center;
 }
+
 .item-col {
   width: 50px;
   text-align: center;
   color: #666;
+}
+
+/* ==============================
+   🔽 Cabeçalho com filtro
+   ============================== */
+.th-filtro {
+  position: relative;
+}
+
+.th-filtro > span,
+.quantidade-pavimento-header.th-filtro > span {
+  margin-right: 4px;
+}
+
+.filtro-icone-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 3px;
+  border-radius: 3px;
+  color: #aaa;
+  vertical-align: middle;
+  display: inline-flex;
+  align-items: center;
+  transition: color 0.15s, background 0.15s;
+}
+
+.filtro-icone-btn:hover {
+  color: #0066cc;
+  background: #e8f0fe;
+}
+
+.filtro-icone-btn.filtro-ativo {
+  color: #0066cc;
+}
+
+.filtro-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1100;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  min-width: 140px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.filtro-option {
+  padding: 7px 14px;
+  cursor: pointer;
+  color: #333;
+  transition: background 0.12s;
+  text-align: left;
+}
+
+.filtro-option:hover {
+  background: #f0f4ff;
+}
+
+.filtro-option-selected {
+  background: #e8f0fe;
+  color: #0066cc;
+  font-weight: 600;
 }
 
 /* Inputs e selects */
@@ -157,21 +326,15 @@ select {
 /* ==============================
    ❌ Botão de remover linha
    ============================== */
-/* ==============================
-   ❌ Botão de remover linha e adicionar fornecedor/EAP
-   ============================== */
-/* ==============================
-   ❌ Botões Remove + Add lado a lado
-   ============================== */
 .button-group {
-  display: flex;        /* Lado a lado */
-  gap: 6px;             /* Espaçamento entre eles */
+  display: flex;
+  gap: 6px;
 }
 
 .remove-btn,
 .add-supabase-btn {
-  background: none;     
-  color: inherit;       
+  background: none;
+  color: inherit;
   border: none;
   border-radius: 6px;
   padding: 4px 10px;
@@ -179,21 +342,19 @@ select {
   font-weight: 600;
   transition: transform 0.2s ease;
 }
-.remove-btn{  
-  color: red;    
-  
+
+.remove-btn {
+  color: red;
 }
 
-.add-supabase-btn{  
-  color: green;    
-  
+.add-supabase-btn {
+  color: green;
 }
 
 .remove-btn:hover,
 .add-supabase-btn:hover {
   transform: scale(1.1);
 }
-
 
 /* ==============================
    📌 Sugestão e layout responsivo
@@ -224,10 +385,21 @@ select {
     font-size: 13px;
     padding: 6px;
   }
+
+  .listagem-info-bar {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .export-pdf-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+    min-width: 70px;
+  }
 }
 
 /* ==============================
-   ✅ .direcionar-para-input — versão unificada (sem duplicações)
+   ✅ .direcionar-para-input
    ============================== */
 .direcionar-para-input {
   width: 100%;
@@ -255,37 +427,116 @@ select {
   font-size: 14px;
   border: none;
   border-radius: 6px;
-  background-color: #00c48c;
   color: #fff;
   cursor: pointer;
   transition: background-color 0.2s ease;
 }
 
-.add-row-btn:hover, .send-btn:hover {
-  background-color: #00a36a;
+.send-btn {
+  background: linear-gradient(135deg, #27ae60 0%, #1e8449 100%);
+  box-shadow: 0 2px 8px rgba(39, 174, 96, 0.2);
 }
 
-.envio-delimiter {
-  text-align: center;
-  font-size: 12px;
-  color: #6c757d;
-  margin: 0 0 6px 0;
-  font-style: italic;
+.send-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1e8449 0%, #186a3b 100%);
+  box-shadow: 0 4px 12px rgba(39, 174, 96, 0.3);
+  transform: translateY(-2px);
 }
 
-.envio-delimiter {
-  width: 100%;
-  height: 1px;
-  background: linear-gradient(to right, transparent, #96d9ff, transparent);
+.send-btn:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
+.send-action-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+}
+
+/* ==============================
+   💾 PDF Export Button
+   ============================== */
+.export-pdf-btn {
+  background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(231, 76, 60, 0.2);
+  white-space: nowrap;
+  min-width: 90px;
+}
+
+.export-pdf-btn:hover {
+  background: linear-gradient(135deg, #c0392b 0%, #a93226 100%);
+  box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
+  transform: translateY(-2px);
+}
+
+.export-pdf-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(231, 76, 60, 0.2);
+}
+
+.export-pdf-btn:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+  opacity: 0.6;
+  box-shadow: none;
+  transform: none;
+}
+
+.export-pdf-btn:focus {
+  outline: 2px solid rgba(231, 76, 60, 0.5);
+  outline-offset: 2px;
+}
+
+.export-pdf-btn svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.3s ease;
+}
+
+.export-pdf-btn:hover svg {
+  transform: scale(1.1);
+}
+
+@keyframes pdf-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.export-pdf-btn:disabled {
+  animation: pdf-pulse 1.5s ease-in-out infinite;
+}
+
+/* ==============================
+   ❄️ Linha congelada (pós-envio)
+   ============================== */
 .linha-congelada,
 .linha-congelada td {
   background-color: #ffffff !important;
   border: none !important;
 }
 
-/* Animação de tremor para código inválido */
+/* ==============================
+   ⚠️ Código inválido
+   ============================== */
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
@@ -298,6 +549,9 @@ select {
   background-color: #fdf2f2;
 }
 
+/* ==============================
+   🔍 Busca com lupa
+   ============================== */
 .sugestoes-dropdown {
   position: absolute;
   background: white;
@@ -321,18 +575,10 @@ select {
   background-color: #f0f0f0;
 }
 
-.send-action-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
 .codigo-com-lupa {
   display: flex;
   align-items: center;
   gap: 6px;
-
-  
 }
 
 .lupa-busca-btn {
@@ -344,13 +590,15 @@ select {
   align-items: center;
   justify-content: center;
   padding: 0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #fff;
+  transition: background 0.2s;
 }
 
 .lupa-busca-btn:hover {
-  border-radius: 4px;
   background: #e0e0e0;
 }
-
 
 .delete-icon {
   color: #ff4d4d;
@@ -364,25 +612,33 @@ select {
   color: #ff0000;
 }
 
-
-
+/* ==============================
+   📝 Observação
+   ============================== */
 .observacao-textarea {
-    width: 100%;
-    min-height: 27px !important;
-    max-height: 120px !important;
-    height: auto !important; /* ← crucial */
-    padding: 3px 6px !important;
-    border: 1px solid #cbd5e1 !important;
-    border-radius: 4px !important;
-    font-size: 14px !important;
-    overflow: hidden !important;
-    box-sizing: border-box !important;
-    margin-top: 2px !important;
-    resize: vertical !important;
+  width: 100%;
+  min-height: 27px !important;
+  max-height: 120px !important;
+  height: auto !important;
+  padding: 3px 6px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 4px !important;
+  font-size: 14px !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+  margin-top: 2px !important;
+  resize: vertical !important;
 }
 
-/* --- Estilos para Locação --- */
+.observacao-rendered {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  text-align: left;
+}
 
+/* ==============================
+   📍 Locação dropdown e tooltip
+   ============================== */
 .locacao-trigger {
   padding: 6px 8px;
   border: 1px solid #ccc;
@@ -417,7 +673,6 @@ select {
 
 .locacao-resumo-clickable {
   cursor: pointer;
-
 }
 
 .locacao-dropdown {
@@ -462,248 +717,28 @@ select {
   user-select: none;
   text-align: left;
 }
-/* ADICIONAR ESTES ESTILOS AO SEU Listagem.css */
 
-/* ============================================================
-   BOTÃO PDF - Exportar Listagem
-   ============================================================ */
-
-.export-pdf-btn {
-  background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
-  color: white;
-  border: none;
-  padding: 8px 14px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 8px rgba(231, 76, 60, 0.2);
-  white-space: nowrap;
-  min-width: 90px;
-}
-
-.export-pdf-btn:hover {
-  background: linear-gradient(135deg, #c0392b 0%, #a93226 100%);
-  box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
-  transform: translateY(-2px);
-}
-
-.export-pdf-btn:active {
-  transform: translateY(0);
-  box-shadow: 0 1px 4px rgba(231, 76, 60, 0.2);
-}
-
-.export-pdf-btn:disabled {
-  background: #bdc3c7;
-  cursor: not-allowed;
-  opacity: 0.6;
-  box-shadow: none;
-  transform: none;
-}
-
-.export-pdf-btn:focus {
-  outline: 2px solid rgba(231, 76, 60, 0.5);
-  outline-offset: 2px;
-}
-
-/* Responsividade para telas menores */
-@media (max-width: 768px) {
-  .export-pdf-btn {
-    padding: 6px 10px;
-    font-size: 12px;
-    min-width: 70px;
-  }
-}
-
-/* ============================================================
-   ANIMAÇÃO DE CARREGAMENTO DO PDF
-   ============================================================ */
-
-@keyframes pdf-pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.7;
-  }
-}
-
-.export-pdf-btn:disabled {
-  animation: pdf-pulse 1.5s ease-in-out infinite;
-}
-
-/* ============================================================
-   MELHORIAS NA SEÇÃO action-buttons (se necessário)
-   ============================================================ */
-
-.action-buttons {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-  background: #f8f9fa;
-  border-bottom: 1px solid #e0e0e0;
-  padding: 12px 24px;
-}
-
-.action-buttons > * {
-  display: flex;
-  align-items: center;
-}
-
-.action-buttons select,
-.action-buttons button {
-  min-height: 40px;
-}
-
-/* ============================================================
-   ÍCONE DO PDF (se necessário estilização especial)
-   ============================================================ */
-
-.export-pdf-btn svg {
-  width: 16px;
-  height: 16px;
-  transition: transform 0.3s ease;
-}
-
-.export-pdf-btn:hover svg {
-  transform: scale(1.1);
-}
-
-/* ============================================================
-   TOOLTIP DO BOTÃO PDF
-   ============================================================ */
-
-.export-pdf-btn[title] {
-  position: relative;
-}
-
-.export-pdf-btn[title]:hover::after {
-  content: attr(title);
+.locacao-tooltip {
   position: absolute;
-  bottom: -40px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #333;
-  color: white;
-  padding: 6px 12px;
-  border-radius: 4px;
-  font-size: 12px;
-  white-space: nowrap;
-  z-index: 1000;
-  font-weight: normal;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-}
-
-/* ============================================================
-   FEEDBACK VISUAL DURANTE EXPORTAÇÃO
-   ============================================================ */
-
-#listagem-pdf-loading {
-  animation: fadeIn 0.3s ease-in;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0.9);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-  }
-}
-
-/* ============================================================
-   BOTÕES DE AÇÃO - Estilização melhorada
-   ============================================================ */
-
-.add-row-btn,
-.send-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: 4px;
-  border: none;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 14px;
-  transition: all 0.3s ease;
-  white-space: nowrap;
-}
-
-.add-row-btn {
-  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
-  color: white;
-  box-shadow: 0 2px 8px rgba(52, 152, 219, 0.2);
-}
-
-.add-row-btn:hover {
-  background: linear-gradient(135deg, #2980b9 0%, #1f618d 100%);
-  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
-  transform: translateY(-2px);
-}
-
-.send-btn {
-  background: linear-gradient(135deg, #27ae60 0%, #1e8449 100%);
-  color: white;
-  box-shadow: 0 2px 8px rgba(39, 174, 96, 0.2);
-}
-
-.send-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #1e8449 0%, #186a3b 100%);
-  box-shadow: 0 4px 12px rgba(39, 174, 96, 0.3);
-  transform: translateY(-2px);
-}
-
-.send-btn:disabled {
-  background: #bdc3c7;
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-/* ============================================================
-   DIRECIONAR PARA (Select com melhor visual)
-   ============================================================ */
-
-.direcionar-para-input {
-  padding: 8px 14px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
+  z-index: 1001;
   background: white;
-  cursor: pointer;
-  transition: all 0.3s ease;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 8px 10px;
+  min-width: 140px;
+  font-size: 0.88em;
+  color: #333;
 }
 
-.direcionar-para-input:hover {
-  border-color: #999;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+.locacao-tooltip-item {
+  padding: 3px 0;
+  text-align: left;
 }
 
-.direcionar-para-input:focus {
-  outline: none;
-  border-color: #3498db;
-  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
-}
-
-/* ============================================================
-   WRAPPER DE ENVIO COM FEEDBACK VISUAL
-   ============================================================ */
-
-.send-action-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  position: relative;
-}
-
+/* ==============================
+   ⏳ Loading
+   ============================== */
 .loader-inline {
   display: inline-block;
   width: 16px;
@@ -718,4 +753,41 @@ select {
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+/* ==============================
+   📍 Fechar botão
+   ============================== */
+.listagem-close-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.2s;
+}
+
+.listagem-close-btn:hover {
+  transform: scale(1.2);
+}
+
+.listagem-header-titles {
+  flex: 1;
+}
+
+.project-name {
+  font-size: 18px;
+  font-weight: bold;
+  color: white;
+}
+
+.sub-info {
+  font-size: 12px;
+  color: #cce6ff;
+  margin-top: 4px;
+}
+
+.nota-name {
+  display: block;
 }

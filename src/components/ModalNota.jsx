@@ -308,7 +308,8 @@ export default function ModalNota({
     );
   }
 
-  // Renderização normal com modal-overlay (comportamento original)
+  // ✅ CORREÇÃO: Modal NÃO fecha ao clicar no overlay
+  // Apenas os botões X e Cancelar podem fechar o modal
   return (
     <div className="modal-overlay">
       <div className={`modal-content ${showVisualizarNota ? "large" : ""}`}>

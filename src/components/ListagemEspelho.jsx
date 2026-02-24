@@ -4,7 +4,7 @@ import { supabase } from "../supabaseClient";
 import "./Listagem.css";
 import "./ListagemEspelho.css";
 import "./loader.css";
-import { FaPaperPlane, FaPlus, FaTimes } from "react-icons/fa";
+import { FaPaperPlane, FaPlus, FaTimes, FaFilter } from "react-icons/fa";
 import Check from "./Check";
 import Loading from "./Loading";
 
@@ -15,34 +15,84 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
   const [tooltipAberto, setTooltipAberto] = useState(null);
   const tooltipRef = useRef(null);
 
-  // Fechar tooltip ao clicar fora
+  // ✅ Info bar
+  const [infoGerador, setInfoGerador]       = useState(null); // { nome, data }
+  const [infoEnvio, setInfoEnvio]           = useState(null); // { nome, data }
+  const [infoRespondido, setInfoRespondido] = useState(null); // { nome }
+  const [nomeUsuarioLogado, setNomeUsuarioLogado] = useState("Usuário");
+  const [userIdLogado, setUserIdLogado]     = useState("");
+
+  // ✅ Filtros
+  const [filtros, setFiltros]           = useState({ locacao: "", eap: "" });
+  const [filtroAbertoCol, setFiltroAbertoCol] = useState(null);
+  const filtroRef = useRef(null);
+
+  // ─── Fechar tooltip de locação ao clicar fora ───
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (tooltipRef.current && !tooltipRef.current.contains(e.target)) {
         setTooltipAberto(null);
       }
     };
-
     if (tooltipAberto !== null) {
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [tooltipAberto]);
 
-  // Função para formatar texto em Title Case
+  // ─── Fechar filtro ao clicar fora ───
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (filtroRef.current && !filtroRef.current.contains(e.target)) {
+        setFiltroAbertoCol(null);
+      }
+    };
+    if (filtroAbertoCol !== null) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [filtroAbertoCol]);
+
+  // ─── Carregar usuário logado ───
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (error) return;
+      const user = data.user;
+      if (user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("nome, id")
+          .eq("id", user.id)
+          .single();
+        setNomeUsuarioLogado(profile?.nome || user.email?.split("@")[0] || "Usuário");
+        setUserIdLogado(profile?.id || "");
+      }
+    };
+    fetchUserProfile();
+  }, []);
+
   const formatarTitleCase = (texto) => {
-    if (!texto || typeof texto !== 'string') return texto;
-    
+    if (!texto || typeof texto !== "string") return texto;
     return texto
       .toLowerCase()
-      .split(' ')
-      .map(palavra => {
-        if (palavra.length === 0) return palavra;
-        return palavra.charAt(0).toUpperCase() + palavra.slice(1);
-      })
-      .join(' ');
+      .split(" ")
+      .map((p) => (p.length === 0 ? p : p.charAt(0).toUpperCase() + p.slice(1)))
+      .join(" ");
   };
 
+  const formatarData = (isoString) => {
+    if (!isoString) return "";
+    return new Date(isoString).toLocaleString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  // ─── Carregar dados da nota espelho + info bar ───
   const carregarDados = async () => {
     setLoading(true);
     try {
@@ -51,6 +101,57 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
         return;
       }
 
+      // ✅ Buscar dados da nota espelho para a info bar
+      const { data: notaEspelho } = await supabase
+        .from("notas")
+        .select("enviado_por_nome, data_envio, respondida, respondido_por_nome, created_by, created_at, nota_original_id")
+        .eq("id", notaEspelhoId)
+        .single();
+
+      if (notaEspelho) {
+        // Nome do gerador via profiles (quem criou a nota original)
+        let nomeGerador = null;
+        if (notaEspelho.created_by) {
+          const { data: perfilCriador } = await supabase
+            .from("profiles")
+            .select("nome")
+            .eq("id", notaEspelho.created_by)
+            .single();
+          nomeGerador = perfilCriador?.nome || null;
+        }
+
+        // Se não achou no espelho, tenta na nota original
+        if (!nomeGerador && notaEspelho.nota_original_id) {
+          const { data: notaOriginalData } = await supabase
+            .from("notas")
+            .select("created_by, created_at")
+            .eq("id", notaEspelho.nota_original_id)
+            .single();
+
+          if (notaOriginalData?.created_by) {
+            const { data: perfilOriginal } = await supabase
+              .from("profiles")
+              .select("nome")
+              .eq("id", notaOriginalData.created_by)
+              .single();
+            nomeGerador = perfilOriginal?.nome || null;
+          }
+        }
+
+        setInfoGerador(nomeGerador ? { nome: nomeGerador, data: notaEspelho.created_at } : null);
+        setInfoEnvio(
+          notaEspelho.enviado_por_nome
+            ? { nome: notaEspelho.enviado_por_nome, data: notaEspelho.data_envio }
+            : null
+        );
+        setInfoRespondido(
+          notaEspelho.respondida && notaEspelho.respondido_por_nome
+            ? { nome: notaEspelho.respondido_por_nome }
+            : null
+        );
+      }
+
+      // ✅ Buscar itens
       const { data: itensSalvos, error } = await supabase
         .from("planilha_itens")
         .select("*")
@@ -59,39 +160,28 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
 
       if (error) throw error;
 
-      const mapped = (itensSalvos || []).map(item => {
-        // Processar locação
+      const mapped = (itensSalvos || []).map((item) => {
         let locacaoArray = [];
         try {
-          if (typeof item.locacao === 'string') {
+          if (typeof item.locacao === "string") {
             const parsed = JSON.parse(item.locacao);
-            if (Array.isArray(parsed)) {
-              locacaoArray = parsed;
-            } else {
-              locacaoArray = item.locacao ? [item.locacao] : [];
-            }
+            locacaoArray = Array.isArray(parsed) ? parsed : item.locacao ? [item.locacao] : [];
           } else if (Array.isArray(item.locacao)) {
             locacaoArray = item.locacao;
           } else if (item.locacao != null) {
             locacaoArray = [String(item.locacao)];
           }
-        } catch (e) {
+        } catch {
           locacaoArray = item.locacao ? [String(item.locacao)] : [];
         }
 
-        // Verificar se é item CRIAR
         const isCriar = (item.codigo || "").toLowerCase() === "criar";
-        
-        // Formatar descrição se necessário
         let descricaoFormatada = item.descricao || "";
         if (isCriar && descricaoFormatada) {
-          // Verificar se está toda em CAIXA ALTA
-          const isUpperCase = descricaoFormatada === descricaoFormatada.toUpperCase() &&
-                              descricaoFormatada !== descricaoFormatada.toLowerCase();
-          
-          if (isUpperCase) {
-            descricaoFormatada = formatarTitleCase(descricaoFormatada);
-          }
+          const isUpperCase =
+            descricaoFormatada === descricaoFormatada.toUpperCase() &&
+            descricaoFormatada !== descricaoFormatada.toLowerCase();
+          if (isUpperCase) descricaoFormatada = formatarTitleCase(descricaoFormatada);
         }
 
         return {
@@ -110,7 +200,7 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
           grupo_envio: item.grupo_envio || "antigo",
           data_envio: item.data_envio || item.criado_em,
           enviado_por: item.enviado_por || "Usuário",
-          isCriar: isCriar,
+          isCriar,
           ordem: item.ordem || 0,
         };
       });
@@ -128,9 +218,9 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
     carregarDados();
   }, [notaEspelhoId]);
 
+  // ─── Helpers ───
   const toggleSelecionado = async (id, novoValor) => {
-    setRows(prev => prev.map(r => (r.id === id ? { ...r, selecionado: novoValor } : r)));
-
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, selecionado: novoValor } : r)));
     try {
       const { error } = await supabase
         .from("planilha_itens")
@@ -139,13 +229,13 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
       if (error) throw error;
     } catch (err) {
       console.error("Erro ao salvar seleção:", err);
-      setRows(prev => prev.map(r => (r.id === id ? { ...r, selecionado: !novoValor } : r)));
+      setRows((prev) => prev.map((r) => (r.id === id ? { ...r, selecionado: !novoValor } : r)));
       alert("Erro ao salvar a marcação.");
     }
   };
 
   const handleInputChange = (id, campo, valor) => {
-    setRows(prev => prev.map(r => (r.id === id ? { ...r, [campo]: valor } : r)));
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [campo]: valor } : r)));
   };
 
   const atualizarOriginal = async (itemOriginalId, updateData) => {
@@ -155,28 +245,21 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
         .from("planilha_itens")
         .update(updateData)
         .eq("id", itemOriginalId);
-      if (error) {
-        console.error("Erro ao atualizar item original:", error);
-      }
+      if (error) console.error("Erro ao atualizar item original:", error);
     } catch (err) {
       console.error("Exceção ao atualizar original:", err);
     }
   };
 
   const handleComentarioBlur = async (id, novoComentario) => {
-    const row = rows.find(r => r.id === id);
+    const row = rows.find((r) => r.id === id);
     if (!row) return;
-
     try {
       const updateData = { comentario: novoComentario || null };
-      const { error: espelhoError } = await supabase
-        .from("planilha_itens")
-        .update(updateData)
-        .eq("id", id);
-      if (espelhoError) throw espelhoError;
-
+      const { error } = await supabase.from("planilha_itens").update(updateData).eq("id", id);
+      if (error) throw error;
       await atualizarOriginal(row.item_original_id, updateData);
-      setRows(prev => prev.map(r => (r.id === id ? { ...r, comentario: novoComentario } : r)));
+      setRows((prev) => prev.map((r) => (r.id === id ? { ...r, comentario: novoComentario } : r)));
     } catch (err) {
       console.error("Erro ao salvar comentário:", err);
       alert("Erro ao salvar comentário.");
@@ -188,46 +271,29 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
       alert("Digite um código válido antes de criar o item!");
       return;
     }
-
     try {
-      const { error: insertError } = await supabase
-        .from("itens")
-        .insert({
-          codigo: row.codigo.trim(),
-          descricao: row.descricao || "",
-          unidade: row.unidade || null,
-        });
-      if (insertError && insertError.code !== '23505') {
-        throw insertError;
-      }
-
-      const updateData = {
+      const { error: insertError } = await supabase.from("itens").insert({
         codigo: row.codigo.trim(),
         descricao: row.descricao || "",
-        isCriar: false,
-      };
-      const { error: updateEspelhoError } = await supabase
+        unidade: row.unidade || null,
+      });
+      if (insertError && insertError.code !== "23505") throw insertError;
+
+      await supabase
         .from("planilha_itens")
-        .update({
-          codigo: row.codigo.trim(),
-          descricao: row.descricao || "",
-        })
+        .update({ codigo: row.codigo.trim(), descricao: row.descricao || "" })
         .eq("id", row.id);
-      if (updateEspelhoError) throw updateEspelhoError;
 
       await atualizarOriginal(row.item_original_id, {
         codigo: row.codigo.trim(),
         descricao: row.descricao || "",
       });
 
-      setRows(prev =>
-        prev.map(r =>
-          r.id === row.id
-            ? { ...r, ...updateData }
-            : r
+      setRows((prev) =>
+        prev.map((r) =>
+          r.id === row.id ? { ...r, codigo: row.codigo.trim(), isCriar: false } : r
         )
       );
-
       alert("Item atualizado! A listagem original foi sincronizada.");
     } catch (err) {
       console.error("Erro ao criar item:", err);
@@ -235,6 +301,7 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
     }
   };
 
+  // ─── Enviar resposta ───
   const handleSave = async () => {
     if (!notaEspelhoId) return;
     setStatusEnvio("enviando");
@@ -246,7 +313,6 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
             updateData.codigo = row.codigo?.trim() || null;
             updateData.descricao = row.descricao || null;
           }
-
           await supabase.from("planilha_itens").update(updateData).eq("id", row.id);
           if (row.item_original_id) {
             await supabase.from("planilha_itens").update(updateData).eq("id", row.item_original_id);
@@ -260,19 +326,25 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
         .eq("id", notaEspelhoId)
         .single();
 
-      if (!notaEspelhoData?.nota_original_id) {
-        throw new Error("Nota original não encontrada.");
-      }
-
+      if (!notaEspelhoData?.nota_original_id) throw new Error("Nota original não encontrada.");
       const notaOriginalId = notaEspelhoData.nota_original_id;
 
-      await supabase.from("notas").update({ respondida: true }).eq("id", notaOriginalId);
-      await supabase.from("notas").update({ respondida: true }).eq("id", notaEspelhoId);
+      // ✅ Gravar respondido_por_nome em ambas as notas
+      const updateRespondida = {
+        respondida: true,
+        respondido_por_nome: nomeUsuarioLogado,
+      };
+
+      await supabase.from("notas").update(updateRespondida).eq("id", notaOriginalId);
+      await supabase.from("notas").update(updateRespondida).eq("id", notaEspelhoId);
 
       if (onStatusUpdate) {
         onStatusUpdate(notaOriginalId, { respondida: true, enviada: true });
         onStatusUpdate(notaEspelhoId, { respondida: true, enviada: true });
       }
+
+      // ✅ Atualizar info bar localmente sem recarregar
+      setInfoRespondido({ nome: nomeUsuarioLogado });
 
       setStatusEnvio("sucesso");
       setTimeout(() => setStatusEnvio(null), 2000);
@@ -283,6 +355,27 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
     }
   };
 
+  // ─── Valores únicos para filtros ───
+  const valoresUnicos = (campo) => {
+    const set = new Set();
+    rows.forEach((r) => {
+      if (campo === "locacao") {
+        (r.locacao || []).forEach((l) => l && set.add(l));
+      } else if (campo === "eap") {
+        if (r.eap) set.add(r.eap);
+      }
+    });
+    return [...set].sort();
+  };
+
+  const rowsFiltradas = rows.filter((r) => {
+    if (filtros.locacao && !(r.locacao || []).includes(filtros.locacao)) return false;
+    if (filtros.eap && r.eap !== filtros.eap) return false;
+    return true;
+  });
+
+  const temFiltroAtivo = filtros.locacao || filtros.eap;
+
   if (loading) {
     return (
       <div className="listagem-card">
@@ -291,10 +384,12 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
     );
   }
 
-  const rowsParaExibir = [...rows].reverse();
+  const rowsParaExibir = [...rowsFiltradas].reverse();
 
   return (
     <div className="listagem-card">
+
+      {/* Header */}
       <div className="listagem-header-container">
         <div className="listagem-header-titles">
           <span className="project-name">{projetoOrigem?.name || "Sem projeto"}</span>
@@ -303,17 +398,31 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
           </div>
         </div>
         {onClose && (
-          <button
-            className="listagem-close-btn"
-            onClick={onClose}
-            aria-label="Fechar"
-          >
+          <button className="listagem-close-btn" onClick={onClose} aria-label="Fechar">
             <FaTimes />
           </button>
         )}
       </div>
 
-      <div className="action-buttons" style={{ justifyContent: 'flex-end' }}>
+      {/* ✅ Barra de info */}
+      <div className="listagem-info-bar">
+        {(infoGerador || infoEnvio) && (
+          <span>
+            {infoGerador && (
+              <>Gerado por <strong>{infoGerador.nome}</strong></>
+            )}
+            {infoEnvio && (
+              <> e enviado por <strong>{infoEnvio.nome}</strong> em {formatarData(infoEnvio.data)}</>
+            )}
+            {infoRespondido && (
+              <> — Respondido por <strong>{infoRespondido.nome}</strong></>
+            )}
+          </span>
+        )}
+      </div>
+
+      {/* Botão enviar */}
+      <div className="action-buttons" style={{ justifyContent: "flex-end" }}>
         <div className="send-action-wrapper">
           <button
             className="send-btn"
@@ -327,28 +436,113 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
         </div>
       </div>
 
-      <div className="listagem-table-wrapper" style={{ position: 'relative' }}>
+      {/* ✅ Tags de filtros ativos */}
+      {temFiltroAtivo && (
+        <div className="filtros-ativos-bar">
+          {filtros.locacao && (
+            <span className="filtro-tag">
+              Locação: {filtros.locacao}
+              <button onClick={() => setFiltros((f) => ({ ...f, locacao: "" }))}>×</button>
+            </span>
+          )}
+          {filtros.eap && (
+            <span className="filtro-tag">
+              EAP: {filtros.eap}
+              <button onClick={() => setFiltros((f) => ({ ...f, eap: "" }))}>×</button>
+            </span>
+          )}
+          <button
+            className="filtro-limpar-todos"
+            onClick={() => setFiltros({ locacao: "", eap: "" })}
+          >
+            Limpar filtros
+          </button>
+        </div>
+      )}
+
+      {/* Tabela */}
+      <div className="listagem-table-wrapper" style={{ position: "relative" }}>
         <table className="listagem-table">
           <thead>
             <tr>
-              <th style={{ width: '40px' }}></th>
+              <th style={{ width: "40px" }}></th>
               <th>#</th>
               <th>Código</th>
               <th>Descrição</th>
               <th>Unidade</th>
               <th>Qnt/pav</th>
-              <th>Locação</th>
-              <th>EAP</th>
+
+              {/* ✅ Locação com filtro */}
+              <th className="th-filtro">
+                <span>Locação</span>
+                <button
+                  className={`filtro-icone-btn ${filtros.locacao ? "filtro-ativo" : ""}`}
+                  onClick={() => setFiltroAbertoCol(filtroAbertoCol === "locacao" ? null : "locacao")}
+                  title="Filtrar locação"
+                >
+                  <FaFilter size={10} />
+                </button>
+                {filtroAbertoCol === "locacao" && (
+                  <div ref={filtroRef} className="filtro-dropdown">
+                    <div
+                      className={`filtro-option ${filtros.locacao === "" ? "filtro-option-selected" : ""}`}
+                      onClick={() => { setFiltros((f) => ({ ...f, locacao: "" })); setFiltroAbertoCol(null); }}
+                    >
+                      Todos
+                    </div>
+                    {valoresUnicos("locacao").map((v) => (
+                      <div
+                        key={v}
+                        className={`filtro-option ${filtros.locacao === v ? "filtro-option-selected" : ""}`}
+                        onClick={() => { setFiltros((f) => ({ ...f, locacao: v })); setFiltroAbertoCol(null); }}
+                      >
+                        {v}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </th>
+
+              {/* ✅ EAP com filtro */}
+              <th className="th-filtro">
+                <span>EAP</span>
+                <button
+                  className={`filtro-icone-btn ${filtros.eap ? "filtro-ativo" : ""}`}
+                  onClick={() => setFiltroAbertoCol(filtroAbertoCol === "eap" ? null : "eap")}
+                  title="Filtrar EAP"
+                >
+                  <FaFilter size={10} />
+                </button>
+                {filtroAbertoCol === "eap" && (
+                  <div ref={filtroRef} className="filtro-dropdown">
+                    <div
+                      className={`filtro-option ${filtros.eap === "" ? "filtro-option-selected" : ""}`}
+                      onClick={() => { setFiltros((f) => ({ ...f, eap: "" })); setFiltroAbertoCol(null); }}
+                    >
+                      Todos
+                    </div>
+                    {valoresUnicos("eap").map((v) => (
+                      <div
+                        key={v}
+                        className={`filtro-option ${filtros.eap === v ? "filtro-option-selected" : ""}`}
+                        onClick={() => { setFiltros((f) => ({ ...f, eap: v })); setFiltroAbertoCol(null); }}
+                      >
+                        {v}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </th>
+
               <th>Observação</th>
               <th>Comentário</th>
-              <th style={{ width: '40px' }}>Ações</th>
+              <th style={{ width: "40px" }}>Ações</th>
             </tr>
           </thead>
           <tbody>
             {rowsParaExibir.map((row, visualIdx) => {
-              const currentGroup = row.grupo_envio;
               const nextRow = rowsParaExibir[visualIdx + 1];
-              const isLastInGroup = !nextRow || nextRow.grupo_envio !== currentGroup;
+              const isLastInGroup = !nextRow || nextRow.grupo_envio !== row.grupo_envio;
 
               return (
                 <React.Fragment key={row.id ?? visualIdx}>
@@ -388,48 +582,33 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
                     </td>
                     <td><span>{row.unidade || ""}</span></td>
                     <td><span>{row.quantidade || ""}</span></td>
-                    <td>
+
+                    {/* Locação */}
+                    <td style={{ position: "relative" }}>
                       <div
-                        className="locacao-resumo"
+                        className={`locacao-resumo ${row.locacao?.length > 1 ? "locacao-resumo-clickable" : ""}`}
                         onClick={() => {
-                          if (row.locacao?.length > 1) {
-                            setTooltipAberto(row.id);
-                          }
-                        }}
-                        style={{
-                          cursor: row.locacao?.length > 1 ? 'pointer' : 'default',
-                          padding: '4px 6px',
-                          borderRadius: '3px',
-                          fontSize: '0.9em',
-                          color: '#444',
-                          whiteSpace: 'nowrap',
+                          if (row.locacao?.length > 1) setTooltipAberto(row.id);
                         }}
                       >
                         {row.locacao?.length === 0
                           ? "–"
                           : row.locacao.length === 1
-                            ? row.locacao[0]
-                            : `${row.locacao[0]} +`}
+                          ? row.locacao[0]
+                          : `${row.locacao[0]} +`}
                       </div>
-
                       {tooltipAberto === row.id && (
-                        <div
-                          ref={tooltipRef}
-                          className="locacao-tooltip"
-                        >
+                        <div ref={tooltipRef} className="locacao-tooltip">
                           {row.locacao.map((loc, i) => (
-                            <div key={i} className="inside-tooltip">
-                              • {loc}
-                            </div>
+                            <div key={i} className="locacao-tooltip-item">• {loc}</div>
                           ))}
                         </div>
                       )}
                     </td>
+
                     <td><span>{row.eap || ""}</span></td>
                     <td>
-                      <div className="observacao-rendered">
-                        {row.observacao || ""}
-                      </div>
+                      <div className="observacao-rendered">{row.observacao || ""}</div>
                     </td>
                     <td>
                       <textarea
@@ -445,11 +624,8 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
                       {row.isCriar && (
                         <button
                           className="add-supabase-btn"
-                          style={{ padding: '4px', fontSize: '0.9em' }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleAddCriar(row);
-                          }}
+                          style={{ padding: "4px", fontSize: "0.9em" }}
+                          onClick={(e) => { e.stopPropagation(); handleAddCriar(row); }}
                           title="Atualizar item"
                         >
                           <FaPlus />
@@ -468,7 +644,7 @@ export default function ListagemEspelho({ projetoOrigem, notaOrigem, notaEspelho
                             month: "2-digit",
                             year: "numeric",
                             hour: "2-digit",
-                            minute: "2-digit"
+                            minute: "2-digit",
                           })}
                         </div>
                       </td>

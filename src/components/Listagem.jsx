@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabaseClient";
 import "./Listagem.css";
 import "./loader.css";
-import { FaTrash, FaPaperPlane, FaComment, FaTimes, FaFilePdf } from "react-icons/fa";
+import { FaTrash, FaPaperPlane, FaComment, FaTimes, FaFilePdf, FaFilter } from "react-icons/fa";
 import { FaMagnifyingGlass } from "react-icons/fa6";
 import Check from "./Check";
 import Loading from "./Loading";
@@ -24,71 +24,77 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
   const [statusEnvio, setStatusEnvio] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // ✅ Informações de geração e envio da listagem (da nota)
+  const [infoGerador, setInfoGerador] = useState(null);
+  const [infoEnvio, setInfoEnvio] = useState(null);
+  const [infoRespondido, setInfoRespondido] = useState(null);
+  const [listagemEnviada, setListagemEnviada] = useState(false);
   const [buscaInsumoAberta, setBuscaInsumoAberta] = useState(false);
   const [linhaBuscaAtiva, setLinhaBuscaAtiva] = useState(null);
 
   // Estado para dropdown de edição
-  const [dropdownAberto, setDropdownAberto] = useState(null); // índice da linha
+  const [dropdownAberto, setDropdownAberto] = useState(null);
   const dropdownRef = useRef(null);
 
-  // ✅ Novo: estado para tooltip de visualização (pós-envio)
-  const [tooltipVisualizacao, setTooltipVisualizacao] = useState(null); // id da linha
+  // ✅ Estado para tooltip de visualização (pós-envio)
+  const [tooltipVisualizacao, setTooltipVisualizacao] = useState(null);
   const tooltipRef = useRef(null);
 
+  // ✅ Filtros
+  const [filtros, setFiltros] = useState({ locacao: "", eap: "" });
+  const [filtroAbertoCol, setFiltroAbertoCol] = useState(null);
+  const filtroRef = useRef(null);
   const cardRef = useRef(null);
+  const notaCarregadaRef = useRef(null);
   const [forcarAtualizacao, setForcarAtualizacao] = useState(0);
 
   // 🔑 Função auxiliar para chave única de rascunho
   const getRascunhoKey = () => `rascunho_listagem_${projetoAtual?.id}_${notaAtual?.id}`;
 
-  // Fechar dropdown ao clicar fora
+  // Fechar dropdown de locação ao clicar fora
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setDropdownAberto(null);
       }
     };
-
     if (dropdownAberto !== null) {
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [dropdownAberto]);
 
-  // ✅ Fechar tooltip de visualização ao clicar fora
+  // Fechar tooltip de visualização ao clicar fora
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (tooltipRef.current && !tooltipRef.current.contains(e.target)) {
         setTooltipVisualizacao(null);
       }
     };
-
     if (tooltipVisualizacao !== null) {
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [tooltipVisualizacao]);
 
-  // Fechar modal ao clicar fora
+  // Fechar painel de filtro ao clicar fora
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (onClose && cardRef.current && !cardRef.current.contains(e.target)) {
-        onClose();
+      if (filtroRef.current && !filtroRef.current.contains(e.target)) {
+        setFiltroAbertoCol(null);
       }
     };
-
-    if (onClose) {
+    if (filtroAbertoCol !== null) {
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }
-  }, [onClose]);
+  }, [filtroAbertoCol]);
 
   // Carrega perfil do usuário logado
   useEffect(() => {
     const fetchUserProfile = async () => {
       const { data, error } = await supabase.auth.getUser();
       if (error) return;
-
       const user = data.user;
       if (user) {
         const { data: profile, error: profileError } = await supabase
@@ -96,7 +102,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
           .select("nome, id")
           .eq("id", user.id)
           .single();
-
         if (profileError) {
           setNomeUsuarioLogado(user.email?.split("@")[0] || "Usuário");
           setUserIdLogado("");
@@ -115,7 +120,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
       setSetoresContainer([]);
       return;
     }
-
     const carregarSetores = async () => {
       try {
         const { data, error } = await supabase
@@ -123,7 +127,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
           .select("id, name, nickname")
           .eq("user_id", containerAtual.id)
           .order("nickname");
-
         if (error) throw error;
         setSetoresContainer(data || []);
       } catch (err) {
@@ -131,7 +134,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         setSetoresContainer([]);
       }
     };
-
     carregarSetores();
   }, [containerAtual?.id]);
 
@@ -143,7 +145,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
       setUnidadesDisponiveis([]);
       return;
     }
-
     const carregarReferenciasDoProjeto = async () => {
       try {
         const [pavimentosRes, eapsRes, unidadesRes] = await Promise.all([
@@ -151,11 +152,10 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
           supabase.from("eap").select("name").eq("project_id", projetoAtual.id),
           supabase.from("itens").select("unidade"),
         ]);
-
-        setLocacoes(pavimentosRes.data?.map(p => p.name) || []);
-        setEaps(eapsRes.data?.map(e => e.name) || []);
+        setLocacoes(pavimentosRes.data?.map((p) => p.name) || []);
+        setEaps(eapsRes.data?.map((e) => e.name) || []);
         setUnidadesDisponiveis([
-          ...new Set(unidadesRes.data?.map(u => u.unidade).filter(Boolean) || [])
+          ...new Set(unidadesRes.data?.map((u) => u.unidade).filter(Boolean) || []),
         ]);
       } catch (err) {
         console.error("Erro ao carregar referências do projeto:", err);
@@ -164,7 +164,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         setUnidadesDisponiveis([]);
       }
     };
-
     carregarReferenciasDoProjeto();
   }, [projetoAtual?.id]);
 
@@ -176,18 +175,57 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
   const carregarDadosDoBanco = async () => {
     try {
       if (!projetoAtual?.id || !notaAtual?.id) {
-        setRows([{
-          codigo: "",
-          descricao: "",
-          unidade: "",
-          quantidade: "",
-          locacao: [],
-          eap: "",
-          observacao: "",
-          comentario: "",
-          ordem: 1,
-        }]);
+        setRows([
+          {
+            codigo: "",
+            descricao: "",
+            unidade: "",
+            quantidade: "",
+            locacao: [],
+            eap: "",
+            observacao: "",
+            comentario: "",
+            ordem: 1,
+          },
+        ]);
         return;
+      }
+
+      // ✅ Carregar dados da nota (gerador + envio + respondido)
+      const { data: notaData } = await supabase
+        .from("notas")
+        .select(
+          "enviada, data_envio, enviado_por_nome, created_at, created_by, respondida, respondido_por_nome"
+        )
+        .eq("id", notaAtual.id)
+        .single();
+
+      if (notaData) {
+        setListagemEnviada(!!notaData.enviada);
+
+        let nomeGerador = null;
+        if (notaData.created_by) {
+          const { data: perfilCriador } = await supabase
+            .from("profiles")
+            .select("nome")
+            .eq("id", notaData.created_by)
+            .single();
+          nomeGerador = perfilCriador?.nome || null;
+        }
+
+        setInfoGerador(
+          nomeGerador ? { nome: nomeGerador, data: notaData.created_at } : null
+        );
+        setInfoEnvio(
+          notaData.enviada && notaData.enviado_por_nome
+            ? { nome: notaData.enviado_por_nome, data: notaData.data_envio }
+            : null
+        );
+        setInfoRespondido(
+          notaData.respondida && notaData.respondido_por_nome
+            ? { nome: notaData.respondido_por_nome }
+            : null
+        );
       }
 
       const { data: itensRes, error: itensError } = await supabase
@@ -199,10 +237,10 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
       if (itensError) throw itensError;
 
       if (itensRes?.length) {
-        const mapped = itensRes.map(item => {
+        const mapped = itensRes.map((item) => {
           let locacaoArray = [];
           try {
-            if (typeof item.locacao === 'string') {
+            if (typeof item.locacao === "string") {
               const parsed = JSON.parse(item.locacao);
               if (Array.isArray(parsed)) {
                 locacaoArray = parsed;
@@ -217,7 +255,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
           } catch (e) {
             locacaoArray = item.locacao ? [String(item.locacao)] : [];
           }
-
           return {
             id: item.id,
             codigo: item.codigo || "",
@@ -237,19 +274,20 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         });
         setRows(mapped);
       } else {
-        setRows([{
-          codigo: "",
-          descricao: "",
-          unidade: "",
-          quantidade: "",
-          locacao: [],
-          eap: "",
-          observacao: "",
-          comentario: "",
-          ordem: 1,
-        }]);
+        setRows([
+          {
+            codigo: "",
+            descricao: "",
+            unidade: "",
+            quantidade: "",
+            locacao: [],
+            eap: "",
+            observacao: "",
+            comentario: "",
+            ordem: 1,
+          },
+        ]);
       }
-
       registrarAlteracao();
     } catch (err) {
       console.error("Erro ao carregar dados da nota:", err);
@@ -259,36 +297,53 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
 
   // ✅ SALVAR RASCUNHO AUTOMATICAMENTE
   useEffect(() => {
-    if (!projetoAtual?.id || !notaAtual?.id || loading) return;
-
+    if (!projetoAtual?.id || !notaAtual?.id || loading || listagemEnviada) return;
     const key = getRascunhoKey();
-    const rascunho = rows.filter(r => 
-      r.codigo?.trim() || r.descricao?.trim() || (r.quantidade && r.quantidade.toString().trim())
+    const rascunho = rows.filter(
+      (r) => r.codigo?.trim() || r.descricao?.trim() || (r.quantidade && r.quantidade.toString().trim())
     );
     if (rascunho.length > 0) {
       localStorage.setItem(key, JSON.stringify(rascunho));
     } else {
       localStorage.removeItem(key);
     }
-  }, [rows, projetoAtual?.id, notaAtual?.id, loading]);
+  }, [rows, projetoAtual?.id, notaAtual?.id, loading, listagemEnviada]);
 
   // ✅ CARREGAR RASCUNHO OU DO BANCO
   useEffect(() => {
     const carregarRascunhoOuBanco = async () => {
+      const chaveAtual = `${projetoAtual?.id}_${notaAtual?.id}`;
+      if (notaCarregadaRef.current === chaveAtual && forcarAtualizacao === 0) return;
+
       setLoading(true);
 
       if (!projetoAtual?.id || !notaAtual?.id) {
-        setRows([{
-          codigo: "",
-          descricao: "",
-          unidade: "",
-          quantidade: "",
-          locacao: [],
-          eap: "",
-          observacao: "",
-          comentario: "",
-          ordem: 1,
-        }]);
+        setRows([
+          {
+            codigo: "",
+            descricao: "",
+            unidade: "",
+            quantidade: "",
+            locacao: [],
+            eap: "",
+            observacao: "",
+            comentario: "",
+            ordem: 1,
+          },
+        ]);
+        setLoading(false);
+        return;
+      }
+
+      const { data: notaCheck } = await supabase
+        .from("notas")
+        .select("enviada")
+        .eq("id", notaAtual.id)
+        .single();
+
+      if (notaCheck?.enviada) {
+        await carregarDadosDoBanco();
+        notaCarregadaRef.current = chaveAtual;
         setLoading(false);
         return;
       }
@@ -300,12 +355,13 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         try {
           const parsed = JSON.parse(rascunhoSalvo);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            const withArrayLocacao = parsed.map(r => ({
+            const withArrayLocacao = parsed.map((r) => ({
               ...r,
-              locacao: Array.isArray(r.locacao) ? r.locacao : (r.locacao ? [r.locacao] : []),
+              locacao: Array.isArray(r.locacao) ? r.locacao : r.locacao ? [r.locacao] : [],
             }));
             setRows(withArrayLocacao);
             registrarAlteracao("Rascunho local");
+            notaCarregadaRef.current = chaveAtual;
             setLoading(false);
             return;
           }
@@ -316,104 +372,106 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
       }
 
       await carregarDadosDoBanco();
+      notaCarregadaRef.current = chaveAtual;
       setLoading(false);
     };
-
     carregarRascunhoOuBanco();
-  }, [projetoAtual, notaAtual, forcarAtualizacao]);
+  }, [projetoAtual?.id, notaAtual?.id, forcarAtualizacao]);
 
   // 🔁 POLLING: sincroniza com banco a cada 3s
   useEffect(() => {
     if (!notaAtual?.id) return;
-
     const verificarAtualizacoes = async () => {
       try {
         const { data, error } = await supabase
           .from("planilha_itens")
-          .select("id, codigo, descricao, comentario, observacao, quantidade, unidade, locacao, eap")
+          .select(
+            "id, codigo, descricao, comentario, observacao, quantidade, unidade, locacao, eap"
+          )
           .eq("nota_id", notaAtual.id);
-
         if (error) throw error;
 
-        setRows(prev => prev.map(r => {
-          const itemAtualizado = data.find(i => i.id === r.id);
-          if (itemAtualizado) {
-            let locacaoArray = [];
-            try {
-              if (typeof itemAtualizado.locacao === 'string') {
-                const parsed = JSON.parse(itemAtualizado.locacao);
-                if (Array.isArray(parsed)) {
-                  locacaoArray = parsed;
-                } else {
-                  locacaoArray = itemAtualizado.locacao ? [itemAtualizado.locacao] : [];
+        setRows((prev) =>
+          prev.map((r) => {
+            const itemAtualizado = data.find((i) => i.id === r.id);
+            if (itemAtualizado) {
+              let locacaoArray = [];
+              try {
+                if (typeof itemAtualizado.locacao === "string") {
+                  const parsed = JSON.parse(itemAtualizado.locacao);
+                  if (Array.isArray(parsed)) {
+                    locacaoArray = parsed;
+                  } else {
+                    locacaoArray = itemAtualizado.locacao ? [itemAtualizado.locacao] : [];
+                  }
+                } else if (Array.isArray(itemAtualizado.locacao)) {
+                  locacaoArray = itemAtualizado.locacao;
+                } else if (itemAtualizado.locacao != null) {
+                  locacaoArray = [String(itemAtualizado.locacao)];
                 }
-              } else if (Array.isArray(itemAtualizado.locacao)) {
-                locacaoArray = itemAtualizado.locacao;
-              } else if (itemAtualizado.locacao != null) {
-                locacaoArray = [String(itemAtualizado.locacao)];
+              } catch (e) {
+                locacaoArray = itemAtualizado.locacao ? [String(itemAtualizado.locacao)] : [];
               }
-            } catch (e) {
-              locacaoArray = itemAtualizado.locacao ? [String(itemAtualizado.locacao)] : [];
+              return {
+                ...r,
+                codigo: itemAtualizado.codigo,
+                descricao: itemAtualizado.descricao,
+                comentario: itemAtualizado.comentario,
+                observacao: itemAtualizado.observacao,
+                quantidade: itemAtualizado.quantidade,
+                unidade: itemAtualizado.unidade,
+                locacao: locacaoArray,
+                eap: itemAtualizado.eap,
+              };
             }
-
-            return {
-              ...r,
-              codigo: itemAtualizado.codigo,
-              descricao: itemAtualizado.descricao,
-              comentario: itemAtualizado.comentario,
-              observacao: itemAtualizado.observacao,
-              quantidade: itemAtualizado.quantidade,
-              unidade: itemAtualizado.unidade,
-              locacao: locacaoArray,
-              eap: itemAtualizado.eap,
-            };
-          }
-          return r;
-        }));
+            return r;
+          })
+        );
       } catch (err) {
-        console.error('Erro ao verificar atualizações:', err);
+        console.error("Erro ao verificar atualizações:", err);
       }
     };
-
     const interval = setInterval(verificarAtualizacoes, 3000);
     return () => clearInterval(interval);
   }, [notaAtual?.id]);
 
   const buscarItemPorCodigo = async (index, codigo) => {
     if (!codigo?.trim() || codigo.toLowerCase() === "criar") {
-      setCodigoErro(prev => {
+      setCodigoErro((prev) => {
         const novo = new Set(prev);
         novo.delete(index);
         return novo;
       });
       return;
     }
-
     try {
       const { data, error } = await supabase
         .from("itens")
         .select("descricao, unidade")
         .eq("codigo", codigo)
         .maybeSingle();
-
       if (error) throw error;
 
       const novas = [...rows];
       if (data) {
-        novas[index] = { ...novas[index], descricao: data.descricao || "", unidade: data.unidade || "" };
-        setCodigoErro(prev => {
+        novas[index] = {
+          ...novas[index],
+          descricao: data.descricao || "",
+          unidade: data.unidade || "",
+        };
+        setCodigoErro((prev) => {
           const novo = new Set(prev);
           novo.delete(index);
           return novo;
         });
       } else {
-        setCodigoErro(prev => new Set(prev).add(index));
+        setCodigoErro((prev) => new Set(prev).add(index));
         novas[index] = { ...novas[index], descricao: "", unidade: "" };
       }
       setRows(novas);
       registrarAlteracao();
     } catch (err) {
-      setCodigoErro(prev => new Set(prev).add(index));
+      setCodigoErro((prev) => new Set(prev).add(index));
     }
   };
 
@@ -427,7 +485,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
   const handleLocacaoChange = (index, valor, checked) => {
     const novas = [...rows];
     const locacoesAtuais = [...novas[index].locacao];
-
     if (checked) {
       if (!locacoesAtuais.includes(valor)) {
         locacoesAtuais.push(valor);
@@ -438,7 +495,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         locacoesAtuais.splice(idx, 1);
       }
     }
-
     novas[index].locacao = locacoesAtuais;
     setRows(novas);
     registrarAlteracao();
@@ -456,10 +512,8 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
   };
 
   const addRow = () => {
-    const ultimaOrdem = rows.length > 0
-      ? Math.max(...rows.map(r => r.ordem || 0))
-      : 0;
-
+    if (listagemEnviada) return;
+    const ultimaOrdem = rows.length > 0 ? Math.max(...rows.map((r) => r.ordem || 0)) : 0;
     const novaLinha = {
       codigo: "",
       descricao: "",
@@ -472,16 +526,15 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
       criado_em: new Date().toISOString(),
       ordem: ultimaOrdem + 1,
     };
-
-    setRows(prev => [...prev, novaLinha]);
+    setRows((prev) => [...prev, novaLinha]);
     registrarAlteracao();
   };
 
   const removeRow = async (index) => {
+    if (listagemEnviada) return;
     const linha = rows[index];
-    setRows(prev => prev.filter((_, i) => i !== index));
+    setRows((prev) => prev.filter((_, i) => i !== index));
     registrarAlteracao();
-
     if (linha?.id) {
       try {
         const { error } = await supabase.from("planilha_itens").delete().eq("id", linha.id);
@@ -497,11 +550,11 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
     setSetorSelecionado(e.target.value);
   };
 
-  // ⭐ NOVO: Função para exportar PDF
+  // ⭐ Função para exportar PDF
   const handleExportarPDF = () => {
     ListagemPdf.exportar(
-      projetoAtual?.name || 'Sem projeto',
-      notaAtual?.nome || 'Sem nota',
+      projetoAtual?.name || "Sem projeto",
+      notaAtual?.nome || "Sem nota",
       new Date(),
       rows
     );
@@ -514,45 +567,51 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
     }
 
     setStatusEnvio("enviando");
+
     try {
       const grupoEnvio = `envio_${Date.now()}`;
       const dataEnvio = new Date().toISOString();
       const remetente = nomeUsuarioLogado;
-
-      const linhasValidas = rows.filter(r => r.codigo?.trim() || r.descricao?.trim() || r.quantidade);
-      const existentes = linhasValidas.filter(r => r.id);
-      const novos = linhasValidas.filter(r => !r.id);
+      const linhasValidas = rows.filter(
+        (r) => r.codigo?.trim() || r.descricao?.trim() || r.quantidade
+      );
+      const existentes = linhasValidas.filter((r) => r.id);
+      const novos = linhasValidas.filter((r) => !r.id);
       const setoresParaEnvio = [setorSelecionado];
 
       // Atualizar existentes
       if (existentes.length) {
-        await Promise.all(existentes.map(async (it) => {
-          const { error } = await supabase.from("planilha_itens").update({
-            codigo: it.codigo?.trim() || null,
-            descricao: it.descricao || null,
-            unidade: it.unidade || null,
-            quantidade: it.quantidade ? Number(it.quantidade) : null,
-            locacao: it.locacao && it.locacao.length > 0 ? JSON.stringify(it.locacao) : null,
-            eap: it.eap || null,
-            observacao: it.observacao || null,
-            comentario: it.comentario || null,
-            direcionar_para: JSON.stringify(setoresParaEnvio),
-            ordem: it.ordem,
-          }).eq("id", it.id);
-          if (error) throw error;
-        }));
+        await Promise.all(
+          existentes.map(async (it) => {
+            const { error } = await supabase.from("planilha_itens").update({
+              codigo: it.codigo?.trim() || null,
+              descricao: it.descricao || null,
+              unidade: it.unidade || null,
+              quantidade: it.quantidade ? Number(it.quantidade) : null,
+              locacao:
+                it.locacao && it.locacao.length > 0 ? JSON.stringify(it.locacao) : null,
+              eap: it.eap || null,
+              observacao: it.observacao || null,
+              comentario: it.comentario || null,
+              direcionar_para: JSON.stringify(setoresParaEnvio),
+              ordem: it.ordem,
+            }).eq("id", it.id);
+            if (error) throw error;
+          })
+        );
       }
 
       // Inserir novos
       if (novos.length) {
-        const inserts = novos.map(it => ({
+        const inserts = novos.map((it) => ({
           projeto_id: projetoAtual.id,
           nota_id: notaAtual.id,
           codigo: it.codigo?.trim() || null,
           descricao: it.descricao || null,
           unidade: it.unidade || null,
           quantidade: it.quantidade ? Number(it.quantidade) : null,
-          locacao: it.locacao && it.locacao.length > 0 ? JSON.stringify(it.locacao) : null,
+          locacao:
+            it.locacao && it.locacao.length > 0 ? JSON.stringify(it.locacao) : null,
           eap: it.eap || null,
           observacao: it.observacao || null,
           comentario: it.comentario || null,
@@ -568,7 +627,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
       }
 
       // Notificação e pilha "Recebidos"
-      const notificacoesParaInserir = setoresParaEnvio.map(setorId => ({
+      const notificacoesParaInserir = setoresParaEnvio.map((setorId) => ({
         user_id: userIdLogado,
         remetente_id: userIdLogado,
         mensagem: `${remetente} enviou a listagem da nota "${notaAtual.nome}"`,
@@ -576,11 +635,13 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         nota_id: notaAtual.id,
         lido: false,
         created_at: new Date().toISOString(),
-        tipo: "listagem_enviada"
+        tipo: "listagem_enviada",
       }));
 
       if (notificacoesParaInserir.length > 0) {
-        const { error: notifError } = await supabase.from("notificacoes").insert(notificacoesParaInserir);
+        const { error: notifError } = await supabase
+          .from("notificacoes")
+          .insert(notificacoesParaInserir);
         if (notifError) {
           console.warn("Erro ao enviar notificações:", notifError);
         }
@@ -599,14 +660,14 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
       let pilhaRecebidosId;
       if (!pilhasRecebidos || pilhasRecebidos.length === 0) {
         const { data: novaPilha, error: insertError } = await supabase
-        .from("pilhas")
-        .insert({ 
-          title: "Recebidos", 
-          setor_id: setorId,
-          ordem: 0
-        })
-        .select("id")
-        .single();
+          .from("pilhas")
+          .insert({
+            title: "Recebidos",
+            setor_id: setorId,
+            ordem: 0,
+          })
+          .select("id")
+          .single();
         if (insertError) throw insertError;
         pilhaRecebidosId = novaPilha.id;
       } else {
@@ -623,19 +684,17 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
       let notaEspelhoId;
       if (notaExistente) {
         notaEspelhoId = notaExistente.id;
-        // ✅ MODIFICADO: Adicionar campos de envio
         await supabase
           .from("notas")
           .update({
             projeto_origem_id: projetoAtual.id,
             nota_original_id: notaAtual.id,
-            data_envio: new Date().toISOString(),
+            data_envio: dataEnvio,
             enviado_por_id: userIdLogado,
             enviado_por_nome: remetente,
           })
           .eq("id", notaEspelhoId);
       } else {
-        // ✅ MODIFICADO: Adicionar campos de envio
         const { data: novaNota, error: notaError } = await supabase
           .from("notas")
           .insert({
@@ -645,7 +704,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
             projeto_origem_id: projetoAtual.id,
             nota_original_id: notaAtual.id,
             enviada: true,
-            data_envio: new Date().toISOString(),
+            data_envio: dataEnvio,
             enviado_por_id: userIdLogado,
             enviado_por_nome: remetente,
           })
@@ -667,10 +726,10 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
       if (itensOriginais?.length > 0) {
         await supabase.from("planilha_itens").delete().eq("nota_id", notaEspelhoId);
 
-        const itensParaInserir = itensOriginais.map(item => {
+        const itensParaInserir = itensOriginais.map((item) => {
           let locacaoArray = [];
           try {
-            if (typeof item.locacao === 'string') {
+            if (typeof item.locacao === "string") {
               const parsed = JSON.parse(item.locacao);
               if (Array.isArray(parsed)) locacaoArray = parsed;
               else locacaoArray = item.locacao ? [item.locacao] : [];
@@ -682,7 +741,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
           } catch (e) {
             locacaoArray = item.locacao ? [String(item.locacao)] : [];
           }
-
           return {
             projeto_id: projetoAtual.id,
             nota_id: notaEspelhoId,
@@ -705,7 +763,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
           };
         });
 
-        const { data: itensInseridos, error: insertItensError } = await supabase
+        const { error: insertItensError } = await supabase
           .from("planilha_itens")
           .insert(itensParaInserir)
           .select("id, ordem");
@@ -716,20 +774,25 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
       // Marcar nota original como enviada
       await supabase
         .from("notas")
-        .update({ enviada: true })
+        .update({
+          enviada: true,
+          enviado_por_nome: remetente,
+          enviado_por_id: userIdLogado,
+          data_envio: dataEnvio,
+        })
         .eq("id", notaAtual.id);
 
       if (onStatusUpdate) {
         onStatusUpdate(notaAtual.id, { enviada: true, respondida: false });
       }
 
+      // ✅ Atualizar estado local de envio
+      setListagemEnviada(true);
+      setInfoEnvio({ nome: remetente, data: dataEnvio });
       setCodigoErro(new Set());
       setSetorSelecionado("");
-
       localStorage.removeItem(getRascunhoKey());
-
       await carregarDadosDoBanco();
-
       setStatusEnvio("sucesso");
       setTimeout(() => setStatusEnvio(null), 2000);
       registrarAlteracao();
@@ -740,6 +803,42 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
     }
   };
 
+  // ✅ Formata data para exibição
+  const formatarData = (isoString) => {
+    if (!isoString) return "";
+    return new Date(isoString).toLocaleString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  // ✅ Valores únicos para filtros
+  const valoresUnicos = (campo) => {
+    const set = new Set();
+    rows.forEach((r) => {
+      if (campo === "locacao") {
+        (r.locacao || []).forEach((l) => l && set.add(l));
+      } else if (campo === "eap") {
+        if (r.eap) set.add(r.eap);
+      } else if (campo === "quantidade") {
+        if (r.quantidade !== "" && r.quantidade != null) set.add(String(r.quantidade));
+      }
+    });
+    return [...set].sort();
+  };
+
+  // ✅ Aplicar filtros nas linhas
+  const rowsFiltradas = rows.filter((r) => {
+    if (filtros.locacao && !(r.locacao || []).includes(filtros.locacao)) return false;
+    if (filtros.eap && r.eap !== filtros.eap) return false;
+    return true;
+  });
+
+  const temFiltroAtivo = filtros.locacao || filtros.eap;
+
   if (loading) {
     return (
       <div className="listagem-card" ref={cardRef}>
@@ -748,14 +847,17 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
     );
   }
 
-  const rowsParaExibir = [...rows].reverse();
+  const rowsParaExibir = [...rowsFiltradas].reverse();
 
   return (
     <div className="listagem-card" ref={cardRef}>
+      {/* Header */}
       <div className="listagem-header-container">
         <div className="listagem-header-titles">
           <span className="project-name">{projetoAtual?.name || "Sem projeto"}</span>
-          <div className="sub-info"><span className="nota-name">{notaAtual?.nome || "Sem nota"}</span></div>
+          <div className="sub-info">
+            <span className="nota-name">{notaAtual?.nome || "Sem nota"}</span>
+          </div>
         </div>
         {onClose && (
           <button
@@ -768,47 +870,104 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         )}
       </div>
 
-      <div className="action-buttons">
-        <button className="add-row-btn" onClick={addRow}>Nova linha</button>
-
-        <div style={{ position: "relative", maxWidth: "300px" }}>
-          <select
-            value={setorSelecionado}
-            onChange={handleSetorChange}
-            className="direcionar-para-input"
-            style={{ height: "auto", minHeight: "40px" }}
-          >
-            <option value="">Selecione um setor</option>
-            {setoresContainer.map((setor) => (
-              <option key={setor.id} value={setor.id}>
-                {setor.nickname || setor.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* ⭐ BOTÃO PDF INTEGRADO */}
-        <button
-          className="export-pdf-btn"
-          onClick={handleExportarPDF}
-          title="Exportar listagem como PDF"
-        >
-          <FaFilePdf style={{ marginRight: 6 }} /> PDF
-        </button>
-
-        <div className="send-action-wrapper">
-          <button
-            className="send-btn"
-            onClick={handleSave}
-            disabled={statusEnvio === "enviando" || !setorSelecionado}
-          >
-            <FaPaperPlane style={{ marginRight: 6 }} /> Enviar
-          </button>
-          {statusEnvio === "enviando" && <span className="loader-inline"></span>}
-          {statusEnvio === "sucesso" && <Check />}
-        </div>
+      {/* Barra de info: gerador, envio e respondido */}
+      <div className="listagem-info-bar">
+        {(infoGerador || infoEnvio) && (
+          <span>
+            {infoGerador && (
+              <>
+                Gerado por <strong>{infoGerador.nome}</strong>
+              </>
+            )}
+            {infoEnvio && (
+              <>
+                {" "}
+                e enviado por <strong>{infoEnvio.nome}</strong> em{" "}
+                {formatarData(infoEnvio.data)}
+              </>
+            )}
+            {infoRespondido && (
+              <>
+                {" "}
+                — Respondido por <strong>{infoRespondido.nome}</strong>
+              </>
+            )}
+          </span>
+        )}
       </div>
 
+      {/* Botões de ação — ocultos se enviada */}
+      {!listagemEnviada && (
+        <div className="action-buttons">
+          <button className="add-row-btn" onClick={addRow}>
+            Nova linha
+          </button>
+          <div style={{ position: "relative", maxWidth: "300px" }}>
+            <select
+              value={setorSelecionado}
+              onChange={handleSetorChange}
+              className="direcionar-para-input"
+              style={{ height: "auto", minHeight: "40px" }}
+            >
+              <option value="">Selecione um setor</option>
+              {setoresContainer.map((setor) => (
+                <option key={setor.id} value={setor.id}>
+                  {setor.nickname || setor.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {/* Botão PDF */}
+          <button
+            className="export-pdf-btn"
+            onClick={handleExportarPDF}
+            title="Exportar listagem como PDF"
+          >
+            <FaFilePdf style={{ marginRight: 6 }} /> PDF
+          </button>
+          <div className="send-action-wrapper">
+            <button
+              className="send-btn"
+              onClick={handleSave}
+              disabled={statusEnvio === "enviando" || !setorSelecionado}
+            >
+              <FaPaperPlane style={{ marginRight: 6 }} /> Enviar
+            </button>
+            {statusEnvio === "enviando" && <span className="loader-inline"></span>}
+            {statusEnvio === "sucesso" && <Check />}
+          </div>
+        </div>
+      )}
+
+      {/* Filtros ativos */}
+      {temFiltroAtivo && (
+        <div className="filtros-ativos-bar">
+          {filtros.locacao && (
+            <span className="filtro-tag">
+              Locação: {filtros.locacao}
+              <button onClick={() => setFiltros((f) => ({ ...f, locacao: "" }))}>
+                ×
+              </button>
+            </span>
+          )}
+          {filtros.eap && (
+            <span className="filtro-tag">
+              EAP: {filtros.eap}
+              <button onClick={() => setFiltros((f) => ({ ...f, eap: "" }))}>
+                ×
+              </button>
+            </span>
+          )}
+          <button
+            className="filtro-limpar-todos"
+            onClick={() => setFiltros({ locacao: "", eap: "" })}
+          >
+            Limpar filtros
+          </button>
+        </div>
+      )}
+
+      {/* Tabela */}
       <div className="listagem-table-wrapper">
         <table className="listagem-table">
           <thead>
@@ -818,25 +977,104 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
               <th>Descrição</th>
               <th>Unidade</th>
               <th className="quantidade-pavimento-header">Qnt/pav</th>
-              <th>Locação</th>
-              <th>EAP</th>
+              <th className="th-filtro">
+                <span>Locação</span>
+                <button
+                  className={`filtro-icone-btn ${filtros.locacao ? "filtro-ativo" : ""}`}
+                  onClick={() =>
+                    setFiltroAbertoCol(filtroAbertoCol === "locacao" ? null : "locacao")
+                  }
+                  title="Filtrar locação"
+                >
+                  <FaFilter size={10} />
+                </button>
+                {filtroAbertoCol === "locacao" && (
+                  <div ref={filtroRef} className="filtro-dropdown">
+                    <div
+                      className={`filtro-option ${
+                        filtros.locacao === "" ? "filtro-option-selected" : ""
+                      }`}
+                      onClick={() => {
+                        setFiltros((f) => ({ ...f, locacao: "" }));
+                        setFiltroAbertoCol(null);
+                      }}
+                    >
+                      Todos
+                    </div>
+                    {valoresUnicos("locacao").map((v) => (
+                      <div
+                        key={v}
+                        className={`filtro-option ${
+                          filtros.locacao === v ? "filtro-option-selected" : ""
+                        }`}
+                        onClick={() => {
+                          setFiltros((f) => ({ ...f, locacao: v }));
+                          setFiltroAbertoCol(null);
+                        }}
+                      >
+                        {v}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </th>
+              <th className="th-filtro">
+                <span>EAP</span>
+                <button
+                  className={`filtro-icone-btn ${filtros.eap ? "filtro-ativo" : ""}`}
+                  onClick={() =>
+                    setFiltroAbertoCol(filtroAbertoCol === "eap" ? null : "eap")
+                  }
+                  title="Filtrar EAP"
+                >
+                  <FaFilter size={10} />
+                </button>
+                {filtroAbertoCol === "eap" && (
+                  <div ref={filtroRef} className="filtro-dropdown">
+                    <div
+                      className={`filtro-option ${
+                        filtros.eap === "" ? "filtro-option-selected" : ""
+                      }`}
+                      onClick={() => {
+                        setFiltros((f) => ({ ...f, eap: "" }));
+                        setFiltroAbertoCol(null);
+                      }}
+                    >
+                      Todos
+                    </div>
+                    {valoresUnicos("eap").map((v) => (
+                      <div
+                        key={v}
+                        className={`filtro-option ${
+                          filtros.eap === v ? "filtro-option-selected" : ""
+                        }`}
+                        onClick={() => {
+                          setFiltros((f) => ({ ...f, eap: v }));
+                          setFiltroAbertoCol(null);
+                        }}
+                      >
+                        {v}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </th>
               <th>Observação</th>
               <th>Comentário</th>
-              <th style={{ width: '40px' }}>Ações</th>
+              {!listagemEnviada && <th style={{ width: "40px" }}>Ações</th>}
             </tr>
           </thead>
           <tbody>
             {rowsParaExibir.map((row, visualIdx) => {
               const isCriar = row.codigo?.toLowerCase() === "criar";
-              const foiEnviada = !!row.id && !!row.data_envio;
+              const foiEnviada = listagemEnviada;
               const isLinhaCongelada = foiEnviada;
               const podeEditarCodigo = !row.id && !isLinhaCongelada;
               const podeEditarDescricao = isCriar && !isLinhaCongelada;
               const podeEditarDemais = !row.id && !isLinhaCongelada;
-
               const nextRow = rowsParaExibir[visualIdx + 1];
               const isLastInGroup = !nextRow || nextRow.grupo_envio !== row.grupo_envio;
-              const indexOriginal = rows.findIndex(r => r.ordem === row.ordem);
+              const indexOriginal = rows.findIndex((r) => r.ordem === row.ordem);
 
               return (
                 <React.Fragment key={row.id ?? visualIdx}>
@@ -851,7 +1089,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                             onChange={(e) => {
                               handleInputChange(indexOriginal, "codigo", e.target.value);
                               if (codigoErro.has(indexOriginal)) {
-                                setCodigoErro(prev => {
+                                setCodigoErro((prev) => {
                                   const novo = new Set(prev);
                                   novo.delete(indexOriginal);
                                   return novo;
@@ -859,7 +1097,9 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                               }
                             }}
                             onBlur={() => !isCriar && buscarItemPorCodigo(indexOriginal, row.codigo)}
-                            onKeyPress={(e) => !isCriar && handleCodigoEnter(e, indexOriginal, row.codigo)}
+                            onKeyPress={(e) =>
+                              !isCriar && handleCodigoEnter(e, indexOriginal, row.codigo)
+                            }
                             placeholder="Código"
                             className={codigoErro.has(indexOriginal) ? "codigo-invalido" : ""}
                           />
@@ -882,10 +1122,13 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                     </td>
                     <td>
                       {podeEditarDescricao ? (
-                        <input className="descri"
+                        <input
+                          className="descri"
                           type="text"
                           value={row.descricao || ""}
-                          onChange={(e) => handleInputChange(indexOriginal, "descricao", e.target.value)}
+                          onChange={(e) =>
+                            handleInputChange(indexOriginal, "descricao", e.target.value)
+                          }
                           placeholder="Descrição do novo item"
                         />
                       ) : (
@@ -896,11 +1139,15 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                       {podeEditarDemais && isCriar ? (
                         <select
                           value={row.unidade || ""}
-                          onChange={(e) => handleInputChange(indexOriginal, "unidade", e.target.value)}
+                          onChange={(e) =>
+                            handleInputChange(indexOriginal, "unidade", e.target.value)
+                          }
                         >
                           <option value=""></option>
                           {unidadesDisponiveis.map((un, i) => (
-                            <option key={i} value={un}>{un}</option>
+                            <option key={i} value={un}>
+                              {un}
+                            </option>
                           ))}
                         </select>
                       ) : (
@@ -912,7 +1159,9 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                         <input
                           type="number"
                           value={row.quantidade ?? ""}
-                          onChange={(e) => handleInputChange(indexOriginal, "quantidade", e.target.value)}
+                          onChange={(e) =>
+                            handleInputChange(indexOriginal, "quantidade", e.target.value)
+                          }
                           min="0"
                           step="any"
                         />
@@ -930,10 +1179,9 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                             {row.locacao?.length === 0
                               ? "Selecionar"
                               : row.locacao.length === 1
-                                ? row.locacao[0]
-                                : `${row.locacao[0]} +`}
+                              ? row.locacao[0]
+                              : `${row.locacao[0]} +`}
                           </div>
-
                           {dropdownAberto === indexOriginal && (
                             <div ref={dropdownRef} className="locacao-dropdown">
                               {locacoes.map((loc) => (
@@ -942,7 +1190,11 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                                     type="checkbox"
                                     checked={row.locacao?.includes(loc) || false}
                                     onChange={(e) =>
-                                      handleLocacaoChange(indexOriginal, loc, e.target.checked)
+                                      handleLocacaoChange(
+                                        indexOriginal,
+                                        loc,
+                                        e.target.checked
+                                      )
                                     }
                                   />
                                   <span>{loc}</span>
@@ -955,7 +1207,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                         <>
                           <div
                             className={`locacao-resumo ${
-                              row.locacao?.length > 1 ? 'locacao-resumo-clickable' : ''
+                              row.locacao?.length > 1 ? "locacao-resumo-clickable" : ""
                             }`}
                             onClick={() => {
                               if (row.locacao?.length > 1) {
@@ -966,10 +1218,9 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                             {row.locacao?.length === 0
                               ? "–"
                               : row.locacao.length === 1
-                                ? row.locacao[0]
-                                : `${row.locacao[0]} +`}
+                              ? row.locacao[0]
+                              : `${row.locacao[0]} +`}
                           </div>
-
                           {tooltipVisualizacao === row.id && (
                             <div ref={tooltipRef} className="locacao-tooltip">
                               {row.locacao.map((loc, i) => (
@@ -986,11 +1237,15 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                       {podeEditarDemais ? (
                         <select
                           value={row.eap || ""}
-                          onChange={(e) => handleInputChange(indexOriginal, "eap", e.target.value)}
+                          onChange={(e) =>
+                            handleInputChange(indexOriginal, "eap", e.target.value)
+                          }
                         >
                           <option value=""></option>
                           {eaps.map((eap, i) => (
-                            <option key={i} value={eap}>{eap}</option>
+                            <option key={i} value={eap}>
+                              {eap}
+                            </option>
                           ))}
                         </select>
                       ) : (
@@ -1006,7 +1261,9 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                             novas[indexOriginal].observacao = e.target.value;
                             setRows(novas);
                           }}
-                          onBlur={(e) => handleObservacaoBlur(indexOriginal, e.target.value)}
+                          onBlur={(e) =>
+                            handleObservacaoBlur(indexOriginal, e.target.value)
+                          }
                           className="observacao-textarea"
                           rows="1"
                         />
@@ -1021,37 +1278,22 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                         {row.comentario || ""}
                       </div>
                     </td>
-                    <td>
-                      <div className="button-group">
-                        {podeEditarDemais && (
-                          <FaTrash
-                            className="delete-icon"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeRow(indexOriginal);
-                            }}
-                          />
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-
-                  {isLastInGroup && visualIdx < rowsParaExibir.length - 1 && (
-                    <tr className="delimiter-row">
-                      <td colSpan="10">
-                        <div className="envio-delimiter">
-                          Enviado por <strong>{row.enviado_por}</strong> em{" "}
-                          {new Date(row.data_envio).toLocaleString("pt-BR", {
-                            day: "2-digit",
-                            month: "2-digit",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit"
-                          })}
+                    {!listagemEnviada && (
+                      <td>
+                        <div className="button-group">
+                          {podeEditarDemais && (
+                            <FaTrash
+                              className="delete-icon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeRow(indexOriginal);
+                              }}
+                            />
+                          )}
                         </div>
                       </td>
-                    </tr>
-                  )}
+                    )}
+                  </tr>
                 </React.Fragment>
               );
             })}
@@ -1059,6 +1301,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         </table>
       </div>
 
+      {/* Modal de Busca de Insumo */}
       <BuscaInsumo
         isOpen={buscaInsumoAberta}
         onClose={() => {
