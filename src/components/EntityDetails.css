@@ -862,3 +862,41 @@
   transition: opacity 0.15s;
 }
 .ed-modal-list-btn:hover { opacity: 0.85; }
+
+/* ── Drag and Drop (adicionar ao EntityDetails.css) ── */
+
+/* Ícone de alça de arrastar */
+.ed-drag-handle {
+  display: flex;
+  align-items: center;
+  color: #c0c8e0;
+  font-size: 13px;
+  cursor: grab;
+  flex-shrink: 0;
+  padding: 0 4px;
+  transition: color 0.15s;
+}
+.ed-drag-handle:hover {
+  color: #020a52;
+}
+.ed-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Item sendo arrastado */
+.ed-modal-list-item.ed-dragging {
+  opacity: 0.4;
+  background: #eef2ff;
+}
+
+/* Item sob o cursor durante o arrasto */
+.ed-modal-list-item.ed-drag-over {
+  border-color: #020a52;
+  background: #eef2ff;
+  box-shadow: 0 0 0 2px rgba(2, 10, 82, 0.15);
+}
+
+/* Cursor de arrastar em todo o item */
+.ed-modal-list-item {
+  cursor: default;
+}

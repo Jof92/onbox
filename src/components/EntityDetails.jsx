@@ -1,6 +1,6 @@
 // src/components/EntityDetails.jsx
 import React, { useState, useEffect, useRef } from "react";
-import { FaArrowLeft, FaTimes, FaSave, FaEdit } from "react-icons/fa";
+import { FaArrowLeft, FaTimes, FaSave, FaEdit, FaGripVertical } from "react-icons/fa";
 import { supabase } from "../supabaseClient";
 import "./EntityDetails.css";
 
@@ -30,7 +30,6 @@ const extrairTexto = (item) => {
   return item.name ?? item.nome ?? "";
 };
 
-// Converte string "Jan/2024" para Date
 const parseMesAno = (mesAno) => {
   if (!mesAno) return null;
   const MESES = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
@@ -40,7 +39,6 @@ const parseMesAno = (mesAno) => {
   return new Date(parseInt(ano), idx, 1);
 };
 
-// Encontra o índice INCC mais próximo a uma data
 const encontrarIndiceParaData = (historico, data) => {
   if (!historico?.length || !data) return null;
   const target = new Date(data);
@@ -55,6 +53,41 @@ const encontrarIndiceParaData = (historico, data) => {
   return melhor;
 };
 
+// ─── Hook de Drag and Drop ────────────────────────────────────────────────────
+function useDragSort(setItems) {
+  const dragIndex = useRef(null);
+
+  const handleDragStart = (e, index) => {
+    dragIndex.current = index;
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = (e, index) => {
+    e.preventDefault();
+    const from = dragIndex.current;
+    const to = index;
+    if (from === null || from === to) return;
+    setItems((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+    dragIndex.current = null;
+  };
+
+  const handleDragEnd = () => {
+    dragIndex.current = null;
+  };
+
+  return { handleDragStart, handleDragOver, handleDrop, handleDragEnd };
+}
+
 // ─── Modal de Edição do Projeto ───────────────────────────────────────────────
 function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId }) {
   const [form, setForm] = useState({
@@ -62,7 +95,6 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
     data_finalizacao: entity.data_finalizacao ?? "",
     engenheiro_id:    entity.engenheiro_id    ?? "",
   });
-  const [membros, setMembros]             = useState([]);
   const [membrosSelecionados, setMembrosSelecionados] = useState(
     Array.isArray(entity.membrosSelecionados)
       ? entity.membrosSelecionados
@@ -70,12 +102,11 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
       ? entity.membros
       : []
   );
-  const [profiles, setProfiles]           = useState([]);
-  const [eapValores, setEapValores]       = useState({});
-  const [salvando, setSalvando]           = useState(false);
-  const [erro, setErro]                   = useState("");
+  const [profiles, setProfiles]     = useState([]);
+  const [eapValores, setEapValores] = useState({});
+  const [salvando, setSalvando]     = useState(false);
+  const [erro, setErro]             = useState("");
 
-  // Pavimentos e EAP editáveis
   const [pavimentosEdit, setPavimentosEdit] = useState(
     (entity.pavimentos || []).map((p) => ({
       id: p?.id ?? null,
@@ -94,53 +125,30 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
   const [novoPavimento, setNovoPavimento] = useState("");
   const [novoEap, setNovoEap]             = useState("");
 
-  // Carrega membros com convite ACEITO no container
+  // Drag hooks independentes para cada lista
+  const dragPav = useDragSort(setPavimentosEdit);
+  const dragEap = useDragSort(setEapEdit);
+
   useEffect(() => {
     const fetchMembros = async () => {
-      // Se não tiver containerId, tenta buscar via entity.container_id diretamente
       const cid = containerId || entity?.container_id;
-
       if (!cid) {
-        // fallback: mostra todos os perfis se não tiver container_id
-        const { data: todos } = await supabase
-          .from("profiles")
-          .select("id, nickname, avatar_url");
+        const { data: todos } = await supabase.from("profiles").select("id, nickname, avatar_url");
         if (todos) setProfiles(todos);
         return;
       }
-
-      // Busca convites aceitos do container
       const { data: convites, error: convErr } = await supabase
-        .from("convites")
-        .select("user_id, nickname")
-        .eq("container_id", cid)
-        .eq("status", "aceito");
-
-      if (convErr) {
-        console.error("Erro ao buscar convites:", convErr);
-        return;
-      }
-
-      if (!convites?.length) {
-        console.warn("Nenhum convite aceito encontrado para container:", cid);
-        return;
-      }
-
-      // Busca os perfis completos pelos user_ids
+        .from("convites").select("user_id, nickname")
+        .eq("container_id", cid).eq("status", "aceito");
+      if (convErr || !convites?.length) return;
       const userIds = convites.map((c) => c.user_id).filter(Boolean);
       if (!userIds.length) return;
-
-      const { data: perfis } = await supabase
-        .from("profiles")
-        .select("id, nickname, avatar_url")
-        .in("id", userIds);
-
+      const { data: perfis } = await supabase.from("profiles").select("id, nickname, avatar_url").in("id", userIds);
       if (perfis) setProfiles(perfis);
     };
     fetchMembros();
   }, [containerId, entity?.container_id]);
 
-  // Carrega orçamentos EAP já salvos
   useEffect(() => {
     if (!eap?.length) return;
     const ids = eap.map((e) => e?.id).filter(Boolean);
@@ -150,9 +158,7 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
         if (!data) return;
         const vals = {};
         data.forEach((row) => {
-          if (row.orcamento_base != null) {
-            vals[row.id] = String(row.orcamento_base).replace(".", ",");
-          }
+          if (row.orcamento_base != null) vals[row.id] = String(row.orcamento_base).replace(".", ",");
         });
         setEapValores(vals);
       });
@@ -165,10 +171,9 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
     return acc + (isNaN(n) ? 0 : n);
   }, 0);
 
-  // Calcula INCC: índice na data de início e índice atual (último)
-  const inccInicio  = encontrarIndiceParaData(inccHistorico, form.data_inicio);
-  const inccAtual   = inccHistorico?.length ? inccHistorico[inccHistorico.length - 1] : null;
-  const fatorIncc   = inccInicio && inccAtual ? inccAtual.indice / inccInicio.indice : null;
+  const inccInicio     = encontrarIndiceParaData(inccHistorico, form.data_inicio);
+  const inccAtual      = inccHistorico?.length ? inccHistorico[inccHistorico.length - 1] : null;
+  const fatorIncc      = inccInicio && inccAtual ? inccAtual.indice / inccInicio.indice : null;
   const totalCorrigido = fatorIncc && totalEap > 0 ? totalEap * fatorIncc : null;
   const variacaoIncc   = fatorIncc ? ((fatorIncc - 1) * 100).toFixed(2) : null;
 
@@ -183,56 +188,38 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
     setSalvando(true);
     setErro("");
     try {
-      // 1. Atualiza datas, engenheiro e membros no projeto
       const updateProject = {
-        data_inicio:      form.data_inicio      || null,
-        data_finalizacao: form.data_finalizacao || null,
-        engenheiro_id:    form.engenheiro_id    || null,
-        indice_incc_inicio:  inccInicio?.indice  ?? null,
-        indice_incc_atual:   inccAtual?.indice   ?? null,
-        orcamento_corrigido: totalCorrigido       ?? null,
+        data_inicio:         form.data_inicio      || null,
+        data_finalizacao:    form.data_finalizacao || null,
+        engenheiro_id:       form.engenheiro_id    || null,
+        indice_incc_inicio:  inccInicio?.indice    ?? null,
+        indice_incc_atual:   inccAtual?.indice     ?? null,
+        orcamento_corrigido: totalCorrigido        ?? null,
       };
-      const { error: errProj } = await supabase
-        .from("projects")
-        .update(updateProject)
-        .eq("id", entity.id);
+      const { error: errProj } = await supabase.from("projects").update(updateProject).eq("id", entity.id);
       if (errProj) throw errProj;
 
-      // 2. Sincroniza Pavimentos
-      // Deleta os removidos (ids que existiam e não estão mais na lista)
-      const idsOrigPav = (entity.pavimentos || []).map((p) => p?.id).filter(Boolean);
-      const idsAtualPav = pavimentosEdit.map((p) => p.id).filter(Boolean);
+      const idsOrigPav      = (entity.pavimentos || []).map((p) => p?.id).filter(Boolean);
+      const idsAtualPav     = pavimentosEdit.map((p) => p.id).filter(Boolean);
       const idsRemovidosPav = idsOrigPav.filter((id) => !idsAtualPav.includes(id));
-      if (idsRemovidosPav.length > 0) {
-        await supabase.from("pavimentos").delete().in("id", idsRemovidosPav);
-      }
-      // Atualiza existentes e insere novos
+      if (idsRemovidosPav.length > 0) await supabase.from("pavimentos").delete().in("id", idsRemovidosPav);
       for (let i = 0; i < pavimentosEdit.length; i++) {
         const p = pavimentosEdit[i];
-        if (p.id) {
-          await supabase.from("pavimentos").update({ name: p.nome, ordem: i }).eq("id", p.id);
-        } else {
-          await supabase.from("pavimentos").insert({ name: p.nome, project_id: entity.id, ordem: i });
-        }
+        if (p.id) await supabase.from("pavimentos").update({ name: p.nome, ordem: i }).eq("id", p.id);
+        else      await supabase.from("pavimentos").insert({ name: p.nome, project_id: entity.id, ordem: i });
       }
 
-      // 3. Sincroniza EAP
-      const idsOrigEap = (entity.eap || []).map((e) => e?.id).filter(Boolean);
-      const idsAtualEap = eapEdit.map((e) => e.id).filter(Boolean);
+      const idsOrigEap      = (entity.eap || []).map((e) => e?.id).filter(Boolean);
+      const idsAtualEap     = eapEdit.map((e) => e.id).filter(Boolean);
       const idsRemovidosEap = idsOrigEap.filter((id) => !idsAtualEap.includes(id));
-      if (idsRemovidosEap.length > 0) {
-        await supabase.from("eap").delete().in("id", idsRemovidosEap);
-      }
+      if (idsRemovidosEap.length > 0) await supabase.from("eap").delete().in("id", idsRemovidosEap);
       for (let i = 0; i < eapEdit.length; i++) {
-        const e = eapEdit[i];
+        const e   = eapEdit[i];
         const raw = eapValores[e.id ?? e._tempId] ?? "";
         const val = parseFloat(String(raw).replace(/\./g, "").replace(",", "."));
         const orcBase = isNaN(val) ? (e.orcamento_base ?? null) : val;
-        if (e.id) {
-          await supabase.from("eap").update({ name: e.nome, ordem: i, orcamento_base: orcBase }).eq("id", e.id);
-        } else {
-          await supabase.from("eap").insert({ name: e.nome, project_id: entity.id, ordem: i, orcamento_base: orcBase });
-        }
+        if (e.id) await supabase.from("eap").update({ name: e.nome, ordem: i, orcamento_base: orcBase }).eq("id", e.id);
+        else      await supabase.from("eap").insert({ name: e.nome, project_id: entity.id, ordem: i, orcamento_base: orcBase });
       }
 
       onSave({
@@ -241,7 +228,7 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
         membrosSelecionados,
         orcamento_corrigido: totalCorrigido,
         pavimentos: pavimentosEdit.map((p) => ({ id: p.id, name: p.nome })),
-        eap: eapEdit.map((e) => ({ id: e.id, name: e.nome })),
+        eap:        eapEdit.map((e) => ({ id: e.id, name: e.nome })),
       });
       onClose();
     } catch (err) {
@@ -253,13 +240,12 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
   };
 
   return (
-    <div className="ed-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="ed-modal-overlay">
       <div className="ed-modal">
 
-        {/* Header */}
         <div className="ed-modal-header">
           <h3>Editar Projeto</h3>
-          <button className="ed-modal-close" onClick={onClose}><FaTimes /></button>
+          <button type="button" className="ed-modal-close" onClick={onClose}><FaTimes /></button>
         </div>
 
         <div className="ed-modal-body">
@@ -284,15 +270,11 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
           {/* Engenheiro */}
           <div className="ed-modal-section">
             <p className="ed-modal-section-title">Engenheiro Responsável</p>
-            <select
-              value={form.engenheiro_id}
+            <select value={form.engenheiro_id}
               onChange={(e) => setForm((f) => ({ ...f, engenheiro_id: e.target.value }))}
-              className="ed-modal-select"
-            >
+              className="ed-modal-select">
               <option value="">Selecione...</option>
-              {profiles.map((p) => (
-                <option key={p.id} value={p.id}>{p.nickname}</option>
-              ))}
+              {profiles.map((p) => <option key={p.id} value={p.id}>{p.nickname}</option>)}
             </select>
           </div>
 
@@ -303,16 +285,11 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
               {profiles.map((p) => {
                 const sel = membrosSelecionados.some((m) => m.id === p.id);
                 return (
-                  <div
-                    key={p.id}
+                  <div key={p.id}
                     className={`ed-modal-profile ${sel ? "ed-modal-profile--sel" : ""}`}
-                    onClick={() => toggleMembro(p)}
-                  >
+                    onClick={() => toggleMembro(p)}>
                     <div className="ed-modal-profile-av">
-                      {p.avatar_url
-                        ? <img src={p.avatar_url} alt={p.nickname} />
-                        : p.nickname?.charAt(0).toUpperCase()
-                      }
+                      {p.avatar_url ? <img src={p.avatar_url} alt={p.nickname} /> : p.nickname?.charAt(0).toUpperCase()}
                     </div>
                     <span>{p.nickname}</span>
                     {sel && <span className="ed-modal-profile-check">✓</span>}
@@ -327,7 +304,18 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
             <p className="ed-modal-section-title">Pavimentos</p>
             <div className="ed-modal-list-edit">
               {pavimentosEdit.map((p, i) => (
-                <div key={p._tempId} className="ed-modal-list-item">
+                <div
+                  key={p._tempId}
+                  className="ed-modal-list-item"
+                  draggable
+                  onDragStart={(e) => dragPav.handleDragStart(e, i)}
+                  onDragOver={(e)  => dragPav.handleDragOver(e, i)}
+                  onDrop={(e)      => dragPav.handleDrop(e, i)}
+                  onDragEnd={dragPav.handleDragEnd}
+                >
+                  <span className="ed-drag-handle" title="Arrastar para reordenar">
+                    <FaGripVertical />
+                  </span>
                   <input
                     className="ed-modal-list-input"
                     value={p.nome}
@@ -336,11 +324,9 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
                     })}
                     placeholder="Nome do pavimento"
                   />
-                  <button
-                    className="ed-modal-list-del"
+                  <button type="button" className="ed-modal-list-del"
                     onClick={() => setPavimentosEdit((prev) => prev.filter((_, idx) => idx !== i))}
-                    title="Remover"
-                  >×</button>
+                    title="Remover">×</button>
                 </div>
               ))}
               <div className="ed-modal-list-add">
@@ -351,19 +337,18 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
                   onChange={(e) => setNovoPavimento(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && novoPavimento.trim()) {
+                      e.preventDefault();
                       setPavimentosEdit((prev) => [...prev, { id: null, nome: novoPavimento.trim(), _tempId: Math.random() }]);
                       setNovoPavimento("");
                     }
                   }}
                 />
-                <button
-                  className="ed-modal-list-btn"
+                <button type="button" className="ed-modal-list-btn"
                   onClick={() => {
                     if (!novoPavimento.trim()) return;
                     setPavimentosEdit((prev) => [...prev, { id: null, nome: novoPavimento.trim(), _tempId: Math.random() }]);
                     setNovoPavimento("");
-                  }}
-                >Adicionar</button>
+                  }}>Adicionar</button>
               </div>
             </div>
           </div>
@@ -373,7 +358,18 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
             <p className="ed-modal-section-title">Itens da EAP</p>
             <div className="ed-modal-list-edit">
               {eapEdit.map((e, i) => (
-                <div key={e._tempId} className="ed-modal-list-item">
+                <div
+                  key={e._tempId}
+                  className="ed-modal-list-item"
+                  draggable
+                  onDragStart={(ev) => dragEap.handleDragStart(ev, i)}
+                  onDragOver={(ev)  => dragEap.handleDragOver(ev, i)}
+                  onDrop={(ev)      => dragEap.handleDrop(ev, i)}
+                  onDragEnd={dragEap.handleDragEnd}
+                >
+                  <span className="ed-drag-handle" title="Arrastar para reordenar">
+                    <FaGripVertical />
+                  </span>
                   <input
                     className="ed-modal-list-input"
                     value={e.nome}
@@ -382,11 +378,9 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
                     })}
                     placeholder="Nome da EAP"
                   />
-                  <button
-                    className="ed-modal-list-del"
+                  <button type="button" className="ed-modal-list-del"
                     onClick={() => setEapEdit((prev) => prev.filter((_, idx) => idx !== i))}
-                    title="Remover"
-                  >×</button>
+                    title="Remover">×</button>
                 </div>
               ))}
               <div className="ed-modal-list-add">
@@ -397,19 +391,18 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
                   onChange={(e) => setNovoEap(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && novoEap.trim()) {
+                      e.preventDefault();
                       setEapEdit((prev) => [...prev, { id: null, nome: novoEap.trim(), orcamento_base: null, _tempId: Math.random() }]);
                       setNovoEap("");
                     }
                   }}
                 />
-                <button
-                  className="ed-modal-list-btn"
+                <button type="button" className="ed-modal-list-btn"
                   onClick={() => {
                     if (!novoEap.trim()) return;
                     setEapEdit((prev) => [...prev, { id: null, nome: novoEap.trim(), orcamento_base: null, _tempId: Math.random() }]);
                     setNovoEap("");
-                  }}
-                >Adicionar</button>
+                  }}>Adicionar</button>
               </div>
             </div>
           </div>
@@ -419,7 +412,7 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
             <div className="ed-modal-section">
               <p className="ed-modal-section-title">Orçamento por EAP (valores na data de início)</p>
               <div className="ed-modal-eap-list">
-                {eapEdit.map((e, i) => {
+                {eapEdit.map((e) => {
                   const key = e.id ?? e._tempId;
                   return (
                     <div key={key} className="ed-modal-eap-row">
@@ -430,9 +423,7 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
                           type="text"
                           placeholder="0,00"
                           value={eapValores[key] ?? (e.orcamento_base != null ? String(e.orcamento_base).replace(".", ",") : "")}
-                          onChange={(ev) =>
-                            setEapValores((prev) => ({ ...prev, [key]: ev.target.value }))
-                          }
+                          onChange={(ev) => setEapValores((prev) => ({ ...prev, [key]: ev.target.value }))}
                           className="ed-modal-eap-input"
                         />
                       </div>
@@ -441,7 +432,6 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
                 })}
               </div>
 
-              {/* Resumo INCC */}
               <div className="ed-modal-incc-box">
                 <div className="ed-modal-incc-row">
                   <span>Total base (soma EAPs)</span>
@@ -486,10 +476,9 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
           {erro && <p className="ed-modal-erro">{erro}</p>}
         </div>
 
-        {/* Footer */}
         <div className="ed-modal-footer">
-          <button className="ed-modal-btn-cancel" onClick={onClose}>Cancelar</button>
-          <button className="ed-modal-btn-save" onClick={handleSave} disabled={salvando}>
+          <button type="button" className="ed-modal-btn-cancel" onClick={onClose}>Cancelar</button>
+          <button type="button" className="ed-modal-btn-save" onClick={handleSave} disabled={salvando}>
             <FaSave /> {salvando ? "Salvando..." : "Salvar"}
           </button>
         </div>
@@ -508,7 +497,7 @@ export default function EntityDetails({
   canEdit = false,
 }) {
   const isProject = entityType === "project";
-  const [entity, setEntity] = useState(entityProp);
+  const [entity, setEntity]               = useState(entityProp);
   const [showModal, setShowModal]         = useState(false);
   const [engenheiro, setEngenheiro]       = useState(null);
   const [stats, setStats]                 = useState({ tarefasTotal: 0, tarefasResolvidas: 0, atas: 0, listagens: 0, diarios: 0 });
@@ -516,7 +505,6 @@ export default function EntityDetails({
   const [inccHistorico, setInccHistorico] = useState([]);
   const [eapComValores, setEapComValores] = useState([]);
 
-  // ✅ FIX: sincroniza quando troca de projeto na sidebar
   useEffect(() => {
     setEntity(entityProp);
     setShowModal(false);
@@ -526,29 +514,22 @@ export default function EntityDetails({
     setLoadingStats(true);
   }, [entityProp?.id]);
 
-  const name = entity.name || (isProject ? "Projeto" : "Setor");
-
+  const name            = entity.name || (isProject ? "Projeto" : "Setor");
   const dataInicio      = isProject ? entity.data_inicio      : null;
   const dataFinalizacao = isProject ? entity.data_finalizacao : null;
   const pavimentos      = isProject ? entity.pavimentos || [] : [];
   const eap             = isProject ? entity.eap        || [] : [];
   const membros = isProject
-    ? Array.isArray(entity.membrosSelecionados)
-      ? entity.membrosSelecionados
-      : Array.isArray(entity.membros)
-      ? entity.membros
-      : []
-    : [];
+    ? Array.isArray(entity.membrosSelecionados) ? entity.membrosSelecionados
+    : Array.isArray(entity.membros)             ? entity.membros
+    : [] : [];
 
   const orcamentoBase      = entity.orcamento_base      ?? null;
   const orcamentoCorrigido = entity.orcamento_corrigido ?? null;
-  // orcamentoBase exibido = soma das EAPs (se disponível) ou campo do projeto
   const variacaoOrcamento  =
     orcamentoBase && orcamentoCorrigido && orcamentoBase > 0
-      ? (((orcamentoCorrigido - orcamentoBase) / orcamentoBase) * 100).toFixed(2)
-      : null;
+      ? (((orcamentoCorrigido - orcamentoBase) / orcamentoBase) * 100).toFixed(2) : null;
 
-  // Carrega valores de orcamento_base das EAPs
   useEffect(() => {
     if (!isProject || !eap?.length) { setEapComValores(eap); return; }
     const ids = eap.map((e) => e?.id).filter(Boolean);
@@ -558,41 +539,14 @@ export default function EntityDetails({
         if (!data) { setEapComValores(eap); return; }
         const map = {};
         data.forEach((r) => { map[r.id] = r.orcamento_base; });
-        setEapComValores(eap.map((e) => ({
-          ...e,
-          orcamento_base: map[e.id] ?? e.orcamento_base ?? null,
-        })));
+        setEapComValores(eap.map((e) => ({ ...e, orcamento_base: map[e.id] ?? e.orcamento_base ?? null })));
       })
       .catch(() => setEapComValores(eap));
   }, [isProject, entity.id]);
 
-  // Carrega orcamento_base das EAPs do banco
-  useEffect(() => {
-    if (!isProject || !eap?.length) { setEapComValores(eap); return; }
-    const ids = eap.map((e) => e?.id).filter(Boolean);
-    if (!ids.length) { setEapComValores(eap); return; }
-    supabase.from("eap").select("id, orcamento_base").in("id", ids)
-      .then(({ data }) => {
-        if (!data) { setEapComValores(eap); return; }
-        const map = {};
-        data.forEach((r) => { map[r.id] = r.orcamento_base; });
-        setEapComValores(eap.map((e) => ({
-          ...e,
-          orcamento_base: map[e.id] ?? e.orcamento_base ?? null,
-        })));
-      })
-      .catch(() => setEapComValores(eap));
-  }, [isProject, entity.id]);
-
-  // Soma de todos os EAPs = orçamento base real
   const orcamentoBaseCalculado = eapComValores.length > 0
-    ? eapComValores.reduce((acc, e) => acc + (Number(e.orcamento_base) || 0), 0)
-    : null;
-  const orcamentoBaseExibir = (orcamentoBaseCalculado && orcamentoBaseCalculado > 0)
-    ? orcamentoBaseCalculado
-    : (entity.orcamento_base ?? null);
+    ? eapComValores.reduce((acc, e) => acc + (Number(e.orcamento_base) || 0), 0) : null;
 
-  // Carrega histórico INCC
   useEffect(() => {
     fetch(`${INCC_API_URL}/incc`)
       .then((r) => r.json())
@@ -600,7 +554,6 @@ export default function EntityDetails({
       .catch(() => {});
   }, []);
 
-  // Carrega engenheiro
   useEffect(() => {
     if (!isProject) return;
     const id = entity.engenheiro_id;
@@ -610,7 +563,6 @@ export default function EntityDetails({
       .catch(() => setEngenheiro(null));
   }, [isProject, entity.engenheiro_id]);
 
-  // Carrega stats via pilhas → notas
   useEffect(() => {
     if (!isProject || !entity.id) { setLoadingStats(false); return; }
     const pid = entity.id;
@@ -647,20 +599,11 @@ export default function EntityDetails({
   return (
     <>
       <div className="ed-card">
-
-        {/* ══ CABEÇALHO ══ */}
         <div className="ed-header">
-          <button className="ed-back" onClick={onBack} title="Voltar">
-            <FaArrowLeft />
-          </button>
-          <div
-            className="ed-avatar"
-            style={{ backgroundColor: entity.photo_url ? undefined : getConsistentColor(entity.id) }}
-          >
-            {entity.photo_url
-              ? <img src={entity.photo_url} alt={name} />
-              : name.charAt(0).toUpperCase() || "?"
-            }
+          <button type="button" className="ed-back" onClick={onBack} title="Voltar"><FaArrowLeft /></button>
+          <div className="ed-avatar"
+            style={{ backgroundColor: entity.photo_url ? undefined : getConsistentColor(entity.id) }}>
+            {entity.photo_url ? <img src={entity.photo_url} alt={name} /> : name.charAt(0).toUpperCase() || "?"}
           </div>
           <div className="ed-header-text">
             <h2 className="ed-name">{name}</h2>
@@ -678,20 +621,16 @@ export default function EntityDetails({
               </div>
             )}
           </div>
-
-          {/* Botão Editar no header — sempre visível para projetos */}
           {isProject && (
-            <button className="ed-header-edit-btn" onClick={() => setShowModal(true)} title="Editar projeto">
+            <button type="button" className="ed-header-edit-btn" onClick={() => setShowModal(true)} title="Editar projeto">
               <FaEdit />
             </button>
           )}
         </div>
 
-        {/* ══ CORPO ══ */}
         <div className="ed-body">
           {isProject && (
             <>
-              {/* Engenheiro */}
               {engenheiro && (
                 <div className="ed-block">
                   <p className="ed-block-title">Engenheiro Responsável</p>
@@ -699,15 +638,13 @@ export default function EntityDetails({
                     <div className="ed-person-avatar" style={{ borderColor: "#28a745" }}>
                       {engenheiro.avatar_url
                         ? <img src={engenheiro.avatar_url} alt={engenheiro.nickname} />
-                        : engenheiro.nickname?.charAt(0).toUpperCase() || "?"
-                      }
+                        : engenheiro.nickname?.charAt(0).toUpperCase() || "?"}
                     </div>
                     <span className="ed-person-name">{engenheiro.nickname}</span>
                   </div>
                 </div>
               )}
 
-              {/* Membros */}
               {membros.length > 0 && (
                 <div className="ed-block">
                   <p className="ed-block-title">Membros</p>
@@ -717,10 +654,7 @@ export default function EntityDetails({
                       return (
                         <div key={m.id} className="ed-membro">
                           <div className="ed-person-avatar" style={{ borderColor: "#020a52" }}>
-                            {m.avatar_url
-                              ? <img src={m.avatar_url} alt={m.nickname} />
-                              : m.nickname?.charAt(0).toUpperCase() || "?"
-                            }
+                            {m.avatar_url ? <img src={m.avatar_url} alt={m.nickname} /> : m.nickname?.charAt(0).toUpperCase() || "?"}
                           </div>
                           <span className="ed-membro-name">{m.nickname}</span>
                         </div>
@@ -730,7 +664,6 @@ export default function EntityDetails({
                 </div>
               )}
 
-              {/* Progresso */}
               <div className="ed-block">
                 <div className="ed-block-title-row">
                   <p className="ed-block-title">Progresso das Tarefas</p>
@@ -746,7 +679,6 @@ export default function EntityDetails({
                 </div>
               </div>
 
-              {/* Resumo */}
               <div className="ed-block">
                 <p className="ed-block-title">Resumo de Atividades</p>
                 {loadingStats ? <p className="ed-loading">Carregando...</p> : (
@@ -771,7 +703,6 @@ export default function EntityDetails({
                 )}
               </div>
 
-              {/* Orçamento — sempre visível para projetos */}
               <div className="ed-block">
                 <p className="ed-block-title">Orçamento da Obra</p>
                 <div className="ed-budget">
@@ -803,7 +734,6 @@ export default function EntityDetails({
                 )}
               </div>
 
-              {/* Pavimentos + EAP — visual original */}
               {(pavimentos.length > 0 || eap.length > 0) && (
                 <div className="ed-block">
                   <div className="project-sections">
@@ -811,9 +741,7 @@ export default function EntityDetails({
                       <div className="project-section">
                         <h3>Pavimentos</h3>
                         <ul>
-                          {pavimentos.map((p, i) => (
-                            <li key={p?.id ?? i}>{extrairTexto(p)}</li>
-                          ))}
+                          {pavimentos.map((p, i) => <li key={p?.id ?? i}>{extrairTexto(p)}</li>)}
                         </ul>
                       </div>
                     )}
@@ -825,9 +753,7 @@ export default function EntityDetails({
                             <li key={e?.id ?? i} className="ed-eap-display-li">
                               <span>{extrairTexto(e)}</span>
                               {e?.orcamento_base != null && Number(e.orcamento_base) > 0 && (
-                                <span className="ed-eap-display-val">
-                                  {formatarMoeda(e.orcamento_base)}
-                                </span>
+                                <span className="ed-eap-display-val">{formatarMoeda(e.orcamento_base)}</span>
                               )}
                             </li>
                           ))}
@@ -845,12 +771,10 @@ export default function EntityDetails({
               )}
             </>
           )}
-
           {children && <div className="ed-children">{children}</div>}
         </div>
       </div>
 
-      {/* Modal de edição */}
       {showModal && (
         <ModalEdicao
           entity={entity}
