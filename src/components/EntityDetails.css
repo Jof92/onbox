@@ -410,6 +410,7 @@
   padding: 6px 0;
   border-radius: 4px;
   transition: background 0.2s ease;
+  text-align: left;
 }
 
 .project-section li:hover {
