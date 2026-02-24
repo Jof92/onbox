@@ -3,11 +3,12 @@ import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabaseClient";
 import "./Listagem.css";
 import "./loader.css";
-import { FaTrash, FaPaperPlane, FaComment, FaTimes } from "react-icons/fa";
+import { FaTrash, FaPaperPlane, FaComment, FaTimes, FaFilePdf } from "react-icons/fa";
 import { FaMagnifyingGlass } from "react-icons/fa6";
 import Check from "./Check";
 import Loading from "./Loading";
 import BuscaInsumo from "./BuscaInsumo";
+import ListagemPdf from "./ListagemPdf";
 
 export default function Listagem({ projetoAtual, notaAtual, containerAtual, onStatusUpdate, onClose }) {
   const [rows, setRows] = useState([]);
@@ -496,6 +497,16 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
     setSetorSelecionado(e.target.value);
   };
 
+  // ⭐ NOVO: Função para exportar PDF
+  const handleExportarPDF = () => {
+    ListagemPdf.exportar(
+      projetoAtual?.name || 'Sem projeto',
+      notaAtual?.nome || 'Sem nota',
+      new Date(),
+      rows
+    );
+  };
+
   const handleSave = async () => {
     if (!notaAtual?.id || !projetoAtual?.id || !setorSelecionado) {
       alert("Selecione um setor para enviar a listagem.");
@@ -775,6 +786,15 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
             ))}
           </select>
         </div>
+
+        {/* ⭐ BOTÃO PDF INTEGRADO */}
+        <button
+          className="export-pdf-btn"
+          onClick={handleExportarPDF}
+          title="Exportar listagem como PDF"
+        >
+          <FaFilePdf style={{ marginRight: 6 }} /> PDF
+        </button>
 
         <div className="send-action-wrapper">
           <button

@@ -49,13 +49,6 @@
 /* ==============================
    🟢 Botões de Ação
    ============================== */
-.action-buttons {
-  padding: 12px 24px;
-  background: #f6f8fa;
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
 
 .add-row-btn,
 .save-btn1 {
@@ -252,11 +245,6 @@ select {
 .direcionar-para-input:focus {
   border-color: #00c48c;
   box-shadow: 0 0 3px rgba(0, 196, 140, 0.5);
-}
-
-.action-buttons {
-  display: flex;
-  align-items: center;
 }
 
 .add-row-btn, .send-btn {
@@ -473,4 +461,261 @@ select {
   font-size: 0.95em;
   user-select: none;
   text-align: left;
+}
+/* ADICIONAR ESTES ESTILOS AO SEU Listagem.css */
+
+/* ============================================================
+   BOTÃO PDF - Exportar Listagem
+   ============================================================ */
+
+.export-pdf-btn {
+  background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(231, 76, 60, 0.2);
+  white-space: nowrap;
+  min-width: 90px;
+}
+
+.export-pdf-btn:hover {
+  background: linear-gradient(135deg, #c0392b 0%, #a93226 100%);
+  box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
+  transform: translateY(-2px);
+}
+
+.export-pdf-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(231, 76, 60, 0.2);
+}
+
+.export-pdf-btn:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+  opacity: 0.6;
+  box-shadow: none;
+  transform: none;
+}
+
+.export-pdf-btn:focus {
+  outline: 2px solid rgba(231, 76, 60, 0.5);
+  outline-offset: 2px;
+}
+
+/* Responsividade para telas menores */
+@media (max-width: 768px) {
+  .export-pdf-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+    min-width: 70px;
+  }
+}
+
+/* ============================================================
+   ANIMAÇÃO DE CARREGAMENTO DO PDF
+   ============================================================ */
+
+@keyframes pdf-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.export-pdf-btn:disabled {
+  animation: pdf-pulse 1.5s ease-in-out infinite;
+}
+
+/* ============================================================
+   MELHORIAS NA SEÇÃO action-buttons (se necessário)
+   ============================================================ */
+
+.action-buttons {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e0e0e0;
+  padding: 12px 24px;
+}
+
+.action-buttons > * {
+  display: flex;
+  align-items: center;
+}
+
+.action-buttons select,
+.action-buttons button {
+  min-height: 40px;
+}
+
+/* ============================================================
+   ÍCONE DO PDF (se necessário estilização especial)
+   ============================================================ */
+
+.export-pdf-btn svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.3s ease;
+}
+
+.export-pdf-btn:hover svg {
+  transform: scale(1.1);
+}
+
+/* ============================================================
+   TOOLTIP DO BOTÃO PDF
+   ============================================================ */
+
+.export-pdf-btn[title] {
+  position: relative;
+}
+
+.export-pdf-btn[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #333;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 1000;
+  font-weight: normal;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* ============================================================
+   FEEDBACK VISUAL DURANTE EXPORTAÇÃO
+   ============================================================ */
+
+#listagem-pdf-loading {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* ============================================================
+   BOTÕES DE AÇÃO - Estilização melhorada
+   ============================================================ */
+
+.add-row-btn,
+.send-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.add-row-btn {
+  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(52, 152, 219, 0.2);
+}
+
+.add-row-btn:hover {
+  background: linear-gradient(135deg, #2980b9 0%, #1f618d 100%);
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+  transform: translateY(-2px);
+}
+
+.send-btn {
+  background: linear-gradient(135deg, #27ae60 0%, #1e8449 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(39, 174, 96, 0.2);
+}
+
+.send-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1e8449 0%, #186a3b 100%);
+  box-shadow: 0 4px 12px rgba(39, 174, 96, 0.3);
+  transform: translateY(-2px);
+}
+
+.send-btn:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* ============================================================
+   DIRECIONAR PARA (Select com melhor visual)
+   ============================================================ */
+
+.direcionar-para-input {
+  padding: 8px 14px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.direcionar-para-input:hover {
+  border-color: #999;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.direcionar-para-input:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+/* ============================================================
+   WRAPPER DE ENVIO COM FEEDBACK VISUAL
+   ============================================================ */
+
+.send-action-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+}
+
+.loader-inline {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid #27ae60;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-left: 5px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
