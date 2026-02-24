@@ -24,7 +24,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
   const [statusEnvio, setStatusEnvio] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // ✅ Informações de geração e envio da listagem (da nota)
   const [infoGerador, setInfoGerador] = useState(null);
   const [infoEnvio, setInfoEnvio] = useState(null);
   const [infoRespondido, setInfoRespondido] = useState(null);
@@ -32,15 +31,12 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
   const [buscaInsumoAberta, setBuscaInsumoAberta] = useState(false);
   const [linhaBuscaAtiva, setLinhaBuscaAtiva] = useState(null);
 
-  // Estado para dropdown de edição
   const [dropdownAberto, setDropdownAberto] = useState(null);
   const dropdownRef = useRef(null);
 
-  // ✅ Estado para tooltip de visualização (pós-envio)
   const [tooltipVisualizacao, setTooltipVisualizacao] = useState(null);
   const tooltipRef = useRef(null);
 
-  // ✅ Filtros
   const [filtros, setFiltros] = useState({ locacao: "", eap: "" });
   const [filtroAbertoCol, setFiltroAbertoCol] = useState(null);
   const filtroRef = useRef(null);
@@ -48,10 +44,8 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
   const notaCarregadaRef = useRef(null);
   const [forcarAtualizacao, setForcarAtualizacao] = useState(0);
 
-  // 🔑 Função auxiliar para chave única de rascunho
   const getRascunhoKey = () => `rascunho_listagem_${projetoAtual?.id}_${notaAtual?.id}`;
 
-  // Fechar dropdown de locação ao clicar fora
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -64,7 +58,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
     }
   }, [dropdownAberto]);
 
-  // Fechar tooltip de visualização ao clicar fora
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (tooltipRef.current && !tooltipRef.current.contains(e.target)) {
@@ -77,7 +70,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
     }
   }, [tooltipVisualizacao]);
 
-  // Fechar painel de filtro ao clicar fora
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (filtroRef.current && !filtroRef.current.contains(e.target)) {
@@ -90,7 +82,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
     }
   }, [filtroAbertoCol]);
 
-  // Carrega perfil do usuário logado
   useEffect(() => {
     const fetchUserProfile = async () => {
       const { data, error } = await supabase.auth.getUser();
@@ -114,7 +105,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
     fetchUserProfile();
   }, []);
 
-  // Carrega setores do container atual
   useEffect(() => {
     if (!containerAtual?.id) {
       setSetoresContainer([]);
@@ -137,7 +127,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
     carregarSetores();
   }, [containerAtual?.id]);
 
-  // Carrega locações, EAPs e unidades
+  // ✅ FIX: pavimentos e EAP buscados com order("ordem") para respeitar a ordem definida no EntityDetails
   useEffect(() => {
     if (!projetoAtual?.id) {
       setLocacoes([]);
@@ -148,8 +138,16 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
     const carregarReferenciasDoProjeto = async () => {
       try {
         const [pavimentosRes, eapsRes, unidadesRes] = await Promise.all([
-          supabase.from("pavimentos").select("name").eq("project_id", projetoAtual.id),
-          supabase.from("eap").select("name").eq("project_id", projetoAtual.id),
+          supabase
+            .from("pavimentos")
+            .select("name")
+            .eq("project_id", projetoAtual.id)
+            .order("ordem", { ascending: true }),
+          supabase
+            .from("eap")
+            .select("name")
+            .eq("project_id", projetoAtual.id)
+            .order("ordem", { ascending: true }),
           supabase.from("itens").select("unidade"),
         ]);
         setLocacoes(pavimentosRes.data?.map((p) => p.name) || []);
@@ -191,7 +189,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         return;
       }
 
-      // ✅ Carregar dados da nota (gerador + envio + respondido)
       const { data: notaData } = await supabase
         .from("notas")
         .select(
@@ -626,7 +623,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         if (error) throw error;
       }
 
-      // Notificação e pilha "Recebidos"
+      // Notificação
       const notificacoesParaInserir = setoresParaEnvio.map((setorId) => ({
         user_id: userIdLogado,
         remetente_id: userIdLogado,
@@ -786,7 +783,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         onStatusUpdate(notaAtual.id, { enviada: true, respondida: false });
       }
 
-      // ✅ Atualizar estado local de envio
       setListagemEnviada(true);
       setInfoEnvio({ nome: remetente, data: dataEnvio });
       setCodigoErro(new Set());
@@ -917,14 +913,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
               ))}
             </select>
           </div>
-          {/* Botão PDF */}
-          <button
-            className="export-pdf-btn"
-            onClick={handleExportarPDF}
-            title="Exportar listagem como PDF"
-          >
-            <FaFilePdf style={{ marginRight: 6 }} /> PDF
-          </button>
+          {/* Enviar antes do PDF */}
           <div className="send-action-wrapper">
             <button
               className="send-btn"
@@ -936,6 +925,15 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
             {statusEnvio === "enviando" && <span className="loader-inline"></span>}
             {statusEnvio === "sucesso" && <Check />}
           </div>
+          {/* Botão PDF no canto direito */}
+          <button
+            className="export-pdf-btn"
+            onClick={handleExportarPDF}
+            title="Exportar listagem como PDF"
+            style={{ marginLeft: "auto" }}
+          >
+            <FaFilePdf style={{ marginRight: 6 }} /> PDF
+          </button>
         </div>
       )}
 
