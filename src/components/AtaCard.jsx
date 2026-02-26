@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { supabase } from "../supabaseClient";
 import Loading from "./Loading";
 import "./loader.css";
@@ -6,6 +6,19 @@ import "./AtaCard.css";
 import AtaObjetivos from "./AtaObjetivos";
 import AtaPdf from "./AtaPdf";
 import { FaTimes, FaUserPlus } from "react-icons/fa";
+
+// ✅ FUNÇÃO MOVIDA PARA FORA DO COMPONENTE
+// Isso impede que ela seja recriada a cada render, estabilizando o useCallback do fetchAta
+const formatarNomeExibicao = (nomeCompleto) => {
+  if (!nomeCompleto || typeof nomeCompleto !== 'string') return "";
+  const palavras = nomeCompleto.trim().split(/\s+/);
+  const duasPrimeiras = palavras.slice(0, 2);
+  return duasPrimeiras
+    .map(palavra => 
+      palavra.charAt(0).toUpperCase() + palavra.slice(1).toLowerCase()
+    )
+    .join(' ');
+};
 
 export default function AtaCard({ 
   projetoAtual, 
@@ -42,23 +55,11 @@ export default function AtaCard({
   const pdfDropdownRef = useRef(null);
   const participantesSectionRef = useRef(null);
 
-  // Função para formatar nome: apenas 2 primeiros nomes com primeira letra maiúscula
-  const formatarNomeExibicao = (nomeCompleto) => {
-    if (!nomeCompleto || typeof nomeCompleto !== 'string') return "";
-    
-    // Remove espaços extras e divide em palavras
-    const palavras = nomeCompleto.trim().split(/\s+/);
-    
-    // Pega apenas as 2 primeiras palavras
-    const duasPrimeiras = palavras.slice(0, 2);
-    
-    // Capitaliza primeira letra de cada palavra, resto minúsculo
-    return duasPrimeiras
-      .map(palavra => 
-        palavra.charAt(0).toUpperCase() + palavra.slice(1).toLowerCase()
-      )
-      .join(' ');
-  };
+  // Detecta se o usuário está editando algum campo de texto
+  const isEditing = useMemo(() => {
+    const active = document.activeElement;
+    return active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA';
+  }, [pauta, local, texto, participanteInput, dataLocal, proxima]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -100,6 +101,9 @@ export default function AtaCard({
   }, []);
 
   const fetchAta = useCallback(async () => {
+    // ✅ Protege contra sobrescrita enquanto o usuário digita
+    if (isEditing) return;
+
     if (!notaAtual?.id) {
       setLoading(false);
       return;
@@ -142,7 +146,7 @@ export default function AtaCard({
               setAlteradoEm("");
               setAutorNome("Rascunho local");
               setLoading(false);
-              return; // ✅ IMPORTANTE: retorna aqui para não continuar
+              return;
             }
           } catch (e) {
             console.warn("Rascunho corrompido, ignorando", e);
@@ -162,11 +166,10 @@ export default function AtaCard({
         setAlteradoEm("");
         setAutorNome("Ainda não redigida");
         setLoading(false);
-        return; // ✅ IMPORTANTE: retorna aqui
+        return;
       }
 
       // ✅ ATA ENCONTRADA - carregar do banco (NÃO carregar rascunho)
-      // Limpar rascunho se houver ata salva
       const key = `rascunho_ata_${notaAtual.id}`;
       localStorage.removeItem(key);
 
@@ -296,7 +299,7 @@ export default function AtaCard({
       console.error("Erro ao carregar ata:", err);
       setLoading(false);
     }
-  }, [notaAtual?.id, usuarioId, formatarNomeExibicao]);
+  }, [notaAtual?.id, usuarioId, isEditing]); // ✅ formatarNomeExibicao removida das dependências
 
   useEffect(() => {
     fetchProjeto();
@@ -397,7 +400,7 @@ export default function AtaCard({
     if (!participantes.some(p => p.id === item.id)) {
       setParticipantes([...participantes, {
         id: item.id,
-        nome: formatarNomeExibicao(item.nome), // ✅ Usa nome real (não nickname) formatado para 2 nomes
+        nome: formatarNomeExibicao(item.nome),
         funcao: item.funcao || "Membro"
       }]);
     }
@@ -410,7 +413,7 @@ export default function AtaCard({
     if (participanteInput.trim()) {
       setParticipantes(prev => [...prev, {
         id: `ext-${extIdCounter}`,
-        nome: formatarNomeExibicao(participanteInput.trim()), // ✅ Formata para 2 nomes
+        nome: formatarNomeExibicao(participanteInput.trim()),
         funcao: "Externo"
       }]);
       setParticipanteInput("");
@@ -676,7 +679,7 @@ export default function AtaCard({
                 className="data-local-text"
                 onDoubleClick={() => setEditingDataLocal(true)}
               >
-                {dataLocal || "cidade e data"}
+                {dataLocal || "Cidade e Data"}
               </span>
             )}
           </div>
@@ -713,7 +716,6 @@ export default function AtaCard({
                   }
                 }}
                 onBlur={() => {
-                  // Delay para permitir clique nas sugestões
                   setTimeout(() => {
                     if (!sugestoesParticipantes.length) {
                       setShowParticipanteInput(false);
@@ -750,7 +752,6 @@ export default function AtaCard({
 
       <div className="ata-body">
         <div className="ata-section">
-          {/* ✅ Título "Texto" acima da textarea com mesma formatação de "Integrantes" */}
           <div className="participantes-header">
             <span className="participantes-title">Texto</span>
           </div>

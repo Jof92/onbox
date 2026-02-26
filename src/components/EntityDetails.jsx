@@ -711,7 +711,7 @@ export default function EntityDetails({
                     <span className="ed-budget-val">
                       {(orcamentoBaseCalculado || orcamentoBase)
                         ? formatarMoeda(orcamentoBaseCalculado || orcamentoBase)
-                        : <span className="ed-budget-vazio">Preencha os valores no lápis ✏️</span>}
+                        : <span className="ed-budget-vazio">—</span>}
                     </span>
                   </div>
                   {variacaoOrcamento != null && (
