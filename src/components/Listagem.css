@@ -676,7 +676,6 @@ select {
 }
 
 .locacao-dropdown {
-  position: absolute;
   z-index: 1001;
   background: white;
   border: 1px solid #ddd;

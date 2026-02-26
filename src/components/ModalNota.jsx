@@ -7,36 +7,38 @@ import Task from "./Task";
 import Metas from "./Meta";
 import Rdo from "./Rdo";
 import NotaCalendario from "./NotaCalendario";
+import FormBuilder from "./FormBuilder"; // ← NOVO
 import "./Cards.css";
 
 const TIPOS_NOTA_CRIACAO = [
-  { key: "Atas", label: "Atas" },
-  { key: "Calendário", label: "Calendário" },
-  { key: "Lista", label: "Listagem" },
-  { key: "Metas", label: "Metas" },
-  { key: "Nota Rápida", label: "Nota Rápida" },
-  { key: "Tarefas", label: "Tarefas" },
+  { key: "Atas",               label: "Atas" },
+  { key: "Calendário",         label: "Calendário" },
+  { key: "Elaborar Formulário", label: "Elaborar Formulário" }, // ← NOVO
+  { key: "Lista",              label: "Listagem" },
+  { key: "Metas",              label: "Metas" },
+  { key: "Nota Rápida",        label: "Nota Rápida" },
+  { key: "Tarefas",            label: "Tarefas" },
 ];
 
-// ✅ Cores exatas fornecidas por você + nova cor para Calendário
 const CORES_TIPO = {
-  "Atas": "#10b981",   // verde médio
-  "Calendário": "#8b5cf6", // roxo médio
-  "Lista": "#3b82f6",  // azul (já bom)
-  "Metas": "#06b6d4",  // turquesa médio
-  "Nota Rápida": "#ec4899", // rosa médio
-  "Tarefas": "#fbbf24", // amarelo dourado médio
+  "Atas":               "#10b981",
+  "Calendário":         "#8b5cf6",
+  "Elaborar Formulário":"#f97316", // ← NOVO — laranja
+  "Lista":              "#3b82f6",
+  "Metas":              "#06b6d4",
+  "Nota Rápida":        "#ec4899",
+  "Tarefas":            "#fbbf24",
 };
 
-// Ícones para cada tipo de nota
 const ICONES_TIPO = {
-  "Atas": "📝",
-  "Calendário": "📅",
-  "Lista": "📋",
-  "Metas": "🎯",
-  "Nota Rápida": "⚡",
-  "Tarefas": "✅",
-  "Diário de Obra": "🏗️",
+  "Atas":               "📝",
+  "Calendário":         "📅",
+  "Elaborar Formulário":"📐", // ← NOVO
+  "Lista":              "📋",
+  "Metas":              "🎯",
+  "Nota Rápida":        "⚡",
+  "Tarefas":            "✅",
+  "Diário de Obra":     "🏗️",
 };
 
 export default function ModalNota({
@@ -63,17 +65,14 @@ export default function ModalNota({
   setColumns,
   setColumnsNormais,
   setColumnsArquivadas,
-  inline = false // ← NOVA PROP: indica se deve renderizar sem modal overlay
+  inline = false,
 }) {
   const [hoveredTipo, setHoveredTipo] = useState(null);
 
   const handleProgressoChange = useCallback(
     (progresso) => {
       if (notaSelecionada?.id) {
-        setNotaProgresso((prev) => ({
-          ...prev,
-          [notaSelecionada.id]: progresso,
-        }));
+        setNotaProgresso((prev) => ({ ...prev, [notaSelecionada.id]: progresso }));
       }
     },
     [notaSelecionada?.id, setNotaProgresso]
@@ -87,43 +86,26 @@ export default function ModalNota({
     }
   };
 
-  // Não renderizar se nenhum modal estiver ativo
-  if (!showNovaNota && !showEditarNota && !showVisualizarNota) {
-    return null;
-  }
+  if (!showNovaNota && !showEditarNota && !showVisualizarNota) return null;
 
-  // Proteção: não abrir Nota Rápida no modal de visualização
-  if (showVisualizarNota && notaSelecionada && notaSelecionada.tipo === "Nota Rápida") {
-    return null;
-  }
+  if (showVisualizarNota && notaSelecionada && notaSelecionada.tipo === "Nota Rápida") return null;
 
-  // Determinar o tipo atual e projeto para o header
-  const tipoAtual = showNovaNota ? formData.tipo : notaSelecionada?.tipo || notaEditData?.tipo;
-  const nomeProjeto = project?.name || "Projeto";
-  const nomeNota = showNovaNota 
-    ? (formData.nome || "Nova Nota")
-    : (notaSelecionada?.nome || notaEditData?.nome || "Editar Nota");
-  
-  const corHeader = tipoAtual ? CORES_TIPO[tipoAtual] : "#6c757d";
-
-  // Determinar título do modal
+  const tipoAtual   = showNovaNota ? formData.tipo : notaSelecionada?.tipo || notaEditData?.tipo;
+  const corHeader   = tipoAtual ? CORES_TIPO[tipoAtual] : "#6c757d";
   const tituloModal = showNovaNota ? "Nova Nota" : "Editar Nota";
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ║  CONTEÚDO DO MODAL (usado tanto no overlay quanto inline)
-  // ╚══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════
+  // ║  CONTEÚDO DO MODAL
+  // ╚══════════════════════════════════════════════════════════════════════
   const modalContent = (
     <>
-      {/* Modal de Criação/Edição */}
+      {/* ── Criação / Edição ── */}
       {(showNovaNota || showEditarNota) && (
         <div className="nota-modal-container">
-          {/* Header com título - apenas texto, sem ícone */}
           <div className="modal-header">
-            <h2 className="modal-title">
-              {tituloModal}
-            </h2>
-            <button 
-              className="modal-close-btn" 
+            <h2 className="modal-title">{tituloModal}</h2>
+            <button
+              className="modal-close-btn"
               onClick={showNovaNota ? onCloseNovaNota : onCloseEditarNota}
             >
               <FaTimes />
@@ -145,16 +127,9 @@ export default function ModalNota({
                 <div className="tipo-nota-buttons">
                   {TIPOS_NOTA_CRIACAO.map(({ key, label }) => {
                     const isSelected = formData.tipo === key;
-                    const isHovered = hoveredTipo === key;
-
-                    const bgColor = isHovered
-                      ? CORES_TIPO[key]
-                      : isSelected
-                      ? CORES_TIPO[key]
-                      : "";
-
-                    const color = isSelected || isHovered ? "#fff" : "#000";
-
+                    const isHovered  = hoveredTipo === key;
+                    const bgColor    = isHovered || isSelected ? CORES_TIPO[key] : "";
+                    const color      = isSelected || isHovered ? "#fff" : "#000";
                     return (
                       <button
                         key={key}
@@ -163,10 +138,7 @@ export default function ModalNota({
                         onClick={() => setFormData((prev) => ({ ...prev, tipo: key }))}
                         onMouseEnter={() => setHoveredTipo(key)}
                         onMouseLeave={() => setHoveredTipo(null)}
-                        style={{
-                          backgroundColor: bgColor,
-                          color: color,
-                        }}
+                        style={{ backgroundColor: bgColor, color }}
                       >
                         {label}
                       </button>
@@ -177,23 +149,22 @@ export default function ModalNota({
             )}
           </div>
 
-          {/* Botões - ordem original mantida */}
           <div className="modal-nota-actions-container">
             <div className="modal-action-buttons">
               <div className="modal-send-action-wrapper">
                 <button
                   className="modal-send-btn"
-                  style={{ 
-                    background: tipoAtual 
+                  style={{
+                    background: tipoAtual
                       ? `linear-gradient(135deg, ${corHeader} 0%, ${adjustColor(corHeader, -20)} 100%)`
-                      : "linear-gradient(135deg, #6c757d 0%, #495057 100%)"
+                      : "linear-gradient(135deg, #6c757d 0%, #495057 100%)",
                   }}
                   onClick={showNovaNota ? handleSaveTask : saveEditedNota}
                 >
                   {showNovaNota ? "Criar" : "Salvar"}
                 </button>
-                <button 
-                  className="modal-btn-cancelar-evento" 
+                <button
+                  className="modal-btn-cancelar-evento"
                   onClick={showNovaNota ? onCloseNovaNota : onCloseEditarNota}
                 >
                   Cancelar
@@ -204,16 +175,15 @@ export default function ModalNota({
         </div>
       )}
 
-      {/* Modal de Visualização — mantém todos os tipos + Calendário */}
+      {/* ── Visualização ── */}
       {showVisualizarNota && notaSelecionada && (
         <>
           {(() => {
-            // Debug: verificar o tipo recebido
-            console.log('🔍 ModalNota - Renderizando nota:', {
-              id: notaSelecionada.id,
-              nome: notaSelecionada.nome,
-              tipo: notaSelecionada.tipo,
-              inline: inline
+            console.log("🔍 ModalNota - Renderizando nota:", {
+              id:     notaSelecionada.id,
+              nome:   notaSelecionada.nome,
+              tipo:   notaSelecionada.tipo,
+              inline,
             });
 
             const tipo = notaSelecionada.tipo;
@@ -230,6 +200,7 @@ export default function ModalNota({
                     containerAtual={{ id: donoContainerId }}
                   />
                 );
+
               case "Calendário":
                 return (
                   <NotaCalendario
@@ -238,11 +209,25 @@ export default function ModalNota({
                     usuarioId={usuarioId}
                     projetoAtual={project}
                     projetoNome={project?.name || "Projeto"}
-                    notaNome={notaSelecionada?.nome || "Calendário"}  
+                    notaNome={notaSelecionada?.nome || "Calendário"}
                   />
                 );
+
+              // ── NOVO ──────────────────────────────────────────────────
+              case "Elaborar Formulário":
+                return (
+                  <FormBuilder
+                    notaId={notaSelecionada.id}
+                    notaNome={notaSelecionada.nome}
+                    onClose={onCloseVisualizarNota}
+                    usuarioId={usuarioId}
+                    projetoAtual={project}
+                  />
+                );
+              // ─────────────────────────────────────────────────────────
+
               case "Tarefas":
-                console.log('✅ Renderizando componente Task para Tarefas');
+                console.log("✅ Renderizando componente Task para Tarefas");
                 return (
                   <Task
                     projetoAtual={project}
@@ -256,6 +241,7 @@ export default function ModalNota({
                     setColumnsArquivadas={setColumnsArquivadas}
                   />
                 );
+
               case "Metas":
                 return (
                   <Metas
@@ -267,6 +253,7 @@ export default function ModalNota({
                     onClose={onCloseVisualizarNota}
                   />
                 );
+
               case "Diário de Obra":
                 return (
                   <Rdo
@@ -276,8 +263,9 @@ export default function ModalNota({
                     projetoAtual={project}
                   />
                 );
+
               default:
-                console.log('⚠️ Tipo não reconhecido, usando Listagem. Tipo recebido:', tipo);
+                console.log("⚠️ Tipo não reconhecido, usando Listagem. Tipo recebido:", tipo);
                 return (
                   <Listagem
                     projetoAtual={project}
@@ -295,11 +283,9 @@ export default function ModalNota({
     </>
   );
 
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════
   // ║  RENDERIZAÇÃO: COM OU SEM OVERLAY
-  // ╚══════════════════════════════════════════════════════════════════════════
-  
-  // Se inline=true, renderiza sem o modal-overlay (para o painel lateral)
+  // ╚══════════════════════════════════════════════════════════════════════
   if (inline) {
     return (
       <div className={`modal-content ${showVisualizarNota ? "large" : ""}`}>
@@ -308,8 +294,6 @@ export default function ModalNota({
     );
   }
 
-  // ✅ CORREÇÃO: Modal NÃO fecha ao clicar no overlay
-  // Apenas os botões X e Cancelar podem fechar o modal
   return (
     <div className="modal-overlay">
       <div className={`modal-content ${showVisualizarNota ? "large" : ""}`}>
@@ -321,20 +305,21 @@ export default function ModalNota({
 
 // Função auxiliar para ajustar cor (escurecer)
 function adjustColor(hex, percent) {
-  // Remover # se existir
-  hex = hex.replace('#', '');
-  
-  // Converter para RGB
+  hex = hex.replace("#", "");
   const num = parseInt(hex, 16);
   const r = Math.min(255, Math.max(0, (num >> 16) + percent));
-  const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00FF) + percent));
-  const b = Math.min(255, Math.max(0, (num & 0x0000FF) + percent));
-  
-  // Converter de volta para hex
-  return '#' + (
-    0x1000000 + 
-    (r < 0 ? 0 : r) * 0x10000 + 
-    (g < 0 ? 0 : g) * 0x100 + 
-    (b < 0 ? 0 : b)
-  ).toString(16).slice(1).toUpperCase();
+  const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00ff) + percent));
+  const b = Math.min(255, Math.max(0, (num & 0x0000ff) + percent));
+  return (
+    "#" +
+    (
+      0x1000000 +
+      (r < 0 ? 0 : r) * 0x10000 +
+      (g < 0 ? 0 : g) * 0x100 +
+      (b < 0 ? 0 : b)
+    )
+      .toString(16)
+      .slice(1)
+      .toUpperCase()
+  );
 }
