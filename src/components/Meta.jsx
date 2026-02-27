@@ -1,29 +1,46 @@
 // src/components/Metas.jsx
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../supabaseClient";
-import { FaTimes } from "react-icons/fa";
+import { FaTimes, FaGripVertical } from "react-icons/fa";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faPenToSquare, faUserPlus, faCalendar } from "@fortawesome/free-solid-svg-icons";
+import { faPenToSquare, faUserPlus, faCalendar, faPalette } from "@fortawesome/free-solid-svg-icons";
+import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import "./Meta.css";
 import "./ListagemEspelho.css";
+
+const CORES_PREDEFINIDAS = [
+  "#ffffff", "#fef9c3", "#dcfce7", "#dbeafe", "#fce7f3",
+  "#ede9fe", "#ffedd5", "#f0fdf4", "#fdf4ff", "#ecfeff",
+];
 
 const ChipResponsavel = ({ responsavel, onRemove, disabled }) => {
   const nomeExibicao = responsavel.nome_exibicao || "Usuário";
   const isExterno = !responsavel.usuario_id;
+  const avatarUrl = responsavel.avatar_url;
+
+  const gerarAbreviacao = (nome) => {
+    if (!nome) return "U";
+    if (nome.includes(' ')) {
+      return nome.split(' ').filter(p => p.length > 0).map(p => p.charAt(0).toUpperCase()).join('');
+    }
+    return nome.substring(0, 2).toUpperCase();
+  };
 
   return (
-    <span className={`chip-responsavel ${isExterno ? 'chip-externo' : ''}`}>
-      {nomeExibicao}
+    <span className={`chip-responsavel ${isExterno ? 'chip-externo' : ''}`} title={nomeExibicao}>
+      <div className="chip-responsavel-avatar-container">
+        {avatarUrl && !isExterno ? (
+          <img src={avatarUrl} alt={nomeExibicao} className="chip-responsavel-avatar"
+            onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+          />
+        ) : null}
+        <div className="chip-responsavel-iniciais"
+          style={{ display: avatarUrl && !isExterno ? 'none' : 'flex' }}>
+          {gerarAbreviacao(nomeExibicao)}
+        </div>
+      </div>
       {!disabled && (
-        <span
-          onClick={(e) => {
-            e.stopPropagation();
-            onRemove(responsavel);
-          }}
-          className="chip-remove"
-        >
-          ×
-        </span>
+        <span onClick={(e) => { e.stopPropagation(); onRemove(responsavel); }} className="chip-remove">×</span>
       )}
     </span>
   );
@@ -39,28 +56,24 @@ const ComentarioIcon = ({ onClick, title }) => (
 
 const podeDesmarcarConclusao = (concluidoEm) => {
   if (!concluidoEm) return true;
-  const agora = new Date();
-  const diffHoras = (agora - new Date(concluidoEm)) / (1000 * 60 * 60);
+  const diffHoras = (new Date() - new Date(concluidoEm)) / (1000 * 60 * 60);
   return diffHoras < 24;
 };
 
-// Função para formatar data sem problemas de fuso horário
 const formatarDataParaExibicao = (dataString) => {
   if (!dataString) return '';
-  
-  // Extrai apenas a parte da data (YYYY-MM-DD) e formata para DD/MM/YYYY
   const dataParte = dataString.split('T')[0];
   const [ano, mes, dia] = dataParte.split('-');
   return `${dia}/${mes}/${ano}`;
 };
 
-export default function Metas({ 
-  notaId, 
-  projectId, 
-  usuarioId, 
-  projetoNome, 
-  notaNome, 
-  onClose 
+export default function Metas({
+  notaId,
+  projectId,
+  usuarioId,
+  projetoNome,
+  notaNome,
+  onClose
 }) {
   const [metas, setMetas] = useState([]);
   const [sugestoesResponsavel, setSugestoesResponsavel] = useState({});
@@ -71,21 +84,42 @@ export default function Metas({
   const [salvando, setSalvando] = useState(false);
   const [novoMetaTexto, setNovoMetaTexto] = useState("");
   const [editingResponsavelId, setEditingResponsavelId] = useState(null);
-
+  const [colorPickerMetaId, setColorPickerMetaId] = useState(null);
+  // Descrição geral da tabela de metas
+  const [descricao, setDescricao] = useState("");
+  const [salvandoDescricao, setSalvandoDescricao] = useState(false);
+  const descricaoTimerRef = useRef(null);
   const cardRef = useRef(null);
-
 
   // Carrega nome do usuário
   useEffect(() => {
     if (!usuarioId) return;
-    const fetchMeuNome = async () => {
-      const { data } = await supabase.from("profiles").select("nome").eq("id", usuarioId).single();
-      if (data?.nome) setMeuNome(data.nome);
-    };
-    fetchMeuNome();
+    supabase.from("profiles").select("nome").eq("id", usuarioId).single()
+      .then(({ data }) => { if (data?.nome) setMeuNome(data.nome); });
   }, [usuarioId]);
 
-  // Carrega metas da nota
+  // Carrega descrição da nota
+  useEffect(() => {
+    if (!notaId) return;
+    supabase.from("notas").select("descricao").eq("id", notaId).single()
+      .then(({ data }) => { if (data?.descricao) setDescricao(data.descricao); });
+  }, [notaId]);
+
+  const salvarDescricao = useCallback(async (valor) => {
+    if (!notaId) return;
+    setSalvandoDescricao(true);
+    await supabase.from("notas").update({ descricao: valor }).eq("id", notaId);
+    setSalvandoDescricao(false);
+  }, [notaId]);
+
+  const handleDescricaoChange = (e) => {
+    const valor = e.target.value;
+    setDescricao(valor);
+    clearTimeout(descricaoTimerRef.current);
+    descricaoTimerRef.current = setTimeout(() => salvarDescricao(valor), 800);
+  };
+
+  // Carrega metas
   const carregarMetas = useCallback(async () => {
     if (!notaId) return setMetas([]);
 
@@ -93,12 +127,10 @@ export default function Metas({
       .from("metas")
       .select(`*, metas_responsaveis(id, usuario_id, nome_externo)`)
       .eq("nota_id", notaId)
+      .order("ordem", { ascending: true })
       .order("criado_em", { ascending: true });
 
-    if (error) {
-      console.error("Erro ao carregar metas:", error);
-      return setMetas([]);
-    }
+    if (error) { console.error("Erro ao carregar metas:", error); return setMetas([]); }
 
     const metasEnriquecidas = metasData.map(m => {
       const responsaveis = (m.metas_responsaveis || []).map(r => ({
@@ -106,28 +138,27 @@ export default function Metas({
         usuario_id: r.usuario_id,
         nome_externo: r.nome_externo,
         nome_exibicao: r.usuario_id ? "" : r.nome_externo,
+        avatar_url: null,
       }));
       delete m.metas_responsaveis;
       return { ...m, responsaveis };
     });
 
-    // Preencher nomes de responsáveis internos
+    // Preencher nomes e avatares dos responsáveis internos
     const idsInternos = metasEnriquecidas.flatMap(m => m.responsaveis)
-      .filter(r => r.usuario_id)
-      .map(r => r.usuario_id);
+      .filter(r => r.usuario_id).map(r => r.usuario_id);
 
     if (idsInternos.length > 0) {
       const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, nome")
-        .in("id", idsInternos);
-
-      const mapNomes = {};
-      profiles?.forEach(p => { mapNomes[p.id] = p.nome; });
-
+        .from("profiles").select("id, nome, avatar_url").in("id", idsInternos);
+      const mapProfiles = {};
+      profiles?.forEach(p => { mapProfiles[p.id] = p; });
       metasEnriquecidas.forEach(m => {
         m.responsaveis.forEach(r => {
-          if (r.usuario_id) r.nome_exibicao = mapNomes[r.usuario_id] || "Usuário";
+          if (r.usuario_id && mapProfiles[r.usuario_id]) {
+            r.nome_exibicao = mapProfiles[r.usuario_id].nome || "Usuário";
+            r.avatar_url = mapProfiles[r.usuario_id].avatar_url || null;
+          }
         });
       });
     }
@@ -135,15 +166,13 @@ export default function Metas({
     setMetas(metasEnriquecidas);
   }, [notaId]);
 
-  useEffect(() => {
-    carregarMetas();
-  }, [carregarMetas]);
+  useEffect(() => { carregarMetas(); }, [carregarMetas]);
 
   // Adicionar nova meta
   const adicionarMeta = async () => {
     if (!novoMetaTexto.trim()) return;
-    
     try {
+      const maxOrdem = metas.reduce((max, m) => Math.max(max, m.ordem ?? 0), -1);
       const { error, data } = await supabase
         .from("metas")
         .insert({
@@ -153,22 +182,12 @@ export default function Metas({
           concluido: false,
           concluido_em: null,
           comentario: "",
+          ordem: maxOrdem + 1,
+          cor: "#ffffff",
         })
-        .select()
-        .single();
-
+        .select().single();
       if (error) throw error;
-
-      setMetas(prev => [...prev, {
-        id: data.id,
-        descricao: data.descricao,
-        data_entrega: data.data_entrega,
-        concluido: data.concluido,
-        concluido_em: data.concluido_em,
-        comentario: data.comentario,
-        responsaveis: [],
-      }]);
-      
+      setMetas(prev => [...prev, { ...data, responsaveis: [] }]);
       setNovoMetaTexto("");
     } catch (err) {
       console.error("Erro ao adicionar meta:", err);
@@ -176,32 +195,45 @@ export default function Metas({
     }
   };
 
-  // Atualizar campo
-  const atualizarMeta = (id, campo, valor) => {
-    setMetas(prev => prev.map(m => m.id === id ? { ...m, [campo]: valor } : m));
+  // Drag and drop
+  const handleDragEnd = async (result) => {
+    if (!result.destination) return;
+    const from = result.source.index;
+    const to = result.destination.index;
+    if (from === to) return;
+
+    const novas = Array.from(metas);
+    const [moved] = novas.splice(from, 1);
+    novas.splice(to, 0, moved);
+    setMetas(novas);
+
+    for (let i = 0; i < novas.length; i++) {
+      if (novas[i].id) {
+        await supabase.from("metas").update({ ordem: i }).eq("id", novas[i].id);
+      }
+    }
   };
 
-  // Buscar responsáveis com @
+  // Cor da linha
+  const atualizarCor = async (id, cor) => {
+    setMetas(prev => prev.map(m => m.id === id ? { ...m, cor } : m));
+    setColorPickerMetaId(null);
+    await supabase.from("metas").update({ cor }).eq("id", id);
+  };
+
+  // Responsáveis
   const handleResponsavelInputChange = (e, metaId) => {
     const valor = e.target.value;
     setInputResponsavel(prev => ({ ...prev, [metaId]: valor }));
 
     if (valor.startsWith("@") && valor.length > 1 && projectId) {
       const termo = valor.slice(1).toLowerCase();
-      supabase
-        .from("project_members")
-        .select("user_id")
-        .eq("project_id", projectId)
-        .then(async ({ data: membros, error }) => {
-          if (error || !membros?.length) return setSugestoesResponsavel(prev => ({ ...prev, [metaId]: [] }));
-
+      supabase.from("project_members").select("user_id").eq("project_id", projectId)
+        .then(async ({ data: membros }) => {
+          if (!membros?.length) return setSugestoesResponsavel(prev => ({ ...prev, [metaId]: [] }));
           const userIds = membros.map(m => m.user_id);
           const { data: profiles } = await supabase
-            .from("profiles")
-            .select("id, nome")
-            .in("id", userIds)
-            .ilike("nome", `%${termo}%`);
-
+            .from("profiles").select("id, nome, avatar_url").in("id", userIds).ilike("nome", `%${termo}%`);
           setSugestoesResponsavel(prev => ({ ...prev, [metaId]: profiles || [] }));
         });
     } else {
@@ -212,184 +244,99 @@ export default function Metas({
   const adicionarResponsavelInterno = async (usuario, metaId) => {
     const meta = metas.find(m => m.id === metaId);
     if (!meta || meta.concluido || meta.responsaveis.some(r => r.usuario_id === usuario.id)) return;
-
     try {
-      const { data } = await supabase
-        .from("metas_responsaveis")
-        .insert({
-          meta_id: metaId,
-          usuario_id: usuario.id,
-          nome_externo: null
-        })
-        .select()
-        .single();
-
+      const { data } = await supabase.from("metas_responsaveis")
+        .insert({ meta_id: metaId, usuario_id: usuario.id, nome_externo: null })
+        .select().single();
       if (!data) return;
-
-      setMetas(prev =>
-        prev.map(m =>
-          m.id === metaId
-            ? {
-                ...m,
-                responsaveis: [
-                  ...m.responsaveis,
-                  {
-                    id: data.id,
-                    usuario_id: usuario.id,
-                    nome_externo: null,
-                    nome_exibicao: usuario.nome
-                  }
-                ]
-              }
-            : m
-        )
-      );
+      setMetas(prev => prev.map(m => m.id === metaId
+        ? { ...m, responsaveis: [...m.responsaveis, { id: data.id, usuario_id: usuario.id, nome_externo: null, nome_exibicao: usuario.nome, avatar_url: usuario.avatar_url || null }] }
+        : m
+      ));
       setInputResponsavel(prev => ({ ...prev, [metaId]: "" }));
       setSugestoesResponsavel(prev => ({ ...prev, [metaId]: [] }));
       setEditingResponsavelId(null);
-    } catch (err) {
-      console.error("Erro ao adicionar responsável interno:", err);
-    }
+    } catch (err) { console.error("Erro ao adicionar responsável interno:", err); }
   };
 
   const adicionarResponsavelExterno = async (nome, metaId) => {
     if (!nome.trim()) return;
     const meta = metas.find(m => m.id === metaId);
     if (!meta || meta.concluido || meta.responsaveis.some(r => r.nome_externo === nome && !r.usuario_id)) return;
-
     try {
-      const { data } = await supabase
-        .from("metas_responsaveis")
-        .insert({
-          meta_id: metaId,
-          nome_externo: nome.trim(),
-          usuario_id: null
-        })
-        .select()
-        .single();
-
+      const { data } = await supabase.from("metas_responsaveis")
+        .insert({ meta_id: metaId, nome_externo: nome.trim(), usuario_id: null })
+        .select().single();
       if (!data) return;
-
-      setMetas(prev =>
-        prev.map(m =>
-          m.id === metaId
-            ? {
-                ...m,
-                responsaveis: [
-                  ...m.responsaveis,
-                  {
-                    id: data.id,
-                    nome_externo: nome.trim(),
-                    usuario_id: null,
-                    nome_exibicao: nome.trim()
-                  }
-                ]
-              }
-            : m
-        )
-      );
+      setMetas(prev => prev.map(m => m.id === metaId
+        ? { ...m, responsaveis: [...m.responsaveis, { id: data.id, nome_externo: nome.trim(), usuario_id: null, nome_exibicao: nome.trim(), avatar_url: null }] }
+        : m
+      ));
       setInputResponsavel(prev => ({ ...prev, [metaId]: "" }));
       setEditingResponsavelId(null);
-    } catch (err) {
-      console.error("Erro ao adicionar responsável externo:", err);
-    }
+    } catch (err) { console.error("Erro ao adicionar responsável externo:", err); }
   };
 
   const removerResponsavel = async (responsavelId, metaId) => {
-    setMetas(prev =>
-      prev.map(m =>
-        m.id === metaId
-          ? { ...m, responsaveis: m.responsaveis.filter(r => r.id !== responsavelId) }
-          : m
-      )
-    );
-    try {
-      await supabase
-        .from("metas_responsaveis")
-        .delete()
-        .eq("id", responsavelId);
-    } catch (err) {
-      console.error("Erro ao remover responsável:", err);
-    }
+    setMetas(prev => prev.map(m => m.id === metaId
+      ? { ...m, responsaveis: m.responsaveis.filter(r => r.id !== responsavelId) }
+      : m
+    ));
+    await supabase.from("metas_responsaveis").delete().eq("id", responsavelId);
   };
 
   const toggleConclusao = async (id, concluidoAtual) => {
     const novoValor = !concluidoAtual;
     setMetas(prev => prev.map(m => m.id === id ? { ...m, concluido: novoValor } : m));
-    try {
-      await supabase
-        .from("metas")
-        .update({ concluido: novoValor, concluido_em: novoValor ? new Date().toISOString() : null })
-        .eq("id", id);
-    } catch (err) {
-      console.error("Erro ao atualizar conclusão:", err);
-      setMetas(prev => prev.map(m => m.id === id ? { ...m, concluido: concluidoAtual } : m));
-    }
+    await supabase.from("metas").update({ concluido: novoValor, concluido_em: novoValor ? new Date().toISOString() : null }).eq("id", id);
   };
 
   const atualizarDataEntrega = async (id, data) => {
     setMetas(prev => prev.map(m => m.id === id ? { ...m, data_entrega: data } : m));
-    try {
-      await supabase
-        .from("metas")
-        .update({ data_entrega: data || null })
-        .eq("id", id);
-    } catch (err) {
-      console.error("Erro ao atualizar data de entrega:", err);
-    }
+    await supabase.from("metas").update({ data_entrega: data || null }).eq("id", id);
   };
 
   const removerMeta = async (id) => {
     if (!window.confirm("Deseja realmente excluir esta meta?")) return;
     setMetas(prev => prev.filter(m => m.id !== id));
-    try {
-      await supabase
-        .from("metas")
-        .delete()
-        .eq("id", id);
-    } catch (err) {
-      console.error("Erro ao excluir meta:", err);
-    }
+    await supabase.from("metas").delete().eq("id", id);
   };
 
-  // Comentário
   const iniciarEdicaoComentario = (id, comentarioAtual) => {
     let puro = comentarioAtual || "";
     if (puro.includes(" — Comentário por ")) {
-      const i = puro.lastIndexOf(" — Comentário por ");
-      puro = puro.substring(0, i);
+      puro = puro.substring(0, puro.lastIndexOf(" — Comentário por "));
     }
     setEditandoComentario(prev => ({ ...prev, [id]: true }));
     setComentarioTemp(prev => ({ ...prev, [id]: puro }));
-  };
-
-  const cancelarComentario = (id) => {
-    setEditandoComentario(prev => ({ ...prev, [id]: false }));
   };
 
   const salvarComentario = async (id) => {
     const comentario = `${comentarioTemp[id] || ""} — Comentário por ${meuNome}`;
     setMetas(prev => prev.map(m => m.id === id ? { ...m, comentario } : m));
     setEditandoComentario(prev => ({ ...prev, [id]: false }));
-    
-    try {
-      await supabase
-        .from("metas")
-        .update({ comentario })
-        .eq("id", id);
-    } catch (err) {
-      console.error("Erro ao salvar comentário:", err);
-    }
+    await supabase.from("metas").update({ comentario }).eq("id", id);
   };
 
   const progressoPercent = metas.length
-    ? Math.round((metas.filter(m => m.concluido).length / metas.length) * 100)
-    : 0;
+    ? Math.round((metas.filter(m => m.concluido).length / metas.length) * 100) : 0;
+
+  // Fechar color picker ao clicar fora
+  useEffect(() => {
+    if (!colorPickerMetaId) return;
+    const handler = (e) => {
+      if (!e.target.closest('.color-picker-popover') && !e.target.closest('.icone-cor')) {
+        setColorPickerMetaId(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [colorPickerMetaId]);
 
   return (
     <div className="metas-modal-overlay">
       <div className="metas-card" ref={cardRef}>
-        {/* HEADER - igual ao AtaCard */}
+        {/* HEADER */}
         <div className="listagem-card">
           <div className="listagem-header-container">
             <div className="listagem-header-titles">
@@ -400,11 +347,7 @@ export default function Metas({
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               {onClose && (
-                <button
-                  className="listagem-close-btn"
-                  onClick={onClose}
-                  aria-label="Fechar"
-                >
+                <button className="listagem-close-btn" onClick={onClose} aria-label="Fechar">
                   <FaTimes />
                 </button>
               )}
@@ -416,6 +359,18 @@ export default function Metas({
         <div className="metas-container-completo">
           <div className="metas-header">
             <h4>Metas</h4>
+          </div>
+
+          {/* Input de descrição geral */}
+          <div className="metas-descricao-wrapper">
+            <input
+              type="text"
+              className="metas-descricao-input"
+              value={descricao}
+              onChange={handleDescricaoChange}
+              placeholder="Adicione uma descrição para esta tabela de metas..."
+            />
+            {salvandoDescricao && <span className="metas-descricao-salvando">salvando…</span>}
           </div>
 
           {/* Barra de Progresso */}
@@ -444,207 +399,205 @@ export default function Metas({
             </button>
           </div>
 
-          {/* Lista de Metas */}
-          <div className="objetivos-lista">
-            {metas.map((meta, idx) => {
-              const isConcluido = meta.concluido;
-              const podeDesmarcar = podeDesmarcarConclusao(meta.concluido_em);
-              const isEditingComentario = editandoComentario[meta.id];
+          {/* Lista de Metas com Drag and Drop */}
+          <DragDropContext onDragEnd={handleDragEnd}>
+            <Droppable droppableId="metas-list">
+              {(provided) => (
+                <div className="objetivos-lista" ref={provided.innerRef} {...provided.droppableProps}>
+                  {metas.map((meta, idx) => {
+                    const isConcluido = meta.concluido;
+                    const podeDesmarcar = podeDesmarcarConclusao(meta.concluido_em);
+                    const isEditingComentario = editandoComentario[meta.id];
+                    const corLinha = meta.cor || "#ffffff";
 
-              return (
-                <div
-                  key={meta.id}
-                  className={`objetivo-item1 ${isConcluido ? 'objetivo-concluido' : ''}`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isConcluido}
-                    onChange={() => toggleConclusao(meta.id, isConcluido)}
-                    disabled={isConcluido && !podeDesmarcar}
-                  />
-                  <span>
-                    <strong>{idx + 1}.</strong> {meta.descricao}
-                  </span>
+                    return (
+                      <Draggable key={String(meta.id)} draggableId={String(meta.id)} index={idx} isDragDisabled={isConcluido}>
+                        {(provided, snapshot) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            className={`objetivo-item1 ${isConcluido ? 'objetivo-concluido' : ''} ${snapshot.isDragging ? 'meta-dragging' : ''}`}
+                            style={{
+                              ...provided.draggableProps.style,
+                              backgroundColor: corLinha,
+                              opacity: snapshot.isDragging ? 0.85 : 1,
+                            }}
+                          >
+                            {/* Drag handle */}
+                            {!isConcluido && (
+                              <span {...provided.dragHandleProps} className="meta-drag-handle" title="Arrastar">
+                                <FaGripVertical />
+                              </span>
+                            )}
 
-                  <div className="objetivo-responsaveis-chips">
-                    {meta.responsaveis.map(resp => (
-                      <ChipResponsavel
-                        key={resp.id}
-                        responsavel={resp}
-                        onRemove={(r) => removerResponsavel(r.id, meta.id)}
-                        disabled={isConcluido}
-                      />
-                    ))}
-                  </div>
+                            <input
+                              type="checkbox"
+                              checked={isConcluido}
+                              onChange={() => toggleConclusao(meta.id, isConcluido)}
+                              disabled={isConcluido && !podeDesmarcar}
+                            />
+                            <span>
+                              <strong>{idx + 1}.</strong> {meta.descricao}
+                            </span>
 
-                  <div className="objetivo-acao-direita">
-                    {!isConcluido && (
-                      <span
-                        className="icone-editar"
-                        title="Editar meta"
-                        onClick={() => {
-                          const novoTexto = prompt("Editar meta:", meta.descricao);
-                          if (novoTexto !== null && novoTexto.trim() !== "" && novoTexto.trim() !== meta.descricao) {
-                            setMetas(prev =>
-                              prev.map(m =>
-                                m.id === meta.id ? { ...m, descricao: novoTexto.trim() } : m
-                              )
-                            );
-                            supabase
-                              .from("metas")
-                              .update({ descricao: novoTexto.trim() })
-                              .eq("id", meta.id)
-                              .then(({ error }) => {
-                                if (error) {
-                                  console.error("Erro ao salvar edição:", error);
-                                  alert("Erro ao salvar alteração.");
-                                  setMetas(prev =>
-                                    prev.map(m =>
-                                      m.id === meta.id ? { ...m, descricao: meta.descricao } : m
-                                    )
-                                  );
-                                }
-                              });
-                          }
-                        }}
-                      >
-                        <FontAwesomeIcon icon={faPenToSquare} />
-                      </span>
-                    )}
+                            {/* Chips de responsáveis */}
+                            <div className="objetivo-responsaveis-chips">
+                              {meta.responsaveis.map(resp => (
+                                <ChipResponsavel
+                                  key={resp.id}
+                                  responsavel={resp}
+                                  onRemove={(r) => removerResponsavel(r.id, meta.id)}
+                                  disabled={isConcluido}
+                                />
+                              ))}
+                            </div>
 
-                    {!isConcluido && (
-                      <span
-                        className="icone-add-resp"
-                        title="Adicionar responsável"
-                        onClick={() => {
-                          setEditingResponsavelId(meta.id);
-                        }}
-                      >
-                        <FontAwesomeIcon icon={faUserPlus} />
-                      </span>
-                    )}
+                            {/* Ações direita */}
+                            <div className="objetivo-acao-direita">
+                              {!isConcluido && (
+                                <span
+                                  className="icone-editar"
+                                  title="Editar meta"
+                                  onClick={() => {
+                                    const novoTexto = prompt("Editar meta:", meta.descricao);
+                                    if (novoTexto !== null && novoTexto.trim() !== "" && novoTexto.trim() !== meta.descricao) {
+                                      setMetas(prev => prev.map(m => m.id === meta.id ? { ...m, descricao: novoTexto.trim() } : m));
+                                      supabase.from("metas").update({ descricao: novoTexto.trim() }).eq("id", meta.id);
+                                    }
+                                  }}
+                                >
+                                  <FontAwesomeIcon icon={faPenToSquare} />
+                                </span>
+                              )}
 
-                    {editingResponsavelId === meta.id && !isConcluido && (
-                      <div className="input-responsavel-flutuante">
-                        <input
-                          type="text"
-                          autoFocus
-                          placeholder="Nome ou @menção"
-                          value={inputResponsavel[meta.id] || ""}
-                          onChange={(e) => handleResponsavelInputChange(e, meta.id)}
-                          onBlur={() => {
-                            setTimeout(() => setEditingResponsavelId(null), 200);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              const valor = inputResponsavel[meta.id] || "";
-                              if (!valor.startsWith("@")) {
-                                adicionarResponsavelExterno(valor, meta.id);
-                              }
-                            } else if (e.key === "Escape") {
-                              setEditingResponsavelId(null);
-                            }
-                          }}
-                          disabled={salvando}
-                        />
-                        {sugestoesResponsavel[meta.id]?.length > 0 && (
-                          <div className="sugestoes-list-flutuante">
-                            {sugestoesResponsavel[meta.id].map(item => (
-                              <div
-                                key={item.id}
-                                className="sugestao-item"
-                                onClick={() => {
-                                  adicionarResponsavelInterno(item, meta.id);
-                                }}
-                              >
-                                @{item.nome}
+                              {!isConcluido && (
+                                <span
+                                  className="icone-add-resp"
+                                  title="Adicionar responsável"
+                                  onClick={() => setEditingResponsavelId(meta.id)}
+                                >
+                                  <FontAwesomeIcon icon={faUserPlus} />
+                                </span>
+                              )}
+
+                              {/* Color picker */}
+                              {!isConcluido && (
+                                <span
+                                  className="icone-cor"
+                                  title="Mudar cor da linha"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setColorPickerMetaId(colorPickerMetaId === meta.id ? null : meta.id);
+                                  }}
+                                  style={{ color: corLinha === "#ffffff" ? "#aaa" : corLinha }}
+                                >
+                                  <FontAwesomeIcon icon={faPalette} />
+                                </span>
+                              )}
+
+                              {colorPickerMetaId === meta.id && (
+                                <div className="color-picker-popover" onClick={(e) => e.stopPropagation()}>
+                                  {CORES_PREDEFINIDAS.map(cor => (
+                                    <div
+                                      key={cor}
+                                      className={`color-swatch ${corLinha === cor ? 'color-swatch--ativo' : ''}`}
+                                      style={{ backgroundColor: cor }}
+                                      onClick={() => atualizarCor(meta.id, cor)}
+                                      title={cor}
+                                    />
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Input responsável flutuante */}
+                              {editingResponsavelId === meta.id && !isConcluido && (
+                                <div className="input-responsavel-flutuante">
+                                  <input
+                                    type="text"
+                                    autoFocus
+                                    placeholder="Nome ou @menção"
+                                    value={inputResponsavel[meta.id] || ""}
+                                    onChange={(e) => handleResponsavelInputChange(e, meta.id)}
+                                    onBlur={() => setTimeout(() => setEditingResponsavelId(null), 200)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        e.preventDefault();
+                                        const valor = inputResponsavel[meta.id] || "";
+                                        if (!valor.startsWith("@")) adicionarResponsavelExterno(valor, meta.id);
+                                      } else if (e.key === "Escape") {
+                                        setEditingResponsavelId(null);
+                                      }
+                                    }}
+                                    disabled={salvando}
+                                  />
+                                  {sugestoesResponsavel[meta.id]?.length > 0 && (
+                                    <div className="sugestoes-list-flutuante">
+                                      {sugestoesResponsavel[meta.id].map(item => (
+                                        <div key={item.id} className="sugestao-item"
+                                          onClick={() => adicionarResponsavelInterno(item, meta.id)}>
+                                          @{item.nome}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Ações */}
+                            <div className="objetivo-acao">
+                              {!isConcluido && (
+                                <label className="objetivo-data-entrega" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', position: 'relative' }}>
+                                  {meta.data_entrega ? (
+                                    <>{formatarDataParaExibicao(meta.data_entrega)}<FontAwesomeIcon icon={faCalendar} style={{ fontSize: '12px', color: '#555' }} /></>
+                                  ) : (
+                                    <FontAwesomeIcon icon={faCalendar} style={{ fontSize: '14px', color: '#555' }} />
+                                  )}
+                                  <input
+                                    type="date"
+                                    style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
+                                    value={meta.data_entrega || ''}
+                                    onChange={(e) => atualizarDataEntrega(meta.id, e.target.value || null)}
+                                    disabled={salvando}
+                                  />
+                                </label>
+                              )}
+
+                              {isConcluido ? (
+                                <ComentarioIcon
+                                  onClick={() => iniciarEdicaoComentario(meta.id, meta.comentario)}
+                                  title={meta.comentario ? "Editar comentário" : "Adicionar comentário"}
+                                />
+                              ) : (
+                                <span className="objetivo-excluir" onClick={() => removerMeta(meta.id)}>×</span>
+                              )}
+                            </div>
+
+                            {/* Editor comentário */}
+                            {isEditingComentario && (
+                              <div className="comentario-editor-flutuante">
+                                <textarea
+                                  value={comentarioTemp[meta.id] || ""}
+                                  onChange={e => setComentarioTemp(prev => ({ ...prev, [meta.id]: e.target.value }))}
+                                  placeholder="Descreva como a meta foi concluída..."
+                                  rows={2}
+                                />
+                                <div className="comentario-botoes">
+                                  <button className="btn-comentario-salvar" onClick={() => salvarComentario(meta.id)}>Salvar</button>
+                                  <button className="btn-comentario-cancelar" onClick={() => setEditandoComentario(prev => ({ ...prev, [meta.id]: false }))}>Cancelar</button>
+                                </div>
                               </div>
-                            ))}
+                            )}
                           </div>
                         )}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="objetivo-acao">
-                    {!isConcluido && (
-                      <label
-                        className="objetivo-data-entrega"
-                        style={{ 
-                          cursor: 'pointer', 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: '4px',
-                          position: 'relative'
-                        }}
-                      >
-                        {meta.data_entrega ? (
-                          <>
-                            {formatarDataParaExibicao(meta.data_entrega)}
-                            <FontAwesomeIcon icon={faCalendar} style={{ fontSize: '12px', color: '#555' }} />
-                          </>
-                        ) : (
-                          <FontAwesomeIcon icon={faCalendar} style={{ fontSize: '14px', color: '#555' }} />
-                        )}
-                        <input
-                          type="date"
-                          style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            width: '100%',
-                            height: '100%',
-                            opacity: 0,
-                            cursor: 'pointer'
-                          }}
-                          value={meta.data_entrega || ''}
-                          onChange={(e) => atualizarDataEntrega(meta.id, e.target.value || null)}
-                          disabled={salvando}
-                        />
-                      </label>
-                    )}
-
-                    {isConcluido ? (
-                      <ComentarioIcon
-                        onClick={() => iniciarEdicaoComentario(meta.id, meta.comentario)}
-                        title={meta.comentario ? "Editar comentário" : "Adicionar comentário"}
-                      />
-                    ) : (
-                      <span
-                        className="objetivo-excluir"
-                        onClick={() => removerMeta(meta.id)}
-                      >
-                        ×
-                      </span>
-                    )}
-                  </div>
-
-                  {isEditingComentario && (
-                    <div className="comentario-editor-flutuante">
-                      <textarea
-                        value={comentarioTemp[meta.id] || ""}
-                        onChange={e => setComentarioTemp(prev => ({ ...prev, [meta.id]: e.target.value }))}
-                        placeholder="Descreva como a meta foi concluída..."
-                        rows={2}
-                      />
-                      <div className="comentario-botoes">
-                        <button
-                          className="btn-comentario-salvar"
-                          onClick={() => salvarComentario(meta.id)}
-                        >
-                          Salvar
-                        </button>
-                        <button className="btn-comentario-cancelar" onClick={() => cancelarComentario(meta.id)}>
-                          Cancelar
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                      </Draggable>
+                    );
+                  })}
+                  {provided.placeholder}
                 </div>
-              );
-            })}
-          </div>
+              )}
+            </Droppable>
+          </DragDropContext>
         </div>
       </div>
     </div>
