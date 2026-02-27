@@ -251,6 +251,7 @@ export default function ModalNota({
                     projetoNome={project?.name || "Projeto"}
                     notaNome={notaSelecionada?.nome || "Metas"}
                     onClose={onCloseVisualizarNota}
+                    containerAtual={{ id: donoContainerId }}
                   />
                 );
 

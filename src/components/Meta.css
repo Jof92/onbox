@@ -470,13 +470,11 @@
 /* ── Ícone cor ── */
 .icone-cor {
   cursor: pointer;
-  font-size: 14px;
-  padding: 4px;
-  border-radius: 4px;
-  transition: background 0.15s, color 0.15s;
-  position: relative;
-  display: flex;
-  align-items: center;
+    color: #555 !important;
+    font-size: 14px;
+    padding: 4px;
+    border-radius: 4px;
+    transition: background 0.2s;
 }
 .icone-cor:hover { background: rgba(0,0,0,0.06); }
 
@@ -616,3 +614,162 @@
   transition: opacity 0.15s;
 }
 .chip-remove:hover { opacity: 1; color: #e53e3e; }
+/* ═══════════════════════════════════════════════════════════════
+   ADICIONAR AO FINAL DO Meta.css (antes dos @media queries)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Drag handle ── */
+.meta-drag-handle {
+  display: flex; align-items: center;
+  color: #c0c8d8; font-size: 13px;
+  cursor: grab; flex-shrink: 0;
+  padding: 0 4px 0 0;
+  transition: color 0.15s; user-select: none;
+}
+.meta-drag-handle:hover { color: #6b7280; }
+.meta-drag-handle:active { cursor: grabbing; }
+.meta-dragging { box-shadow: 0 8px 24px rgba(0,0,0,0.18); border-radius: 8px; z-index: 9999; }
+
+/* ── Ícone cor ── */
+.icone-cor {
+  cursor: pointer; font-size: 14px; padding: 4px;
+  border-radius: 4px; transition: background 0.15s, color 0.15s;
+  position: relative; display: flex; align-items: center;
+}
+.icone-cor:hover { background: rgba(0,0,0,0.06); }
+
+/* ── Color picker popover ── */
+.color-picker-popover {
+  position: absolute; top: calc(100% + 6px); right: 0;
+  background: #fff; border: 1px solid #e0e4f0; border-radius: 10px;
+  padding: 8px; display: flex; flex-wrap: wrap; gap: 6px; width: 148px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.14); z-index: 2000;
+  animation: popover-in 0.12s ease;
+}
+@keyframes popover-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+.color-swatch {
+  width: 22px; height: 22px; border-radius: 50%; cursor: pointer;
+  border: 2px solid transparent; transition: transform 0.12s, border-color 0.12s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+.color-swatch:hover { transform: scale(1.2); }
+.color-swatch--ativo { border-color: #020a52; transform: scale(1.15); }
+
+/* ── Chips de responsável com avatar ── */
+.chip-responsavel {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;
+  border-radius: 20px; padding: 2px 8px 2px 3px;
+  font-size: 12px; font-weight: 500; max-width: 130px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle;
+}
+.chip-externo { background: #fde68a; color: #854d0e; border-color: #fcd34d; }
+.chip-responsavel-avatar-container {
+  width: 20px; height: 20px; border-radius: 50%; overflow: hidden;
+  flex-shrink: 0; background: #0369a1; display: flex; align-items: center; justify-content: center;
+}
+.chip-externo .chip-responsavel-avatar-container { background: #d97706; }
+.chip-responsavel-avatar { width: 100%; height: 100%; object-fit: cover; display: block; }
+.chip-responsavel-iniciais {
+  width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 700; color: #fff;
+}
+.chip-remove {
+  cursor: pointer; font-size: 14px; line-height: 1; opacity: 0.6; margin-left: 2px; transition: opacity 0.15s;
+}
+.chip-remove:hover { opacity: 1; color: #e53e3e; }
+
+/* ═══════════════════════════════════════════════════════════
+   ÁREA DE DESCRIÇÃO MULTILINHAS COM TOOLTIP
+   ═══════════════════════════════════════════════════════════ */
+
+.metas-descricao-wrapper { position: relative; margin-bottom: 14px; }
+
+.metas-descricao-display {
+  position: relative;
+  min-height: 40px;
+  padding: 10px 36px 10px 14px;
+  border: 1px dashed #c8d4e8;
+  border-radius: 8px;
+  background: #f9faff;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.metas-descricao-display:hover {
+  border-color: #020a52;
+  border-style: solid;
+  background: #fff;
+}
+.metas-descricao-vazia { color: #aab4cc; font-style: italic; }
+
+.fb-text-click-hint {
+  position: absolute; top: 8px; right: 10px;
+  font-size: 13px; color: #aab4cc; opacity: 0;
+  transition: opacity 0.15s; pointer-events: none;
+}
+.metas-descricao-display:hover .fb-text-click-hint { opacity: 1; }
+
+/* ── Ajustes tooltip para Metas ── */
+.metas-desc-textarea-tt {
+  width: 100%; min-height: 80px; resize: vertical;
+  padding: 8px 10px; border: 1.5px solid #e2e8f0; border-radius: 6px;
+  font-size: 13px; font-family: inherit; outline: none; line-height: 1.5;
+  transition: border-color 0.15s; box-sizing: border-box; margin-bottom: 4px; display: block;
+}
+.metas-desc-textarea-tt:focus { border-color: #3b4fd8; }
+
+/* ── Tooltip base (se FormBuilder.css não estiver carregado na página) ── */
+.fb-text-tooltip1 {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 3000;
+  background: #090909; border: 1.5px solid #e2e8f0; border-radius: 10px;
+  padding: 12px 14px 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.16);
+  min-width: 260px; animation: popover-in 0.12s ease;
+}
+.fb-tt-arrow {
+  position: absolute; top: -7px; left: 16px;
+  width: 12px; height: 12px; background: #fff;
+  border-left: 1.5px solid #e2e8f0; border-top: 1.5px solid #e2e8f0;
+  transform: rotate(45deg);
+}
+.fb-tt-text-input {
+  width: 100%; padding: 7px 10px; border: 1.5px solid #e2e8f0; border-radius: 6px;
+  font-size: 13px; font-family: inherit; outline: none; margin-bottom: 8px;
+  display: block; box-sizing: border-box; transition: border-color 0.15s;
+}
+.fb-tt-text-input:focus { border-color: #3b4fd8; }
+.fb-tt-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fb-tt-align-group {
+  display: flex; border: 1.5px solid #e2e8f0; border-radius: 6px; overflow: hidden;
+}
+.fb-tt-align-btn {
+  background: none; border: none; padding: 5px 8px; cursor: pointer;
+  color: #64748b; display: flex; align-items: center; transition: background 0.1s, color 0.1s;
+}
+.fb-tt-align-btn:hover { background: #f1f5f9; }
+.fb-tt-align-btn.active { background: #eef2ff; color: #3b4fd8; }
+.fb-tt-align-btn + .fb-tt-align-btn { border-left: 1px solid #e2e8f0; }
+.fb-tt-size-group {
+  display: flex; align-items: center; gap: 4px;
+  border: 1.5px solid #e2e8f0; border-radius: 6px; padding: 2px 4px;
+}
+.fb-tt-sz-btn {
+  background: none; border: none; width: 22px; height: 22px;
+  cursor: pointer; font-size: 16px; color: #64748b;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 4px; transition: background 0.1s;
+}
+.fb-tt-sz-btn:hover { background: #f1f5f9; }
+.fb-tt-sz-val { font-size: 12px; font-weight: 600; color: #374151; min-width: 22px; text-align: center; }
+.fb-tt-color-label { cursor: pointer; display: flex; align-items: center; }
+.fb-tt-color-swatch {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 2px solid #e2e8f0; display: block; transition: border-color 0.15s;
+}
+.fb-tt-color-label:hover .fb-tt-color-swatch { border-color: #94a3b8; }
+.fb-tt-color-hidden { position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none; }
