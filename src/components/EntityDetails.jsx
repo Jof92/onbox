@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { FaArrowLeft, FaTimes, FaSave, FaEdit, FaGripVertical } from "react-icons/fa";
 import { supabase } from "../supabaseClient";
+import dataTransferImage from "../assets/data-transfer.png";
 import "./EntityDetails.css";
 
 const INCC_API_URL = "https://incc-api.onrender.com";
@@ -81,11 +82,217 @@ function useDragSort(setItems) {
     dragIndex.current = null;
   };
 
-  const handleDragEnd = () => {
-    dragIndex.current = null;
-  };
+  const handleDragEnd = () => { dragIndex.current = null; };
 
   return { handleDragStart, handleDragOver, handleDrop, handleDragEnd };
+}
+
+// ─── Popover de Importação ────────────────────────────────────────────────────
+function ImportarPopover({ containerId, currentProjectId, anchorRef, onImport, onClose }) {
+  const popoverRef                        = useRef(null);
+  const [projetos, setProjetos]           = useState([]);
+  const [loadingProj, setLoadingProj]     = useState(true);
+  const [projetoSel, setProjetoSel]       = useState(null);
+  const [detalhes, setDetalhes]           = useState(null);
+  const [loadingDet, setLoadingDet]       = useState(false);
+  const [selPavimentos, setSelPavimentos] = useState([]);
+  const [selEap, setSelEap]               = useState([]);
+  const [step, setStep]                   = useState("projetos");
+  const [pos, setPos]                     = useState({ top: 0, left: 0 });
+
+  useEffect(() => {
+    if (anchorRef?.current) {
+      const rect = anchorRef.current.getBoundingClientRect();
+      setPos({
+        top:  rect.bottom + window.scrollY + 8,
+        left: Math.max(8, rect.right + window.scrollX - 300),
+      });
+    }
+  }, [anchorRef]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (
+        popoverRef.current &&
+        !popoverRef.current.contains(e.target) &&
+        anchorRef?.current &&
+        !anchorRef.current.contains(e.target)
+      ) onClose();
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [onClose, anchorRef]);
+
+    useEffect(() => {
+    const fetchProjetos = async () => {
+      setLoadingProj(true);
+      try {
+        let uid = containerId;
+
+        // Fallback: busca user_id pelo projeto atual se prop não chegou
+        if (!uid && currentProjectId) {
+          const { data: proj } = await supabase
+            .from("projects").select("user_id").eq("id", currentProjectId).single();
+          uid = proj?.user_id;
+        }
+
+        if (!uid) { setLoadingProj(false); return; }
+
+        const { data } = await supabase
+          .from("projects").select("id, name")
+          .eq("user_id", uid)
+          .neq("id", currentProjectId)
+          .order("name");
+
+        if (data) setProjetos(data);
+      } finally { setLoadingProj(false); }
+    };
+    fetchProjetos();
+  }, [containerId, currentProjectId]);
+
+  const selecionarProjeto = async (proj) => {
+    setProjetoSel(proj);
+    setStep("itens");
+    setLoadingDet(true);
+    setSelPavimentos([]);
+    setSelEap([]);
+    try {
+      const [{ data: pavs }, { data: eaps }] = await Promise.all([
+        supabase.from("pavimentos").select("id, name, ordem").eq("project_id", proj.id).order("ordem"),
+        supabase.from("eap").select("id, name, ordem, orcamento_base").eq("project_id", proj.id).order("ordem"),
+      ]);
+      setDetalhes({ pavimentos: pavs || [], eap: eaps || [] });
+    } catch { setDetalhes({ pavimentos: [], eap: [] }); }
+    finally { setLoadingDet(false); }
+  };
+
+  const togglePav = (id) => setSelPavimentos((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
+  const toggleEap = (id) => setSelEap((p)        => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
+
+  const hasPavs  = (detalhes?.pavimentos ?? []).length > 0;
+  const hasEaps  = (detalhes?.eap        ?? []).length > 0;
+  const totalSel = selPavimentos.length + selEap.length;
+
+  const handleImport = () => {
+    const pavimentos = (detalhes?.pavimentos ?? [])
+      .filter((p) => selPavimentos.includes(p.id))
+      .map((p) => ({ id: null, nome: p.name, _tempId: Math.random() }));
+    const eap = (detalhes?.eap ?? [])
+      .filter((e) => selEap.includes(e.id))
+      .map((e) => ({ id: null, nome: e.name, orcamento_base: e.orcamento_base ?? null, _tempId: Math.random() }));
+    onImport({ pavimentos, eap });
+    onClose();
+  };
+
+  return (
+    <div ref={popoverRef} className="imp-popover" style={{ top: pos.top, left: pos.left }}>
+      <div className="imp-header">
+        {step === "itens" && (
+          <button type="button" className="imp-nav-btn"
+            onClick={() => { setStep("projetos"); setProjetoSel(null); setDetalhes(null); }}>
+            ‹
+          </button>
+        )}
+        <span className="imp-title">
+          {step === "projetos" ? "Importar de outro projeto" : projetoSel?.name}
+        </span>
+        <button type="button" className="imp-nav-btn" onClick={onClose}>×</button>
+      </div>
+
+      <div className="imp-body">
+        {step === "projetos" && (
+          <>
+            <p className="imp-hint">Escolha um projeto para copiar seus pavimentos e/ou EAP.</p>
+            {loadingProj ? (
+              <div className="imp-loading">Carregando projetos…</div>
+            ) : projetos.length === 0 ? (
+              <div className="imp-empty">Nenhum outro projeto encontrado.</div>
+            ) : (
+              <ul className="imp-proj-list">
+                {projetos.map((p) => (
+                  <li key={p.id} className="imp-proj-item" onClick={() => selecionarProjeto(p)}>
+                    <span className="imp-proj-avatar">{p.name?.charAt(0).toUpperCase()}</span>
+                    <span className="imp-proj-name">{p.name}</span>
+                    <span className="imp-proj-arrow">›</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
+
+        {step === "itens" && (
+          <>
+            {loadingDet ? (
+              <div className="imp-loading">Carregando itens…</div>
+            ) : !hasPavs && !hasEaps ? (
+              <div className="imp-empty">Este projeto não possui pavimentos nem EAP.</div>
+            ) : (
+              <>
+                {hasPavs && (
+                  <div className="imp-group">
+                    <div className="imp-group-header">
+                      <span className="imp-group-title">Pavimentos</span>
+                      <div className="imp-group-actions">
+                        <button type="button" className="imp-sel-btn"
+                          onClick={() => setSelPavimentos(detalhes.pavimentos.map((p) => p.id))}>Todos</button>
+                        <button type="button" className="imp-sel-btn imp-sel-btn--ghost"
+                          onClick={() => setSelPavimentos([])}>Nenhum</button>
+                      </div>
+                    </div>
+                    <ul className="imp-item-list">
+                      {detalhes.pavimentos.map((p) => (
+                        <li key={p.id}
+                          className={`imp-item ${selPavimentos.includes(p.id) ? "imp-item--sel" : ""}`}
+                          onClick={() => togglePav(p.id)}>
+                          <span className="imp-checkbox">{selPavimentos.includes(p.id) ? "✓" : ""}</span>
+                          <span className="imp-item-name">{p.name}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {hasEaps && (
+                  <div className="imp-group">
+                    <div className="imp-group-header">
+                      <span className="imp-group-title">EAP</span>
+                      <div className="imp-group-actions">
+                        <button type="button" className="imp-sel-btn"
+                          onClick={() => setSelEap(detalhes.eap.map((e) => e.id))}>Todos</button>
+                        <button type="button" className="imp-sel-btn imp-sel-btn--ghost"
+                          onClick={() => setSelEap([])}>Nenhum</button>
+                      </div>
+                    </div>
+                    <ul className="imp-item-list">
+                      {detalhes.eap.map((e) => (
+                        <li key={e.id}
+                          className={`imp-item ${selEap.includes(e.id) ? "imp-item--sel" : ""}`}
+                          onClick={() => toggleEap(e.id)}>
+                          <span className="imp-checkbox">{selEap.includes(e.id) ? "✓" : ""}</span>
+                          <span className="imp-item-name">{e.name}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        )}
+      </div>
+
+      {step === "itens" && !loadingDet && (hasPavs || hasEaps) && (
+        <div className="imp-footer">
+          <span className="imp-sel-count">
+            {totalSel === 0 ? "Nenhum selecionado" : `${totalSel} item${totalSel > 1 ? "s" : ""} selecionado${totalSel > 1 ? "s" : ""}`}
+          </span>
+          <button type="button" className="imp-btn-import" disabled={totalSel === 0} onClick={handleImport}>
+            Importar
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── Modal de Edição do Projeto ───────────────────────────────────────────────
@@ -102,10 +309,12 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
       ? entity.membros
       : []
   );
-  const [profiles, setProfiles]     = useState([]);
-  const [eapValores, setEapValores] = useState({});
-  const [salvando, setSalvando]     = useState(false);
-  const [erro, setErro]             = useState("");
+  const [profiles, setProfiles]               = useState([]);
+  const [eapValores, setEapValores]           = useState({});
+  const [salvando, setSalvando]               = useState(false);
+  const [erro, setErro]                       = useState("");
+  const [showImportPopover, setShowImportPopover] = useState(false);
+  const importBtnRef                          = useRef(null);
 
   const [pavimentosEdit, setPavimentosEdit] = useState(
     (entity.pavimentos || []).map((p) => ({
@@ -125,9 +334,14 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
   const [novoPavimento, setNovoPavimento] = useState("");
   const [novoEap, setNovoEap]             = useState("");
 
-  // Drag hooks independentes para cada lista
   const dragPav = useDragSort(setPavimentosEdit);
   const dragEap = useDragSort(setEapEdit);
+
+  // Importar itens de outro projeto — faz append
+  const handleImport = ({ pavimentos: pavImport, eap: eapImport }) => {
+    if (pavImport.length > 0) setPavimentosEdit((prev) => [...prev, ...pavImport]);
+    if (eapImport.length > 0) setEapEdit((prev) => [...prev, ...eapImport]);
+  };
 
   useEffect(() => {
     const fetchMembros = async () => {
@@ -301,7 +515,19 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
 
           {/* ── Pavimentos ── */}
           <div className="ed-modal-section">
-            <p className="ed-modal-section-title">Pavimentos</p>
+            <div className="ed-modal-section-import-header">
+              <p className="ed-modal-section-title">Pavimentos</p>
+              <button
+                ref={importBtnRef}
+                type="button"
+                className="ed-modal-import-btn"
+                title="Importar pavimentos e EAP de outro projeto"
+                onClick={() => setShowImportPopover((v) => !v)}
+              >
+                <img src={dataTransferImage} alt="" className="ed-modal-import-icon" />
+                Importar de outro projeto
+              </button>
+            </div>
             <div className="ed-modal-list-edit">
               {pavimentosEdit.map((p, i) => (
                 <div
@@ -313,9 +539,7 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
                   onDrop={(e)      => dragPav.handleDrop(e, i)}
                   onDragEnd={dragPav.handleDragEnd}
                 >
-                  <span className="ed-drag-handle" title="Arrastar para reordenar">
-                    <FaGripVertical />
-                  </span>
+                  <span className="ed-drag-handle" title="Arrastar para reordenar"><FaGripVertical /></span>
                   <input
                     className="ed-modal-list-input"
                     value={p.nome}
@@ -367,9 +591,7 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
                   onDrop={(ev)      => dragEap.handleDrop(ev, i)}
                   onDragEnd={dragEap.handleDragEnd}
                 >
-                  <span className="ed-drag-handle" title="Arrastar para reordenar">
-                    <FaGripVertical />
-                  </span>
+                  <span className="ed-drag-handle" title="Arrastar para reordenar"><FaGripVertical /></span>
                   <input
                     className="ed-modal-list-input"
                     value={e.nome}
@@ -431,7 +653,6 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
                   );
                 })}
               </div>
-
               <div className="ed-modal-incc-box">
                 <div className="ed-modal-incc-row">
                   <span>Total base (soma EAPs)</span>
@@ -483,6 +704,17 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
           </button>
         </div>
       </div>
+
+      {/* Popover renderizado fora do scroll do modal */}
+      {showImportPopover && (
+        <ImportarPopover
+          containerId={containerId || entity?.container_id}
+          currentProjectId={entity.id}
+          anchorRef={importBtnRef}
+          onImport={handleImport}
+          onClose={() => setShowImportPopover(false)}
+        />
+      )}
     </div>
   );
 }
@@ -495,6 +727,7 @@ export default function EntityDetails({
   onEdit,
   children,
   canEdit = false,
+  containerId,
 }) {
   const isProject = entityType === "project";
   const [entity, setEntity]               = useState(entityProp);
@@ -782,7 +1015,7 @@ export default function EntityDetails({
           onClose={() => setShowModal(false)}
           onSave={handleSaved}
           inccHistorico={inccHistorico}
-          containerId={entity.container_id}
+          containerId={containerId}
         />
       )}
     </>

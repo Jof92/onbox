@@ -698,6 +698,7 @@ export default function ProjectManager({ containerAtual, user, onSidebarUpdate }
             setShowSetoresModal(true);
           }}
           canEdit={canEditEntity(setorDetalhado)}
+          containerId={containerAtual} 
         />
       ) : selectedProject ? (
         <EntityDetails
