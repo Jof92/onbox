@@ -1,95 +1,354 @@
 /* src/components/BuscaInsumo.css */
-.busca-insumo-overlay {
+
+/* ─── Overlay ─────────────────────────────────────────────────────────────── */
+.bi-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 1000;
+  animation: bi-fade-in 0.15s ease;
 }
 
-.busca-insumo-modal {
-  background: white;
-  width: 90%;
-  max-height: 70vh;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+@keyframes bi-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ─── Modal ───────────────────────────────────────────────────────────────── */
+.bi-modal {
+  background: #fff;
+  width: min(92%, 780px);
+  max-height: 82vh;
+  border-radius: 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.22);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  animation: bi-slide-up 0.18s ease;
 }
 
-.busca-insumo-header {
-  padding: 12px;
-  border-bottom: 1px solid #eee;
+@keyframes bi-slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-.busca-insumo-title {
-  margin: 0 0 8px 0;
-  font-size: 1.1rem;
-  color: #333;
+/* ─── Cabeçalho ──────────────────────────────────────────────────────────── */
+.bi-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 14px 10px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f8f9fa;
+  flex-shrink: 0;
+}
+
+.bi-title {
+  font-size: 14px;
   font-weight: 600;
-  text-align: center;
+  color: #111827;
 }
 
-.busca-insumo-input {
-  width: 100%;
+.bi-close-btn {
+  background: none;
+  border: none;
+  font-size: 14px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 3px 7px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: background 0.12s, color 0.12s;
+}
+.bi-close-btn:hover { background: #e5e7eb; color: #111827; }
+
+/* ─── Área de busca (input + balão) ─────────────────────────────────────── */
+.bi-search-area {
+  padding: 10px 14px 0;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.bi-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bi-input {
+  flex: 1;
   padding: 8px 12px;
-  font-size: 1rem;
-  border: 1px solid #ccc;
+  font-size: 13.5px;
+  border: 1.5px solid #d1d5db;
   border-radius: 4px;
   outline: none;
+  color: #111827;
+  background: #fff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  font-family: inherit;
 }
-
-.busca-insumo-results {
-  padding: 8px;
-  overflow-y: auto;
-  max-height: 60vh;
+.bi-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
 }
+.bi-input::placeholder { color: #9ca3af; font-size: 13px; }
 
-.busca-insumo-item {
-  display: grid;
-  grid-template-columns: 1fr 3fr 1fr;
-  gap: 12px;
-  padding: 10px 12px;
-  cursor: pointer;
-  border-bottom: 1px solid #f0f0f0;
-  font-size: 0.95rem;
+/* Botões de ícone (limpar / ajuda) */
+.bi-icon-btn {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
   align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  line-height: 1;
+}
+.bi-icon-btn:hover { background: #f3f4f6; color: #374151; border-color: #d1d5db; }
+
+.bi-help-btn--active {
+  background: #eff6ff;
+  border-color: #2563eb;
+  color: #2563eb;
 }
 
-.busca-insumo-item:hover {
-  background: #f9f9f9;
+/* ─── Balão de ajuda ─────────────────────────────────────────────────────── */
+.bi-balloon {
+  position: relative;
+  margin-top: 8px;
+  margin-bottom: 6px;
+  background: #f0f7ff;
+  border: 1.5px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 12px 14px 10px;
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.10);
+  animation: bi-balloon-in 0.18s ease;
+  z-index: 10;
 }
 
-.busca-insumo-item-codigo {
-  font-weight: bold;
+@keyframes bi-balloon-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Setinha apontando para o input acima */
+.bi-balloon-arrow {
+  position: absolute;
+  top: -7px;
+  right: 30px;
+  width: 12px;
+  height: 12px;
+  background: #f0f7ff;
+  border-left: 1.5px solid #bfdbfe;
+  border-top: 1.5px solid #bfdbfe;
+  transform: rotate(45deg);
+  border-radius: 2px 0 0 0;
+}
+
+.bi-balloon-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.bi-balloon-titulo {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1d4ed8;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.bi-balloon-close {
+  background: none;
+  border: none;
+  font-size: 11px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: background 0.12s, color 0.12s;
+}
+.bi-balloon-close:hover { background: #dbeafe; color: #1d4ed8; }
+
+/* Lista de exemplos */
+.bi-balloon-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.bi-balloon-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.bi-balloon-exemplo {
+  flex-shrink: 0;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 12px;
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+  border-radius: 4px;
+  padding: 1px 6px;
   white-space: nowrap;
+  font-weight: 600;
+  min-width: 130px;
+  display: inline-block;
 }
 
-.busca-insumo-item-descricao {
+.bi-balloon-desc {
+  color: #374151;
+  font-size: 12px;
+}
+.bi-balloon-desc em { color: #1d4ed8; font-style: normal; font-weight: 500; }
+.bi-balloon-desc strong { color: #1e40af; }
+
+.bi-balloon-rodape {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: #6b7280;
+  padding-top: 8px;
+  border-top: 1px solid #bfdbfe;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-family: inherit;
+  color: #374151;
+  box-shadow: 0 1px 0 #cbd5e1;
+  min-width: 20px;
+}
+
+/* ─── Separador entre área de busca e tabela ─────────────────────────────── */
+.bi-search-area {
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+/* ─── Wrapper da tabela (scrollável) ─────────────────────────────────────── */
+.bi-table-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 80px;
+}
+
+/* ─── Tabela estilo Excel ─────────────────────────────────────────────────── */
+.bi-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  table-layout: fixed;
+}
+
+.bi-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.bi-th {
+  background: #f0f0f0;
+  color: #374151;
+  font-weight: 600;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 7px 10px;
+  border: 1px solid #c8c8c8;
+  text-align: left;
+  user-select: none;
+}
+
+.bi-th-codigo,  .bi-td-codigo  { width: 120px; }
+.bi-th-descricao,.bi-td-descricao { width: auto; }
+.bi-th-unidade, .bi-td-unidade { width: 64px; text-align: center; }
+
+.bi-tr { cursor: pointer; transition: background 0.07s; }
+.bi-tr:nth-child(even) { background: #fafafa; }
+.bi-tr:nth-child(odd)  { background: #ffffff; }
+
+.bi-tr--selected,
+.bi-tr--selected:nth-child(even),
+.bi-tr--selected:nth-child(odd) {
+  background: #dbeafe;
+}
+
+.bi-td {
+  padding: 6px 10px;
+  border: 1px solid #e0e0e0;
+  color: #1f2937;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.4;
 }
 
-.busca-insumo-item-unidade {
+.bi-td-codigo {
+  font-family: monospace;
+  font-size: 12px;
+  color: #374151;
+  font-weight: 500;
+}
+
+.bi-td-descricao {
+  font-size: 13px;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.35;
+}
+
+.bi-td-unidade {
+  font-size: 12px;
+  color: #4b5563;
   font-style: italic;
-  color: #555;
-  white-space: nowrap;
-  text-align: right;
-}
-
-.busca-insumo-loading,
-.busca-insumo-empty {
-  padding: 16px;
   text-align: center;
-  color: #666;
 }
 
-.busca-insumo-item.selected {
-  background-color: #e0e0e0; /* ou qualquer cor de destaque */
+/* ─── Status ──────────────────────────────────────────────────────────────── */
+.bi-status {
+  padding: 28px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 13px;
 }
+.bi-status-idle { color: #9ca3af; font-style: italic; }
+
+/* ─── Rodapé ─────────────────────────────────────────────────────────────── */
+.bi-footer {
+  padding: 6px 14px;
+  font-size: 11px;
+  color: #6b7280;
+  border-top: 1px solid #e5e7eb;
+  background: #f8f9fa;
+  text-align: right;
+  flex-shrink: 0;
+}
+.bi-footer-limit { color: #f59e0b; font-weight: 500; }

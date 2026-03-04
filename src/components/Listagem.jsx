@@ -3,12 +3,44 @@ import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabaseClient";
 import "./Listagem.css";
 import "./loader.css";
-import { FaTrash, FaPaperPlane, FaComment, FaTimes, FaFilePdf, FaFilter } from "react-icons/fa";
+import { FaTrash, FaPaperPlane, FaComment, FaTimes, FaFilePdf, FaFilter, FaSave } from "react-icons/fa";
 import { FaMagnifyingGlass } from "react-icons/fa6";
 import Check from "./Check";
 import Loading from "./Loading";
 import BuscaInsumo from "./BuscaInsumo";
 import ListagemPdf from "./ListagemPdf";
+
+// ─── Constante de versão dos avisos ──────────────────────────────────────────
+// Toda vez que quiser que um aviso apareça novamente para todos os usuários,
+// incremente essa versão (ou mude o texto do aviso).
+const AVISOS = [
+  {
+    id: "aviso_rascunho_v1",
+    texto: "💾 Novo: Agora você pode salvar um rascunho e continuar preenchendo depois, sem precisar enviar.",
+  },
+];
+
+// ─── Hook para gerenciar avisos fechados via localStorage ────────────────────
+function useAvisosFechados() {
+  const [fechados, setFechados] = useState(() => {
+    try {
+      const salvo = localStorage.getItem("listagem_avisos_fechados");
+      return salvo ? JSON.parse(salvo) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const fecharAviso = (id) => {
+    setFechados((prev) => {
+      const novo = [...new Set([...prev, id])];
+      localStorage.setItem("listagem_avisos_fechados", JSON.stringify(novo));
+      return novo;
+    });
+  };
+
+  return { fechados, fecharAviso };
+}
 
 export default function Listagem({ projetoAtual, notaAtual, containerAtual, onStatusUpdate, onClose }) {
   const [rows, setRows] = useState([]);
@@ -22,6 +54,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
   const [setorSelecionado, setSetorSelecionado] = useState("");
   const [userIdLogado, setUserIdLogado] = useState("");
   const [statusEnvio, setStatusEnvio] = useState(null);
+  const [statusSalvar, setStatusSalvar] = useState(null); // 'salvando' | 'sucesso' | 'erro' | null
   const [loading, setLoading] = useState(true);
 
   const [infoGerador, setInfoGerador] = useState(null);
@@ -43,6 +76,10 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
   const cardRef = useRef(null);
   const notaCarregadaRef = useRef(null);
   const [forcarAtualizacao, setForcarAtualizacao] = useState(0);
+
+  // ─── Avisos ────────────────────────────────────────────────────────────────
+  const { fechados, fecharAviso } = useAvisosFechados();
+  const avisosVisiveis = AVISOS.filter((a) => !fechados.includes(a.id));
 
   const getRascunhoKey = () => `rascunho_listagem_${projetoAtual?.id}_${notaAtual?.id}`;
 
@@ -292,7 +329,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
     }
   };
 
-  // ✅ SALVAR RASCUNHO AUTOMATICAMENTE
+  // ✅ SALVAR RASCUNHO AUTOMATICAMENTE (localStorage)
   useEffect(() => {
     if (!projetoAtual?.id || !notaAtual?.id || loading || listagemEnviada) return;
     const key = getRascunhoKey();
@@ -555,6 +592,82 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
       new Date(),
       rows
     );
+  };
+
+  // ─── 💾 SALVAR RASCUNHO NO BANCO (sem enviar) ────────────────────────────
+  const handleSalvarRascunho = async () => {
+    if (!notaAtual?.id || !projetoAtual?.id) {
+      alert("Selecione um projeto e uma nota para salvar.");
+      return;
+    }
+
+    setStatusSalvar("salvando");
+
+    try {
+      const linhasValidas = rows.filter(
+        (r) => r.codigo?.trim() || r.descricao?.trim() || r.quantidade
+      );
+      const existentes = linhasValidas.filter((r) => r.id);
+      const novos = linhasValidas.filter((r) => !r.id);
+
+      // Atualizar itens existentes no banco
+      if (existentes.length) {
+        await Promise.all(
+          existentes.map(async (it) => {
+            const { error } = await supabase.from("planilha_itens").update({
+              codigo: it.codigo?.trim() || null,
+              descricao: it.descricao || null,
+              unidade: it.unidade || null,
+              quantidade: it.quantidade ? Number(it.quantidade) : null,
+              locacao:
+                it.locacao && it.locacao.length > 0 ? JSON.stringify(it.locacao) : null,
+              eap: it.eap || null,
+              observacao: it.observacao || null,
+              comentario: it.comentario || null,
+              ordem: it.ordem,
+            }).eq("id", it.id);
+            if (error) throw error;
+          })
+        );
+      }
+
+      // Inserir novos itens como rascunho (sem grupo_envio de envio real)
+      if (novos.length) {
+        const inserts = novos.map((it) => ({
+          projeto_id: projetoAtual.id,
+          nota_id: notaAtual.id,
+          codigo: it.codigo?.trim() || null,
+          descricao: it.descricao || null,
+          unidade: it.unidade || null,
+          quantidade: it.quantidade ? Number(it.quantidade) : null,
+          locacao:
+            it.locacao && it.locacao.length > 0 ? JSON.stringify(it.locacao) : null,
+          eap: it.eap || null,
+          observacao: it.observacao || null,
+          comentario: it.comentario || null,
+          grupo_envio: "rascunho",
+          criado_em: new Date().toISOString(),
+          ordem: it.ordem,
+        }));
+        const { error } = await supabase.from("planilha_itens").insert(inserts);
+        if (error) throw error;
+      }
+
+      // Atualizar localStorage com rascunho salvo
+      const key = getRascunhoKey();
+      localStorage.setItem(key, JSON.stringify(rows));
+
+      // Recarregar do banco para pegar os IDs dos itens inseridos
+      await carregarDadosDoBanco();
+
+      setStatusSalvar("sucesso");
+      setTimeout(() => setStatusSalvar(null), 2500);
+      registrarAlteracao();
+    } catch (err) {
+      console.error("Erro ao salvar rascunho:", err);
+      setStatusSalvar("erro");
+      setTimeout(() => setStatusSalvar(null), 3000);
+    }
   };
 
   const handleSave = async () => {
@@ -866,6 +979,25 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         )}
       </div>
 
+      {/* ─── Barra de Avisos/Atualizações ──────────────────────────────────── */}
+      {avisosVisiveis.length > 0 && (
+        <div className="listagem-avisos-container">
+          {avisosVisiveis.map((aviso) => (
+            <div key={aviso.id} className="listagem-aviso-bar">
+              <span className="listagem-aviso-texto">{aviso.texto}</span>
+              <button
+                className="listagem-aviso-fechar"
+                onClick={() => fecharAviso(aviso.id)}
+                aria-label="Fechar aviso"
+                title="Fechar aviso (não aparecerá novamente)"
+              >
+                <FaTimes size={10} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Barra de info: gerador, envio e respondido */}
       <div className="listagem-info-bar">
         {(infoGerador || infoEnvio) && (
@@ -913,7 +1045,27 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
               ))}
             </select>
           </div>
-          {/* Enviar antes do PDF */}
+
+          {/* ─── Botão Salvar Rascunho ───────────────────────────────────── */}
+          <div className="save-draft-wrapper">
+            <button
+              className="save-draft-btn"
+              onClick={handleSalvarRascunho}
+              disabled={statusSalvar === "salvando"}
+              title="Salvar rascunho no banco — continue preenchendo depois"
+            >
+              <FaSave style={{ marginRight: 6 }} />
+              {statusSalvar === "salvando" ? "Salvando..." : "Salvar"}
+            </button>
+            {statusSalvar === "sucesso" && (
+              <span className="save-draft-feedback sucesso">✓ Salvo!</span>
+            )}
+            {statusSalvar === "erro" && (
+              <span className="save-draft-feedback erro">✗ Erro ao salvar</span>
+            )}
+          </div>
+
+          {/* Enviar */}
           <div className="send-action-wrapper">
             <button
               className="send-btn"
@@ -925,6 +1077,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
             {statusEnvio === "enviando" && <span className="loader-inline"></span>}
             {statusEnvio === "sucesso" && <Check />}
           </div>
+
           {/* Botão PDF no canto direito */}
           <button
             className="export-pdf-btn"
