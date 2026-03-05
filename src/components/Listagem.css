@@ -791,17 +791,17 @@ select {
   display: block;
 }
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   ADICIONAR ao seu Listagem.css existente
-   ───────────────────────────────────────────────────────────────────────────── */
+/* ==============================
+   🔔 Avisos (sistema + projeto)
+   ============================== */
 
-/* ─── Barra de Avisos/Atualizações ──────────────────────────────────────────── */
 .listagem-avisos-container {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
+/* ── Aviso base (sistema) ── */
 .listagem-aviso-bar {
   display: flex;
   align-items: center;
@@ -814,6 +814,18 @@ select {
   font-size: 12px;
   color: #78350f;
   animation: slideDownFade 0.25s ease;
+}
+
+/* ── Aviso do projeto — vermelho/laranja mais forte ── */
+.listagem-aviso-projeto {
+  background: linear-gradient(90deg, #fff5f5 0%, #fff8f5 100%);
+  border-left-color: #ef4444;
+  border-bottom-color: #fecaca;
+  color: #7f1d1d;
+}
+
+.listagem-aviso-projeto strong {
+  color: #b91c1c;
 }
 
 @keyframes slideDownFade {
@@ -854,7 +866,18 @@ select {
   background: #fde68a;
 }
 
-/* ─── Botão Salvar Rascunho ─────────────────────────────────────────────────── */
+/* Botão fechar do aviso do projeto herda cor diferente */
+.listagem-aviso-projeto .listagem-aviso-fechar {
+  color: #991b1b;
+}
+
+.listagem-aviso-projeto .listagem-aviso-fechar:hover {
+  background: #fecaca;
+}
+
+/* ==============================
+   💾 Botão Salvar Rascunho
+   ============================== */
 .save-draft-wrapper {
   display: flex;
   align-items: center;

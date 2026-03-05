@@ -56,10 +56,30 @@ export default function AtaCard({
   const participantesSectionRef = useRef(null);
 
   // Detecta se o usuário está editando algum campo de texto
-  const isEditing = useMemo(() => {
-    const active = document.activeElement;
-    return active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA';
-  }, [pauta, local, texto, participanteInput, dataLocal, proxima]);
+  const isEditingRef = useRef(false);
+
+  useEffect(() => {
+    const handleFocusIn = () => {
+      const active = document.activeElement;
+      if (active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA') {
+        isEditingRef.current = true;
+      }
+    };
+    const handleFocusOut = () => {
+      setTimeout(() => {
+        const active = document.activeElement;
+        if (!active || (active.tagName !== 'INPUT' && active.tagName !== 'TEXTAREA')) {
+          isEditingRef.current = false;
+        }
+      }, 100);
+    };
+    document.addEventListener('focusin', handleFocusIn);
+    document.addEventListener('focusout', handleFocusOut);
+    return () => {
+      document.removeEventListener('focusin', handleFocusIn);
+      document.removeEventListener('focusout', handleFocusOut);
+    };
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -102,7 +122,7 @@ export default function AtaCard({
 
   const fetchAta = useCallback(async () => {
     // ✅ Protege contra sobrescrita enquanto o usuário digita
-    if (isEditing) return;
+    if (isEditingRef.current) return; 
 
     if (!notaAtual?.id) {
       setLoading(false);
@@ -299,7 +319,7 @@ export default function AtaCard({
       console.error("Erro ao carregar ata:", err);
       setLoading(false);
     }
-  }, [notaAtual?.id, usuarioId, isEditing]); // ✅ formatarNomeExibicao removida das dependências
+  }, [notaAtual?.id, usuarioId]); // ✅ formatarNomeExibicao removida das dependências
 
   useEffect(() => {
     fetchProjeto();

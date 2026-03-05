@@ -10,9 +10,8 @@ import Loading from "./Loading";
 import BuscaInsumo from "./BuscaInsumo";
 import ListagemPdf from "./ListagemPdf";
 
-// ─── Constante de versão dos avisos ──────────────────────────────────────────
-// Toda vez que quiser que um aviso apareça novamente para todos os usuários,
-// incremente essa versão (ou mude o texto do aviso).
+// ─── Avisos do sistema (novidades de funcionalidade) ─────────────────────────
+// Para forçar que um aviso apareça novamente para todos, mude o id.
 const AVISOS = [
   {
     id: "aviso_rascunho_v1",
@@ -20,7 +19,9 @@ const AVISOS = [
   },
 ];
 
-// ─── Hook para gerenciar avisos fechados via localStorage ────────────────────
+const DIAS_SEMANA = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+
+// ─── Hook para gerenciar avisos do sistema fechados via localStorage ──────────
 function useAvisosFechados() {
   const [fechados, setFechados] = useState(() => {
     try {
@@ -77,9 +78,43 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
   const notaCarregadaRef = useRef(null);
   const [forcarAtualizacao, setForcarAtualizacao] = useState(0);
 
-  // ─── Avisos ────────────────────────────────────────────────────────────────
+  // ─── Avisos do sistema ────────────────────────────────────────────────────
   const { fechados, fecharAviso } = useAvisosFechados();
   const avisosVisiveis = AVISOS.filter((a) => !fechados.includes(a.id));
+
+  // ─── Avisos do projeto ────────────────────────────────────────────────────
+  const [avisoProjeto, setAvisoProjeto]           = useState([]);
+  const [avisosDescartados, setAvisosDescartados] = useState(new Set());
+
+  // Carrega os avisos do projeto quando o projeto muda
+  useEffect(() => {
+    if (!projetoAtual?.id) {
+      setAvisoProjeto([]);
+      setAvisosDescartados(new Set());
+      return;
+    }
+    // Reseta descartados ao trocar de projeto para o aviso reaparecer
+    setAvisosDescartados(new Set());
+    supabase
+      .from("project_avisos")
+      .select("*")
+      .eq("project_id", projetoAtual.id)
+      .then(({ data }) => {
+        if (data) setAvisoProjeto(data);
+      });
+  }, [projetoAtual?.id]);
+
+  // Hoje = 0 (Dom) ... 6 (Sáb)
+  const hoje = new Date().getDay();
+
+  // Regra de exibição:
+  // - dia_semana null → aviso fixo, sempre aparece
+  // - dia_semana definido → aparece APENAS quando hoje NÃO é esse dia (alerta de dia errado)
+  const avisosVisivelsProjeto = avisoProjeto.filter((a) => {
+    if (avisosDescartados.has(a.id)) return false;
+    if (a.dia_semana === null || a.dia_semana === undefined) return true;
+    return hoje !== a.dia_semana;
+  });
 
   const getRascunhoKey = () => `rascunho_listagem_${projetoAtual?.id}_${notaAtual?.id}`;
 
@@ -979,7 +1014,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         )}
       </div>
 
-      {/* ─── Barra de Avisos/Atualizações ──────────────────────────────────── */}
+      {/* ─── Avisos do sistema ─────────────────────────────────────────────── */}
       {avisosVisiveis.length > 0 && (
         <div className="listagem-avisos-container">
           {avisosVisiveis.map((aviso) => (
@@ -995,6 +1030,40 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
               </button>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ─── Avisos do projeto ─────────────────────────────────────────────── */}
+      {avisosVisivelsProjeto.length > 0 && (
+        <div className="listagem-avisos-container">
+          {avisosVisivelsProjeto.map((aviso) => {
+            const diaLabel =
+              aviso.dia_semana != null ? DIAS_SEMANA[aviso.dia_semana] : null;
+            return (
+              <div key={aviso.id} className="listagem-aviso-bar listagem-aviso-projeto">
+                <span className="listagem-aviso-texto">
+                  {diaLabel ? (
+                    <>
+                      <strong>⚠️ Atenção:</strong> O dia de envio deste projeto é{" "}
+                      <strong>{diaLabel}</strong>. {aviso.texto}
+                    </>
+                  ) : (
+                    <>📌 {aviso.texto}</>
+                  )}
+                </span>
+                <button
+                  className="listagem-aviso-fechar"
+                  onClick={() =>
+                    setAvisosDescartados((prev) => new Set([...prev, aviso.id]))
+                  }
+                  aria-label="Fechar aviso"
+                  title="Fechar (reaparece na próxima vez que abrir a listagem)"
+                >
+                  <FaTimes size={10} />
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -1016,8 +1085,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
             )}
             {infoRespondido && (
               <>
-                {" "}
-                — Respondido por <strong>{infoRespondido.nome}</strong>
+                {" "}— Respondido por <strong>{infoRespondido.nome}</strong>
               </>
             )}
           </span>
