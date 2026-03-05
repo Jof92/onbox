@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabaseClient";
 import "./Listagem.css";
 import "./loader.css";
-import { FaTrash, FaPaperPlane, FaComment, FaTimes, FaFilePdf, FaFilter, FaSave } from "react-icons/fa";
+import { FaTrash, FaPaperPlane, FaComment, FaTimes, FaFilePdf, FaFilter, FaSave, FaEdit, FaCheck } from "react-icons/fa";
 import { FaMagnifyingGlass } from "react-icons/fa6";
 import Check from "./Check";
 import Loading from "./Loading";
@@ -62,6 +62,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
   const [infoEnvio, setInfoEnvio] = useState(null);
   const [infoRespondido, setInfoRespondido] = useState(null);
   const [listagemEnviada, setListagemEnviada] = useState(false);
+  const [modoEdicao, setModoEdicao]           = useState(false);
   const [buscaInsumoAberta, setBuscaInsumoAberta] = useState(false);
   const [linhaBuscaAtiva, setLinhaBuscaAtiva] = useState(null);
 
@@ -271,6 +272,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
 
       if (notaData) {
         setListagemEnviada(!!notaData.enviada);
+        setModoEdicao(false); // sempre começa sem modo edição ao trocar de nota
 
         let nomeGerador = null;
         if (notaData.created_by) {
@@ -705,6 +707,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
     }
   };
 
+
   const handleSave = async () => {
     if (!notaAtual?.id || !projetoAtual?.id || !setorSelecionado) {
       alert("Selecione um setor para enviar a listagem.");
@@ -1133,6 +1136,17 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
             )}
           </div>
 
+          {/* ─── Botão Editar: aparece quando há itens salvos e não está editando ── */}
+          {rows.some((r) => r.id) && !modoEdicao && (
+            <button
+              className="edit-mode-btn"
+              onClick={() => setModoEdicao(true)}
+              title="Desbloquear todos os campos para edição"
+            >
+              <FaEdit style={{ marginRight: 6 }} /> Editar
+            </button>
+          )}
+
           {/* Enviar */}
           <div className="send-action-wrapper">
             <button
@@ -1152,6 +1166,19 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
             onClick={handleExportarPDF}
             title="Exportar listagem como PDF"
             style={{ marginLeft: "auto" }}
+          >
+            <FaFilePdf style={{ marginRight: 6 }} /> PDF
+          </button>
+        </div>
+      )}
+
+      {/* ─── Barra pós-envio: PDF sempre disponível ──────────────────────── */}
+      {listagemEnviada && (
+        <div className="action-buttons">
+          <button
+            className="export-pdf-btn"
+            onClick={handleExportarPDF}
+            title="Exportar listagem como PDF"
           >
             <FaFilePdf style={{ marginRight: 6 }} /> PDF
           </button>
@@ -1280,17 +1307,18 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
               </th>
               <th>Observação</th>
               <th>Comentário</th>
-              {!listagemEnviada && <th style={{ width: "40px" }}>Ações</th>}
+              {(!listagemEnviada) && <th style={{ width: "40px" }}>Ações</th>}
             </tr>
           </thead>
           <tbody>
             {rowsParaExibir.map((row, visualIdx) => {
               const isCriar = row.codigo?.toLowerCase() === "criar";
               const foiEnviada = listagemEnviada;
-              const isLinhaCongelada = foiEnviada;
-              const podeEditarCodigo = !row.id && !isLinhaCongelada;
-              const podeEditarDescricao = isCriar && !isLinhaCongelada;
-              const podeEditarDemais = !row.id && !isLinhaCongelada;
+              // modoEdicao destrava tudo — como planilha normal
+              const isLinhaCongelada = !modoEdicao && (foiEnviada || !!row.id);
+              const podeEditarCodigo    = modoEdicao || (!row.id && !foiEnviada);
+              const podeEditarDescricao = (modoEdicao && isCriar) || (isCriar && !foiEnviada);
+              const podeEditarDemais    = modoEdicao || (!row.id && !foiEnviada);
               const nextRow = rowsParaExibir[visualIdx + 1];
               const isLastInGroup = !nextRow || nextRow.grupo_envio !== row.grupo_envio;
               const indexOriginal = rows.findIndex((r) => r.ordem === row.ordem);
@@ -1500,7 +1528,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                     {!listagemEnviada && (
                       <td>
                         <div className="button-group">
-                          {podeEditarDemais && (
+                          {!foiEnviada && (
                             <FaTrash
                               className="delete-icon"
                               onClick={(e) => {

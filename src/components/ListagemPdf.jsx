@@ -130,7 +130,7 @@ class ListagemPdf {
     autoTable(pdf, {
       startY: margemSuperior + 38,
       margin: { left: margemEsquerda, right: margemDireita, top: margemSuperior, bottom: margemInferior },
-      head: [['Código', 'Descrição', 'Unidade', 'Qtd', 'Locação', 'EAP', 'Observação', 'Comentário']],
+      head: [['Código', 'Descrição', 'Unid', 'Qtd', 'Locação', 'EAP', 'Observação', 'Comentário']],
       body: tableData,
       headStyles: {
         fillColor: [41, 128, 185],
@@ -154,14 +154,14 @@ class ListagemPdf {
         lineColor: [200, 200, 200],
       },
       columnStyles: {
-        0: { cellWidth: 18, halign: 'center', overflow: 'visible' },   // Código
-        1: { cellWidth: 58, halign: 'left', overflow: 'linebreak' },   // Descrição (MAIOR em paisagem)
-        2: { cellWidth: 14, halign: 'center', overflow: 'visible' },   // Unidade
-        3: { cellWidth: 12, halign: 'center', overflow: 'visible' },   // Qtd
-        4: { cellWidth: 52, halign: 'left', overflow: 'linebreak' },   // Locação (MAIOR)
-        5: { cellWidth: 24, halign: 'left', overflow: 'linebreak' },   // EAP
-        6: { cellWidth: 26, halign: 'left', overflow: 'linebreak' },   // Observação
-        7: { cellWidth: 26, halign: 'left', overflow: 'linebreak' },   // Comentário
+        0: { cellWidth: 24, halign: 'center', overflow: 'visible' },   // Código
+        1: { cellWidth: 60, halign: 'left',   overflow: 'linebreak' }, // Descrição
+        2: { cellWidth: 20, halign: 'center', overflow: 'visible' },   // Unidade
+        3: { cellWidth: 14, halign: 'center', overflow: 'visible' },   // Qtd
+        4: { cellWidth: 46, halign: 'left',   overflow: 'linebreak' }, // Locação
+        5: { cellWidth: 30, halign: 'left',   overflow: 'linebreak' }, // EAP
+        6: { cellWidth: 28, halign: 'left',   overflow: 'linebreak' }, // Observação
+        7: { cellWidth: 28, halign: 'left',   overflow: 'linebreak' }, // Comentário
       },
       alternateRowStyles: {
         fillColor: [245, 248, 251],
@@ -251,7 +251,6 @@ class ListagemPdf {
     if (!num) return '0';
     const numero = parseFloat(num);
     if (isNaN(numero)) return String(num);
-    // Formatar com até 2 casas decimais, removendo zeros desnecessários
     return numero.toLocaleString('pt-BR', {
       minimumFractionDigits: 0,
       maximumFractionDigits: 2,
