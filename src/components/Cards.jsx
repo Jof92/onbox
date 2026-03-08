@@ -12,11 +12,10 @@ import Column from "./CardsColumn";
 import CardsHeader from "./CardsHeader";
 
 // ─── Tipos que abrem visualização completa (painel/modal) ───────────────────
-// Adicionar aqui sempre que um novo tipo precisar abrir o ModalNota visualização
 const TIPOS_COM_VISUALIZACAO = [
   "Atas",
   "Calendário",
-  "Elaborar Formulário", // ← NOVO
+  "Elaborar Formulário",
   "Lista",
   "Metas",
   "Tarefas",
@@ -142,17 +141,21 @@ export default function Cards() {
     if (!error) atualizarStatusNota(notaId, { responsaveis_ids: novosIds });
   };
 
-  const jaExisteDiario = [...columnsNormais, ...columnsArquivadas].some(
+  // ─── FIX: jaExisteDiario agora só verifica columnsNormais (não arquivadas) ───
+  const jaExisteDiario = columnsNormais.some(
     col => col.tipo_pilha === "diario_obras"
   );
 
   const handleCreateColumn = async (tipo) => {
     if (!entity) return;
     setShowAddColumnMenu(false);
-    if (tipo === "diario_obras" && jaExisteDiario) {
+
+    // ─── FIX: bloquear só se existir pilha RDO ativa (não arquivada) ───
+    if (tipo === "diario_obras" && columnsNormais.some(c => c.tipo_pilha === "diario_obras")) {
       alert("Já existe uma pilha 'Diário de Obra' neste projeto/setor.");
       return;
     }
+
     const cols = modoArquivadas ? columnsArquivadas : columnsNormais;
     const outras = cols.filter(c => c.title !== "Recebidos");
     const maxOrdem = outras.length > 0 ? Math.max(...outras.map(c => c.ordem)) : -1;
@@ -322,24 +325,25 @@ export default function Cards() {
           title: p.title,
           notas: p.notas,
           cor_fundo: p.cor_fundo || null,
-          ordem: p.ordem || 0,
+          ordem: p.ordem ?? 999,
           arquivada,
           tipo_pilha: p.tipo_pilha || null,
         });
 
-        setColumnsNormais(pilhasNormaisComNotas.map(p => mapCol(p, false)));
-        setColumnsArquivadas(pilhasArquivadasComNotas.map(p => mapCol(p, true)));
+        const sortByOrdem = (arr) => [...arr].sort((a, b) => (a.ordem ?? 999) - (b.ordem ?? 999));
+
+        setColumnsNormais(sortByOrdem(pilhasNormaisComNotas).map(p => mapCol(p, false)));
+        setColumnsArquivadas(sortByOrdem(pilhasArquivadasComNotas).map(p => mapCol(p, true)));
 
         setEntity({ ...entityData, type });
 
-        // ── Abrir nota vinda da URL ──
         if (notaIdFromUrl) {
           const buscar = (cols) =>
             cols
               .flatMap(col => col.notas)
               .find(n =>
                 String(n.id) === notaIdFromUrl &&
-                TIPOS_COM_VISUALIZACAO.includes(n.tipo)  // ← usa a lista centralizada
+                TIPOS_COM_VISUALIZACAO.includes(n.tipo)
               );
 
           const notaNormal   = buscar(pilhasNormaisComNotas);
@@ -498,7 +502,6 @@ export default function Cards() {
       const setter = modoArquivadas ? setColumnsArquivadas : setColumnsNormais;
       setter(prev => prev.map(c => c.id === activeColumnId ? { ...c, notas: [newNota, ...c.notas] } : c));
 
-      // ── Abre visualização imediatamente para tipos que têm painel ──
       if (TIPOS_COM_VISUALIZACAO.includes(newNota.tipo)) {
         setNotaSelecionada(newNota);
         updateUrlWithNota(newNota.id);
@@ -593,16 +596,24 @@ export default function Cards() {
     }
   }, [dataConclusaoEdit]);
 
-  const saveColumnsOrder = async (newColumns) => {
+  // ─── FIX: saveColumnsOrder recebe modoArquivadas explicitamente para evitar closure stale ───
+  const saveColumnsOrder = async (newColumns, isArquivadas) => {
+    // Usa o índice real de cada coluna no array completo (incluindo Recebidos para manter posição correta)
+    // mas só salva no banco as que não são "Recebidos"
     const updates = newColumns
+      .map((col, index) => ({ id: col.id, ordem: index, title: col.title }))
       .filter(col => col.title !== "Recebidos")
-      .map((col, index) => ({ id: col.id, ordem: index }));
+      .map(({ id, ordem }) => ({ id, ordem }));
+
     try {
-      for (const { id, ordem } of updates) {
-        const { error } = await supabase.from("pilhas").update({ ordem }).eq("id", id);
-        if (error) throw error;
-      }
-      const setter = modoArquivadas ? setColumnsArquivadas : setColumnsNormais;
+      await Promise.all(
+        updates.map(({ id, ordem }) =>
+          supabase.from("pilhas").update({ ordem }).eq("id", id)
+        )
+      );
+
+      // Usa o parâmetro explícito em vez do closure
+      const setter = isArquivadas ? setColumnsArquivadas : setColumnsNormais;
       setter(prev =>
         prev.map(col => {
           const updated = updates.find(u => u.id === col.id);
@@ -625,13 +636,19 @@ export default function Cards() {
       const newColumns = Array.from(cols);
       const [moved] = newColumns.splice(source.index, 1);
       newColumns.splice(destination.index, 0, moved);
+
+      // Mantém "Recebidos" sempre primeiro
       const recIdx = newColumns.findIndex(col => col.title === "Recebidos");
       if (recIdx > 0) {
         const rec = newColumns.splice(recIdx, 1)[0];
         newColumns.unshift(rec);
       }
+
+      // Atualiza estado local imediatamente (feedback visual)
       setCols(newColumns);
-      saveColumnsOrder(newColumns);
+
+      // Passa modoArquivadas explicitamente para evitar closure stale
+      await saveColumnsOrder(newColumns, modoArquivadas);
       return;
     }
 
@@ -665,7 +682,6 @@ export default function Cards() {
   }, [columnsNormais, columnsArquivadas, modoArquivadas, notaSelecionada]);
 
   const handleOpenNota = (nota) => {
-    // Nota Rápida nunca abre visualização
     if (nota.tipo === "Nota Rápida") return;
 
     let isRecebidos = false;
@@ -690,10 +706,8 @@ export default function Cards() {
     updateUrlWithNota(null);
   };
 
-  // ── Renderiza conteúdo completo da nota no painel lateral ────────────────
   const renderNotaContent = (nota, onClose) => {
     if (!nota) return null;
-    console.log("🔍 Cards.renderNotaContent:", { id: nota.id, nome: nota.nome, tipo: nota.tipo });
     return (
       <ModalNota
         inline={true}
@@ -754,6 +768,7 @@ export default function Cards() {
           {showAddColumnMenu && (
             <div className="add-column-menu">
               <button onClick={() => handleCreateColumn("normal")}>Pilha normal</button>
+              {/* FIX: mostra opção RDO sempre que não existir pilha RDO ativa */}
               {!jaExisteDiario && (
                 <button onClick={() => handleCreateColumn("diario_obras")}>Diário de Obra</button>
               )}
