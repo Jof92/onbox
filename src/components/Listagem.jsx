@@ -43,6 +43,17 @@ function useAvisosFechados() {
   return { fechados, fecharAviso };
 }
 
+// ─── Gera um UID local estável para linhas sem id de banco ───────────────────
+let _uidCounter = 0;
+function gerarUid() {
+  return `_local_${++_uidCounter}_${Date.now()}`;
+}
+
+function garantirUid(row) {
+  if (!row._uid) row._uid = gerarUid();
+  return row;
+}
+
 export default function Listagem({ projetoAtual, notaAtual, containerAtual, onStatusUpdate, onClose }) {
   const [rows, setRows] = useState([]);
   const [ultimaAlteracao, setUltimaAlteracao] = useState("");
@@ -243,22 +254,46 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
     setUltimaAlteracao(`${autor} alterou em ${agora.toLocaleDateString()} ${agora.toLocaleTimeString()}`);
   };
 
+  // ─── Normaliza locação para array e garante _uid em cada row ────────────
+  const normalizarRow = (item) => {
+    let locacaoArray = [];
+    try {
+      if (typeof item.locacao === "string") {
+        const parsed = JSON.parse(item.locacao);
+        locacaoArray = Array.isArray(parsed) ? parsed : item.locacao ? [item.locacao] : [];
+      } else if (Array.isArray(item.locacao)) {
+        locacaoArray = item.locacao;
+      } else if (item.locacao != null) {
+        locacaoArray = [String(item.locacao)];
+      }
+    } catch (e) {
+      locacaoArray = item.locacao ? [String(item.locacao)] : [];
+    }
+    return garantirUid({
+      id: item.id,
+      codigo: item.codigo || "",
+      descricao: item.descricao || "",
+      unidade: item.unidade || "",
+      quantidade: item.quantidade || "",
+      locacao: locacaoArray,
+      eap: item.eap || "",
+      observacao: item.observacao || "",
+      comentario: item.comentario || "",
+      criado_em: item.criado_em || null,
+      grupo_envio: item.grupo_envio || "antigo",
+      data_envio: item.data_envio || item.criado_em,
+      enviado_por: item.enviado_por || "Usuário",
+      ordem: item.ordem ?? 0,
+    });
+  };
+
   const carregarDadosDoBanco = async () => {
     try {
       if (!projetoAtual?.id || !notaAtual?.id) {
-        setRows([
-          {
-            codigo: "",
-            descricao: "",
-            unidade: "",
-            quantidade: "",
-            locacao: [],
-            eap: "",
-            observacao: "",
-            comentario: "",
-            ordem: 1,
-          },
-        ]);
+        setRows([garantirUid({
+          codigo: "", descricao: "", unidade: "", quantidade: "",
+          locacao: [], eap: "", observacao: "", comentario: "", ordem: 1,
+        })]);
         return;
       }
 
@@ -272,7 +307,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
 
       if (notaData) {
         setListagemEnviada(!!notaData.enviada);
-        setModoEdicao(false); // sempre começa sem modo edição ao trocar de nota
+        setModoEdicao(false);
 
         let nomeGerador = null;
         if (notaData.created_by) {
@@ -308,56 +343,18 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
       if (itensError) throw itensError;
 
       if (itensRes?.length) {
-        const mapped = itensRes.map((item) => {
-          let locacaoArray = [];
-          try {
-            if (typeof item.locacao === "string") {
-              const parsed = JSON.parse(item.locacao);
-              if (Array.isArray(parsed)) {
-                locacaoArray = parsed;
-              } else {
-                locacaoArray = item.locacao ? [item.locacao] : [];
-              }
-            } else if (Array.isArray(item.locacao)) {
-              locacaoArray = item.locacao;
-            } else if (item.locacao != null) {
-              locacaoArray = [String(item.locacao)];
-            }
-          } catch (e) {
-            locacaoArray = item.locacao ? [String(item.locacao)] : [];
-          }
-          return {
-            id: item.id,
-            codigo: item.codigo || "",
-            descricao: item.descricao || "",
-            unidade: item.unidade || "",
-            quantidade: item.quantidade || "",
-            locacao: locacaoArray,
-            eap: item.eap || "",
-            observacao: item.observacao || "",
-            comentario: item.comentario || "",
-            criado_em: item.criado_em || null,
-            grupo_envio: item.grupo_envio || "antigo",
-            data_envio: item.data_envio || item.criado_em,
-            enviado_por: item.enviado_por || "Usuário",
-            ordem: item.ordem || 0,
-          };
-        });
-        setRows(mapped);
+        const mapped = itensRes.map(normalizarRow);
+        // Garante numeração sequencial correta caso ordem venha null/0 do banco
+        const comOrdemCorreta = mapped.map((r, i) => ({
+          ...r,
+          ordem: r.ordem && r.ordem > 0 ? r.ordem : i + 1,
+        }));
+        setRows(comOrdemCorreta);
       } else {
-        setRows([
-          {
-            codigo: "",
-            descricao: "",
-            unidade: "",
-            quantidade: "",
-            locacao: [],
-            eap: "",
-            observacao: "",
-            comentario: "",
-            ordem: 1,
-          },
-        ]);
+        setRows([garantirUid({
+          codigo: "", descricao: "", unidade: "", quantidade: "",
+          locacao: [], eap: "", observacao: "", comentario: "", ordem: 1,
+        })]);
       }
       registrarAlteracao();
     } catch (err) {
@@ -389,19 +386,10 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
       setLoading(true);
 
       if (!projetoAtual?.id || !notaAtual?.id) {
-        setRows([
-          {
-            codigo: "",
-            descricao: "",
-            unidade: "",
-            quantidade: "",
-            locacao: [],
-            eap: "",
-            observacao: "",
-            comentario: "",
-            ordem: 1,
-          },
-        ]);
+        setRows([garantirUid({
+          codigo: "", descricao: "", unidade: "", quantidade: "",
+          locacao: [], eap: "", observacao: "", comentario: "", ordem: 1,
+        })]);
         setLoading(false);
         return;
       }
@@ -426,7 +414,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         try {
           const parsed = JSON.parse(rascunhoSalvo);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            const withArrayLocacao = parsed.map((r) => ({
+            const withArrayLocacao = parsed.map((r) => garantirUid({
               ...r,
               locacao: Array.isArray(r.locacao) ? r.locacao : r.locacao ? [r.locacao] : [],
             }));
@@ -450,9 +438,16 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
   }, [projetoAtual?.id, notaAtual?.id, forcarAtualizacao]);
 
   // 🔁 POLLING: sincroniza com banco a cada 3s
+  // ⚠️ Pausado quando modoEdicao está ativo para não sobrescrever edições em andamento
+  const modoEdicaoRef = useRef(modoEdicao);
+  useEffect(() => { modoEdicaoRef.current = modoEdicao; }, [modoEdicao]);
+
   useEffect(() => {
     if (!notaAtual?.id) return;
     const verificarAtualizacoes = async () => {
+      // Não atualiza enquanto o usuário estiver editando
+      if (modoEdicaoRef.current) return;
+
       try {
         const { data, error } = await supabase
           .from("planilha_itens")
@@ -464,17 +459,15 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
 
         setRows((prev) =>
           prev.map((r) => {
+            // Linhas sem id (novas, não salvas) nunca são sobrescritas pelo polling
+            if (!r.id) return r;
             const itemAtualizado = data.find((i) => i.id === r.id);
             if (itemAtualizado) {
               let locacaoArray = [];
               try {
                 if (typeof itemAtualizado.locacao === "string") {
                   const parsed = JSON.parse(itemAtualizado.locacao);
-                  if (Array.isArray(parsed)) {
-                    locacaoArray = parsed;
-                  } else {
-                    locacaoArray = itemAtualizado.locacao ? [itemAtualizado.locacao] : [];
-                  }
+                  locacaoArray = Array.isArray(parsed) ? parsed : itemAtualizado.locacao ? [itemAtualizado.locacao] : [];
                 } else if (Array.isArray(itemAtualizado.locacao)) {
                   locacaoArray = itemAtualizado.locacao;
                 } else if (itemAtualizado.locacao != null) {
@@ -506,13 +499,14 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
     return () => clearInterval(interval);
   }, [notaAtual?.id]);
 
-  const buscarItemPorCodigo = async (index, codigo) => {
+  // ─── Busca índice pelo _uid (sempre único e estável) ────────────────────
+  const findIndexByUid = (uid) => rows.findIndex((r) => r._uid === uid);
+
+  const buscarItemPorCodigo = async (uid, codigo) => {
+    const index = findIndexByUid(uid);
+    if (index === -1) return;
     if (!codigo?.trim() || codigo.toLowerCase() === "criar") {
-      setCodigoErro((prev) => {
-        const novo = new Set(prev);
-        novo.delete(index);
-        return novo;
-      });
+      setCodigoErro((prev) => { const novo = new Set(prev); novo.delete(uid); return novo; });
       return;
     }
     try {
@@ -523,88 +517,87 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         .maybeSingle();
       if (error) throw error;
 
-      const novas = [...rows];
-      if (data) {
-        novas[index] = {
-          ...novas[index],
-          descricao: data.descricao || "",
-          unidade: data.unidade || "",
-        };
-        setCodigoErro((prev) => {
-          const novo = new Set(prev);
-          novo.delete(index);
-          return novo;
-        });
-      } else {
-        setCodigoErro((prev) => new Set(prev).add(index));
-        novas[index] = { ...novas[index], descricao: "", unidade: "" };
-      }
-      setRows(novas);
+      setRows((prev) => {
+        const novas = [...prev];
+        const i = novas.findIndex((r) => r._uid === uid);
+        if (i === -1) return prev;
+        if (data) {
+          novas[i] = { ...novas[i], descricao: data.descricao || "", unidade: data.unidade || "" };
+          setCodigoErro((prev2) => { const novo = new Set(prev2); novo.delete(uid); return novo; });
+        } else {
+          setCodigoErro((prev2) => new Set(prev2).add(uid));
+          novas[i] = { ...novas[i], descricao: "", unidade: "" };
+        }
+        return novas;
+      });
       registrarAlteracao();
     } catch (err) {
-      setCodigoErro((prev) => new Set(prev).add(index));
+      setCodigoErro((prev) => new Set(prev).add(uid));
     }
   };
 
-  const handleInputChange = (index, campo, valor) => {
-    const novas = [...rows];
-    novas[index][campo] = valor;
-    setRows(novas);
+  // ─── Handlers usando _uid como chave ────────────────────────────────────
+  const handleInputChange = (uid, campo, valor) => {
+    setRows((prev) => {
+      const novas = [...prev];
+      const i = novas.findIndex((r) => r._uid === uid);
+      if (i === -1) return prev;
+      novas[i] = { ...novas[i], [campo]: valor };
+      return novas;
+    });
     registrarAlteracao();
   };
 
-  const handleLocacaoChange = (index, valor, checked) => {
-    const novas = [...rows];
-    const locacoesAtuais = [...novas[index].locacao];
-    if (checked) {
-      if (!locacoesAtuais.includes(valor)) {
-        locacoesAtuais.push(valor);
+  const handleLocacaoChange = (uid, valor, checked) => {
+    setRows((prev) => {
+      const novas = [...prev];
+      const i = novas.findIndex((r) => r._uid === uid);
+      if (i === -1) return prev;
+      const locacoesAtuais = [...(novas[i].locacao || [])];
+      if (checked) {
+        if (!locacoesAtuais.includes(valor)) locacoesAtuais.push(valor);
+      } else {
+        const idx = locacoesAtuais.indexOf(valor);
+        if (idx !== -1) locacoesAtuais.splice(idx, 1);
       }
-    } else {
-      const idx = locacoesAtuais.indexOf(valor);
-      if (idx !== -1) {
-        locacoesAtuais.splice(idx, 1);
-      }
-    }
-    novas[index].locacao = locacoesAtuais;
-    setRows(novas);
+      novas[i] = { ...novas[i], locacao: locacoesAtuais };
+      return novas;
+    });
     registrarAlteracao();
   };
 
-  const handleObservacaoBlur = (index, valor) => {
-    const novas = [...rows];
-    novas[index].observacao = valor;
-    setRows(novas);
+  const handleObservacaoBlur = (uid, valor) => {
+    setRows((prev) => {
+      const novas = [...prev];
+      const i = novas.findIndex((r) => r._uid === uid);
+      if (i === -1) return prev;
+      novas[i] = { ...novas[i], observacao: valor };
+      return novas;
+    });
     registrarAlteracao();
   };
 
-  const handleCodigoEnter = (e, index, codigo) => {
-    if (e.key === "Enter") buscarItemPorCodigo(index, codigo);
+  const handleCodigoEnter = (e, uid, codigo) => {
+    if (e.key === "Enter") buscarItemPorCodigo(uid, codigo);
   };
 
   const addRow = () => {
     if (listagemEnviada) return;
     const ultimaOrdem = rows.length > 0 ? Math.max(...rows.map((r) => r.ordem || 0)) : 0;
-    const novaLinha = {
-      codigo: "",
-      descricao: "",
-      unidade: "",
-      quantidade: "",
-      locacao: [],
-      eap: "",
-      observacao: "",
-      comentario: "",
+    const novaLinha = garantirUid({
+      codigo: "", descricao: "", unidade: "", quantidade: "",
+      locacao: [], eap: "", observacao: "", comentario: "",
       criado_em: new Date().toISOString(),
       ordem: ultimaOrdem + 1,
-    };
+    });
     setRows((prev) => [...prev, novaLinha]);
     registrarAlteracao();
   };
 
-  const removeRow = async (index) => {
+  const removeRow = async (uid) => {
     if (listagemEnviada) return;
-    const linha = rows[index];
-    setRows((prev) => prev.filter((_, i) => i !== index));
+    const linha = rows.find((r) => r._uid === uid);
+    setRows((prev) => prev.filter((r) => r._uid !== uid));
     registrarAlteracao();
     if (linha?.id) {
       try {
@@ -647,7 +640,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
       const existentes = linhasValidas.filter((r) => r.id);
       const novos = linhasValidas.filter((r) => !r.id);
 
-      // Atualizar itens existentes no banco
       if (existentes.length) {
         await Promise.all(
           existentes.map(async (it) => {
@@ -656,8 +648,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
               descricao: it.descricao || null,
               unidade: it.unidade || null,
               quantidade: it.quantidade ? Number(it.quantidade) : null,
-              locacao:
-                it.locacao && it.locacao.length > 0 ? JSON.stringify(it.locacao) : null,
+              locacao: it.locacao && it.locacao.length > 0 ? JSON.stringify(it.locacao) : null,
               eap: it.eap || null,
               observacao: it.observacao || null,
               comentario: it.comentario || null,
@@ -668,7 +659,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         );
       }
 
-      // Inserir novos itens como rascunho (sem grupo_envio de envio real)
       if (novos.length) {
         const inserts = novos.map((it) => ({
           projeto_id: projetoAtual.id,
@@ -677,8 +667,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
           descricao: it.descricao || null,
           unidade: it.unidade || null,
           quantidade: it.quantidade ? Number(it.quantidade) : null,
-          locacao:
-            it.locacao && it.locacao.length > 0 ? JSON.stringify(it.locacao) : null,
+          locacao: it.locacao && it.locacao.length > 0 ? JSON.stringify(it.locacao) : null,
           eap: it.eap || null,
           observacao: it.observacao || null,
           comentario: it.comentario || null,
@@ -690,11 +679,9 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         if (error) throw error;
       }
 
-      // Atualizar localStorage com rascunho salvo
       const key = getRascunhoKey();
       localStorage.setItem(key, JSON.stringify(rows));
 
-      // Recarregar do banco para pegar os IDs dos itens inseridos
       await carregarDadosDoBanco();
 
       setStatusSalvar("sucesso");
@@ -727,7 +714,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
       const novos = linhasValidas.filter((r) => !r.id);
       const setoresParaEnvio = [setorSelecionado];
 
-      // Atualizar existentes
       if (existentes.length) {
         await Promise.all(
           existentes.map(async (it) => {
@@ -736,8 +722,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
               descricao: it.descricao || null,
               unidade: it.unidade || null,
               quantidade: it.quantidade ? Number(it.quantidade) : null,
-              locacao:
-                it.locacao && it.locacao.length > 0 ? JSON.stringify(it.locacao) : null,
+              locacao: it.locacao && it.locacao.length > 0 ? JSON.stringify(it.locacao) : null,
               eap: it.eap || null,
               observacao: it.observacao || null,
               comentario: it.comentario || null,
@@ -749,7 +734,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         );
       }
 
-      // Inserir novos
       if (novos.length) {
         const inserts = novos.map((it) => ({
           projeto_id: projetoAtual.id,
@@ -758,8 +742,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
           descricao: it.descricao || null,
           unidade: it.unidade || null,
           quantidade: it.quantidade ? Number(it.quantidade) : null,
-          locacao:
-            it.locacao && it.locacao.length > 0 ? JSON.stringify(it.locacao) : null,
+          locacao: it.locacao && it.locacao.length > 0 ? JSON.stringify(it.locacao) : null,
           eap: it.eap || null,
           observacao: it.observacao || null,
           comentario: it.comentario || null,
@@ -774,7 +757,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         if (error) throw error;
       }
 
-      // Notificação
       const notificacoesParaInserir = setoresParaEnvio.map((setorId) => ({
         user_id: userIdLogado,
         remetente_id: userIdLogado,
@@ -790,9 +772,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         const { error: notifError } = await supabase
           .from("notificacoes")
           .insert(notificacoesParaInserir);
-        if (notifError) {
-          console.warn("Erro ao enviar notificações:", notifError);
-        }
+        if (notifError) console.warn("Erro ao enviar notificações:", notifError);
       }
 
       const setorId = setorSelecionado;
@@ -809,11 +789,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
       if (!pilhasRecebidos || pilhasRecebidos.length === 0) {
         const { data: novaPilha, error: insertError } = await supabase
           .from("pilhas")
-          .insert({
-            title: "Recebidos",
-            setor_id: setorId,
-            ordem: 0,
-          })
+          .insert({ title: "Recebidos", setor_id: setorId, ordem: 0 })
           .select("id")
           .single();
         if (insertError) throw insertError;
@@ -862,7 +838,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         notaEspelhoId = novaNota.id;
       }
 
-      // Clonar itens para o espelho
       const { data: itensOriginais, error: itensError } = await supabase
         .from("planilha_itens")
         .select("*")
@@ -879,8 +854,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
           try {
             if (typeof item.locacao === "string") {
               const parsed = JSON.parse(item.locacao);
-              if (Array.isArray(parsed)) locacaoArray = parsed;
-              else locacaoArray = item.locacao ? [item.locacao] : [];
+              locacaoArray = Array.isArray(parsed) ? parsed : item.locacao ? [item.locacao] : [];
             } else if (Array.isArray(item.locacao)) {
               locacaoArray = item.locacao;
             } else if (item.locacao != null) {
@@ -919,7 +893,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         if (insertItensError) throw insertItensError;
       }
 
-      // Marcar nota original como enviada
       await supabase
         .from("notas")
         .update({
@@ -954,11 +927,8 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
   const formatarData = (isoString) => {
     if (!isoString) return "";
     return new Date(isoString).toLocaleString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
+      day: "2-digit", month: "2-digit", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
     });
   };
 
@@ -994,6 +964,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
     );
   }
 
+  // Exibir em ordem reversa — mas usando _uid como chave, não índice
   const rowsParaExibir = [...rowsFiltradas].reverse();
 
   return (
@@ -1007,11 +978,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
           </div>
         </div>
         {onClose && (
-          <button
-            className="listagem-close-btn"
-            onClick={onClose}
-            aria-label="Fechar"
-          >
+          <button className="listagem-close-btn" onClick={onClose} aria-label="Fechar">
             <FaTimes />
           </button>
         )}
@@ -1040,8 +1007,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
       {avisosVisivelsProjeto.length > 0 && (
         <div className="listagem-avisos-container">
           {avisosVisivelsProjeto.map((aviso) => {
-            const diaLabel =
-              aviso.dia_semana != null ? DIAS_SEMANA[aviso.dia_semana] : null;
+            const diaLabel = aviso.dia_semana != null ? DIAS_SEMANA[aviso.dia_semana] : null;
             return (
               <div key={aviso.id} className="listagem-aviso-bar listagem-aviso-projeto">
                 <span className="listagem-aviso-texto">
@@ -1075,21 +1041,13 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         {(infoGerador || infoEnvio) && (
           <span>
             {infoGerador && (
-              <>
-                Gerado por <strong>{infoGerador.nome}</strong>
-              </>
+              <>Gerado por <strong>{infoGerador.nome}</strong></>
             )}
             {infoEnvio && (
-              <>
-                {" "}
-                e enviado por <strong>{infoEnvio.nome}</strong> em{" "}
-                {formatarData(infoEnvio.data)}
-              </>
+              <> e enviado por <strong>{infoEnvio.nome}</strong> em {formatarData(infoEnvio.data)}</>
             )}
             {infoRespondido && (
-              <>
-                {" "}— Respondido por <strong>{infoRespondido.nome}</strong>
-              </>
+              <> — Respondido por <strong>{infoRespondido.nome}</strong></>
             )}
           </span>
         )}
@@ -1136,7 +1094,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
             )}
           </div>
 
-          {/* ─── Botão Editar: aparece quando há itens salvos e não está editando ── */}
+          {/* ─── Botão Editar ── */}
           {rows.some((r) => r.id) && !modoEdicao && (
             <button
               className="edit-mode-btn"
@@ -1160,7 +1118,6 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
             {statusEnvio === "sucesso" && <Check />}
           </div>
 
-          {/* Botão PDF no canto direito */}
           <button
             className="export-pdf-btn"
             onClick={handleExportarPDF}
@@ -1172,7 +1129,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
         </div>
       )}
 
-      {/* ─── Barra pós-envio: PDF sempre disponível ──────────────────────── */}
+      {/* ─── Barra pós-envio ──────────────────────────────────────────────── */}
       {listagemEnviada && (
         <div className="action-buttons">
           <button
@@ -1191,17 +1148,13 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
           {filtros.locacao && (
             <span className="filtro-tag">
               Locação: {filtros.locacao}
-              <button onClick={() => setFiltros((f) => ({ ...f, locacao: "" }))}>
-                ×
-              </button>
+              <button onClick={() => setFiltros((f) => ({ ...f, locacao: "" }))}>×</button>
             </span>
           )}
           {filtros.eap && (
             <span className="filtro-tag">
               EAP: {filtros.eap}
-              <button onClick={() => setFiltros((f) => ({ ...f, eap: "" }))}>
-                ×
-              </button>
+              <button onClick={() => setFiltros((f) => ({ ...f, eap: "" }))}>×</button>
             </span>
           )}
           <button
@@ -1237,26 +1190,16 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                 {filtroAbertoCol === "locacao" && (
                   <div ref={filtroRef} className="filtro-dropdown">
                     <div
-                      className={`filtro-option ${
-                        filtros.locacao === "" ? "filtro-option-selected" : ""
-                      }`}
-                      onClick={() => {
-                        setFiltros((f) => ({ ...f, locacao: "" }));
-                        setFiltroAbertoCol(null);
-                      }}
+                      className={`filtro-option ${filtros.locacao === "" ? "filtro-option-selected" : ""}`}
+                      onClick={() => { setFiltros((f) => ({ ...f, locacao: "" })); setFiltroAbertoCol(null); }}
                     >
                       Todos
                     </div>
                     {valoresUnicos("locacao").map((v) => (
                       <div
                         key={v}
-                        className={`filtro-option ${
-                          filtros.locacao === v ? "filtro-option-selected" : ""
-                        }`}
-                        onClick={() => {
-                          setFiltros((f) => ({ ...f, locacao: v }));
-                          setFiltroAbertoCol(null);
-                        }}
+                        className={`filtro-option ${filtros.locacao === v ? "filtro-option-selected" : ""}`}
+                        onClick={() => { setFiltros((f) => ({ ...f, locacao: v })); setFiltroAbertoCol(null); }}
                       >
                         {v}
                       </div>
@@ -1278,26 +1221,16 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                 {filtroAbertoCol === "eap" && (
                   <div ref={filtroRef} className="filtro-dropdown">
                     <div
-                      className={`filtro-option ${
-                        filtros.eap === "" ? "filtro-option-selected" : ""
-                      }`}
-                      onClick={() => {
-                        setFiltros((f) => ({ ...f, eap: "" }));
-                        setFiltroAbertoCol(null);
-                      }}
+                      className={`filtro-option ${filtros.eap === "" ? "filtro-option-selected" : ""}`}
+                      onClick={() => { setFiltros((f) => ({ ...f, eap: "" })); setFiltroAbertoCol(null); }}
                     >
                       Todos
                     </div>
                     {valoresUnicos("eap").map((v) => (
                       <div
                         key={v}
-                        className={`filtro-option ${
-                          filtros.eap === v ? "filtro-option-selected" : ""
-                        }`}
-                        onClick={() => {
-                          setFiltros((f) => ({ ...f, eap: v }));
-                          setFiltroAbertoCol(null);
-                        }}
+                        className={`filtro-option ${filtros.eap === v ? "filtro-option-selected" : ""}`}
+                        onClick={() => { setFiltros((f) => ({ ...f, eap: v })); setFiltroAbertoCol(null); }}
                       >
                         {v}
                       </div>
@@ -1307,26 +1240,27 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
               </th>
               <th>Observação</th>
               <th>Comentário</th>
-              {(!listagemEnviada) && <th style={{ width: "40px" }}>Ações</th>}
+              {!listagemEnviada && <th style={{ width: "40px" }}>Ações</th>}
             </tr>
           </thead>
           <tbody>
             {rowsParaExibir.map((row, visualIdx) => {
               const isCriar = row.codigo?.toLowerCase() === "criar";
               const foiEnviada = listagemEnviada;
-              // modoEdicao destrava tudo — como planilha normal
               const isLinhaCongelada = !modoEdicao && (foiEnviada || !!row.id);
               const podeEditarCodigo    = modoEdicao || (!row.id && !foiEnviada);
               const podeEditarDescricao = (modoEdicao && isCriar) || (isCriar && !foiEnviada);
               const podeEditarDemais    = modoEdicao || (!row.id && !foiEnviada);
               const nextRow = rowsParaExibir[visualIdx + 1];
               const isLastInGroup = !nextRow || nextRow.grupo_envio !== row.grupo_envio;
-              const indexOriginal = rows.findIndex((r) => r.ordem === row.ordem);
+
+              // ✅ CORREÇÃO PRINCIPAL: usa _uid como chave, não ordem/índice
+              const uid = row._uid;
 
               return (
-                <React.Fragment key={row.id ?? visualIdx}>
+                <React.Fragment key={uid}>
                   <tr className={isLinhaCongelada ? "linha-congelada" : ""}>
-                    <td>{row.ordem}</td>
+                    <td>{rowsParaExibir.length - visualIdx}</td>
                     <td>
                       {podeEditarCodigo ? (
                         <div className="codigo-com-lupa">
@@ -1334,28 +1268,22 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                             type="text"
                             value={row.codigo}
                             onChange={(e) => {
-                              handleInputChange(indexOriginal, "codigo", e.target.value);
-                              if (codigoErro.has(indexOriginal)) {
-                                setCodigoErro((prev) => {
-                                  const novo = new Set(prev);
-                                  novo.delete(indexOriginal);
-                                  return novo;
-                                });
+                              handleInputChange(uid, "codigo", e.target.value);
+                              if (codigoErro.has(uid)) {
+                                setCodigoErro((prev) => { const novo = new Set(prev); novo.delete(uid); return novo; });
                               }
                             }}
-                            onBlur={() => !isCriar && buscarItemPorCodigo(indexOriginal, row.codigo)}
-                            onKeyPress={(e) =>
-                              !isCriar && handleCodigoEnter(e, indexOriginal, row.codigo)
-                            }
+                            onBlur={() => !isCriar && buscarItemPorCodigo(uid, row.codigo)}
+                            onKeyPress={(e) => !isCriar && handleCodigoEnter(e, uid, row.codigo)}
                             placeholder="Código"
-                            className={codigoErro.has(indexOriginal) ? "codigo-invalido" : ""}
+                            className={codigoErro.has(uid) ? "codigo-invalido" : ""}
                           />
                           <button
                             type="button"
                             className="lupa-busca-btn"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setLinhaBuscaAtiva(indexOriginal);
+                              setLinhaBuscaAtiva(uid);
                               setBuscaInsumoAberta(true);
                             }}
                             title="Buscar insumo"
@@ -1373,9 +1301,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                           className="descri"
                           type="text"
                           value={row.descricao || ""}
-                          onChange={(e) =>
-                            handleInputChange(indexOriginal, "descricao", e.target.value)
-                          }
+                          onChange={(e) => handleInputChange(uid, "descricao", e.target.value)}
                           placeholder="Descrição do novo item"
                         />
                       ) : (
@@ -1386,15 +1312,11 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                       {podeEditarDemais && isCriar ? (
                         <select
                           value={row.unidade || ""}
-                          onChange={(e) =>
-                            handleInputChange(indexOriginal, "unidade", e.target.value)
-                          }
+                          onChange={(e) => handleInputChange(uid, "unidade", e.target.value)}
                         >
                           <option value=""></option>
                           {unidadesDisponiveis.map((un, i) => (
-                            <option key={i} value={un}>
-                              {un}
-                            </option>
+                            <option key={i} value={un}>{un}</option>
                           ))}
                         </select>
                       ) : (
@@ -1406,9 +1328,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                         <input
                           type="number"
                           value={row.quantidade ?? ""}
-                          onChange={(e) =>
-                            handleInputChange(indexOriginal, "quantidade", e.target.value)
-                          }
+                          onChange={(e) => handleInputChange(uid, "quantidade", e.target.value)}
                           min="0"
                           step="any"
                         />
@@ -1421,7 +1341,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                         <>
                           <div
                             className="locacao-trigger"
-                            onClick={() => setDropdownAberto(indexOriginal)}
+                            onClick={() => setDropdownAberto(uid)}
                           >
                             {row.locacao?.length === 0
                               ? "Selecionar"
@@ -1429,20 +1349,14 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                               ? row.locacao[0]
                               : `${row.locacao[0]} +`}
                           </div>
-                          {dropdownAberto === indexOriginal && (
+                          {dropdownAberto === uid && (
                             <div ref={dropdownRef} className="locacao-dropdown">
                               {locacoes.map((loc) => (
                                 <label key={loc} className="locacao-option">
                                   <input
                                     type="checkbox"
                                     checked={row.locacao?.includes(loc) || false}
-                                    onChange={(e) =>
-                                      handleLocacaoChange(
-                                        indexOriginal,
-                                        loc,
-                                        e.target.checked
-                                      )
-                                    }
+                                    onChange={(e) => handleLocacaoChange(uid, loc, e.target.checked)}
                                   />
                                   <span>{loc}</span>
                                 </label>
@@ -1453,14 +1367,8 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                       ) : (
                         <>
                           <div
-                            className={`locacao-resumo ${
-                              row.locacao?.length > 1 ? "locacao-resumo-clickable" : ""
-                            }`}
-                            onClick={() => {
-                              if (row.locacao?.length > 1) {
-                                setTooltipVisualizacao(row.id);
-                              }
-                            }}
+                            className={`locacao-resumo ${row.locacao?.length > 1 ? "locacao-resumo-clickable" : ""}`}
+                            onClick={() => { if (row.locacao?.length > 1) setTooltipVisualizacao(uid); }}
                           >
                             {row.locacao?.length === 0
                               ? "–"
@@ -1468,12 +1376,10 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                               ? row.locacao[0]
                               : `${row.locacao[0]} +`}
                           </div>
-                          {tooltipVisualizacao === row.id && (
+                          {tooltipVisualizacao === uid && (
                             <div ref={tooltipRef} className="locacao-tooltip">
                               {row.locacao.map((loc, i) => (
-                                <div key={i} className="locacao-tooltip-item">
-                                  • {loc}
-                                </div>
+                                <div key={i} className="locacao-tooltip-item">• {loc}</div>
                               ))}
                             </div>
                           )}
@@ -1484,15 +1390,11 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                       {podeEditarDemais ? (
                         <select
                           value={row.eap || ""}
-                          onChange={(e) =>
-                            handleInputChange(indexOriginal, "eap", e.target.value)
-                          }
+                          onChange={(e) => handleInputChange(uid, "eap", e.target.value)}
                         >
                           <option value=""></option>
                           {eaps.map((eap, i) => (
-                            <option key={i} value={eap}>
-                              {eap}
-                            </option>
+                            <option key={i} value={eap}>{eap}</option>
                           ))}
                         </select>
                       ) : (
@@ -1503,27 +1405,17 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                       {podeEditarDemais ? (
                         <textarea
                           value={row.observacao || ""}
-                          onChange={(e) => {
-                            const novas = [...rows];
-                            novas[indexOriginal].observacao = e.target.value;
-                            setRows(novas);
-                          }}
-                          onBlur={(e) =>
-                            handleObservacaoBlur(indexOriginal, e.target.value)
-                          }
+                          onChange={(e) => handleInputChange(uid, "observacao", e.target.value)}
+                          onBlur={(e) => handleObservacaoBlur(uid, e.target.value)}
                           className="observacao-textarea"
                           rows="1"
                         />
                       ) : (
-                        <div className="observacao-rendered">
-                          {row.observacao || ""}
-                        </div>
+                        <div className="observacao-rendered">{row.observacao || ""}</div>
                       )}
                     </td>
                     <td>
-                      <div className="observacao-rendered">
-                        {row.comentario || ""}
-                      </div>
+                      <div className="observacao-rendered">{row.comentario || ""}</div>
                     </td>
                     {!listagemEnviada && (
                       <td>
@@ -1531,10 +1423,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
                           {!foiEnviada && (
                             <FaTrash
                               className="delete-icon"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                removeRow(indexOriginal);
-                              }}
+                              onClick={(e) => { e.stopPropagation(); removeRow(uid); }}
                             />
                           )}
                         </div>
@@ -1551,10 +1440,7 @@ export default function Listagem({ projetoAtual, notaAtual, containerAtual, onSt
       {/* Modal de Busca de Insumo */}
       <BuscaInsumo
         isOpen={buscaInsumoAberta}
-        onClose={() => {
-          setBuscaInsumoAberta(false);
-          setLinhaBuscaAtiva(null);
-        }}
+        onClose={() => { setBuscaInsumoAberta(false); setLinhaBuscaAtiva(null); }}
         onSelect={(codigo) => {
           if (linhaBuscaAtiva !== null) {
             handleInputChange(linhaBuscaAtiva, "codigo", codigo);
