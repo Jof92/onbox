@@ -19,21 +19,33 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../supabaseClient";
 
-// ✅ Nova função: gera cor suave e única com base no ID
 const getConsistentColor = (str) => {
   if (!str) return "#81C784";
-
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     hash = str.charCodeAt(i) + ((hash << 5) - hash);
   }
-
   const hue = Math.abs(hash) % 360;
   return `hsl(${hue}, 65%, 60%)`;
 };
 
-// ✅ Componente de Card Arrastável
-function SortableProjectCard({ proj, onProjectClick }) {
+// ── Ícone de livro (Font Awesome fal book — SVG inline para não depender de lib) ──
+function BookIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 448 512"
+      width="15"
+      height="15"
+      fill="currentColor"
+    >
+      <path d="M448 360V24c0-13.3-10.7-24-24-24H96C43 0 0 43 0 96v320c0 53 43 96 96 96h328c13.3 0 24-10.7 24-24v-16c0-7.5-3.5-14.3-8.9-18.7-4.2-15.4-4.2-59.3 0-74.7 5.4-4.3 8.9-11.1 8.9-18.6zM128 134c0-3.3 2.7-6 6-6h212c3.3 0 6 2.7 6 6v20c0 3.3-2.7 6-6 6H134c-3.3 0-6-2.7-6-6v-20zm0 64c0-3.3 2.7-6 6-6h212c3.3 0 6 2.7 6 6v20c0 3.3-2.7 6-6 6H134c-3.3 0-6-2.7-6-6v-20zm253.4 250H96c-26.5 0-48-21.5-48-48s21.5-48 48-48h285.4c-1.9 17.1-1.9 78.9 0 96z"/>
+    </svg>
+  );
+}
+
+// ── Card de Projeto Arrastável ──
+function SortableProjectCard({ proj, onProjectClick, onViewDetails }) {
   const {
     attributes,
     listeners,
@@ -48,6 +60,7 @@ function SortableProjectCard({ proj, onProjectClick }) {
     transition,
     opacity: isDragging ? 0.5 : 1,
     cursor: isDragging ? "grabbing" : "grab",
+    position: "relative",
   };
 
   return (
@@ -59,6 +72,21 @@ function SortableProjectCard({ proj, onProjectClick }) {
       className="project-box"
       onClick={() => onProjectClick?.(proj)}
     >
+      {/* Botão de livro — abre EntityDetails */}
+      {onViewDetails && (
+        <button
+          className="project-box__details-btn"
+          title="Ver detalhes do projeto"
+          onClick={(e) => {
+            e.stopPropagation();
+            onViewDetails(proj);
+          }}
+          onPointerDown={(e) => e.stopPropagation()} // evita acionar drag
+        >
+          <BookIcon />
+        </button>
+      )}
+
       <div
         className="project-photo"
         style={{
@@ -78,7 +106,7 @@ function SortableProjectCard({ proj, onProjectClick }) {
   );
 }
 
-// ✅ Componente de Card de Setor Arrastável
+// ── Card de Setor Arrastável ──
 function SortableSetorCard({
   setor,
   onSetorClick,
@@ -111,7 +139,6 @@ function SortableSetorCard({
       className="project-box"
       onClick={() => onSetorClick?.(setor)}
     >
-      {/* Botão de ações (não arrasta) */}
       <div
         className="setor-actions-trigger"
         onClick={(e) => {
@@ -145,7 +172,6 @@ function SortableSetorCard({
         </div>
       )}
 
-      {/* Handle de arrasto */}
       <div {...listeners}>
         <div
           className="project-photo"
@@ -173,6 +199,7 @@ export default function ContainerGrid({
   onProjectClick,
   onSetorClick,
   onSetorAction,
+  onViewProjectDetails,   // ← nova prop: abre EntityDetails
   menuSetorAberto,
   setMenuSetorAberto,
   containerId,
@@ -181,19 +208,13 @@ export default function ContainerGrid({
   onReorderSetores,
 }) {
   const [projetosFiltrados, setProjetosFiltrados] = useState([]);
-  const [setoresFiltrados, setSetoresFiltrados] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [activeId, setActiveId] = useState(null);
+  const [setoresFiltrados, setSetoresFiltrados]   = useState([]);
+  const [loading, setLoading]                     = useState(true);
+  const [activeId, setActiveId]                   = useState(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8, // Evita conflito com cliques
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   useEffect(() => {
@@ -206,7 +227,6 @@ export default function ContainerGrid({
       }
 
       try {
-        // Se o usuário é o dono do container, mostra tudo
         if (currentUserId === containerId) {
           setProjetosFiltrados(projects);
           setSetoresFiltrados(setores);
@@ -214,7 +234,6 @@ export default function ContainerGrid({
           return;
         }
 
-        // Busca as permissões do colaborador
         const { data: permissoes, error } = await supabase
           .from("permissoes_colaboradores")
           .select("projeto_id, setor_id")
@@ -229,26 +248,11 @@ export default function ContainerGrid({
           return;
         }
 
-        // Extrai os IDs permitidos
-        const projetosPermitidos = permissoes
-          .filter((p) => p.projeto_id)
-          .map((p) => p.projeto_id);
+        const projetosPermitidos = permissoes.filter((p) => p.projeto_id).map((p) => p.projeto_id);
+        const setoresPermitidos  = permissoes.filter((p) => p.setor_id).map((p) => p.setor_id);
 
-        const setoresPermitidos = permissoes
-          .filter((p) => p.setor_id)
-          .map((p) => p.setor_id);
-
-        // Filtra os arrays
-        const projetosFiltrados = projects.filter((p) =>
-          projetosPermitidos.includes(p.id)
-        );
-
-        const setoresFiltrados = setores.filter((s) =>
-          setoresPermitidos.includes(s.id)
-        );
-
-        setProjetosFiltrados(projetosFiltrados);
-        setSetoresFiltrados(setoresFiltrados);
+        setProjetosFiltrados(projects.filter((p) => projetosPermitidos.includes(p.id)));
+        setSetoresFiltrados(setores.filter((s) => setoresPermitidos.includes(s.id)));
       } catch (err) {
         console.error("Erro ao filtrar permissões:", err);
         setProjetosFiltrados([]);
@@ -261,58 +265,36 @@ export default function ContainerGrid({
     filtrarPorPermissoes();
   }, [projects, setores, currentUserId, containerId]);
 
-  const handleDragStart = (event) => {
-    setActiveId(event.active.id);
-  };
+  const handleDragStart = (event) => setActiveId(event.active.id);
 
   const handleDragEnd = (event) => {
     const { active, over } = event;
-
     setActiveId(null);
+    if (!over || active.id === over.id) return;
 
-    if (!over || active.id === over.id) {
-      return;
-    }
-
-    // Verifica se é projeto ou setor baseado no ID
     const isProject = projetosFiltrados.some((p) => p.id === active.id);
-
     if (isProject) {
       const oldIndex = projetosFiltrados.findIndex((p) => p.id === active.id);
       const newIndex = projetosFiltrados.findIndex((p) => p.id === over.id);
-
       const newOrder = arrayMove(projetosFiltrados, oldIndex, newIndex);
       setProjetosFiltrados(newOrder);
-
-      if (onReorderProjects) {
-        onReorderProjects(newOrder);
-      }
+      onReorderProjects?.(newOrder);
     } else {
       const oldIndex = setoresFiltrados.findIndex((s) => s.id === active.id);
       const newIndex = setoresFiltrados.findIndex((s) => s.id === over.id);
-
       const newOrder = arrayMove(setoresFiltrados, oldIndex, newIndex);
       setSetoresFiltrados(newOrder);
-
-      if (onReorderSetores) {
-        onReorderSetores(newOrder);
-      }
+      onReorderSetores?.(newOrder);
     }
   };
 
-  if (loading) {
-    return <p className="no-projects">Carregando...</p>;
-  }
+  if (loading) return <p className="no-projects">Carregando...</p>;
 
   const temConteudo = projetosFiltrados.length > 0 || setoresFiltrados.length > 0;
-
-  if (!temConteudo) {
-    return <p className="no-projects">Tudo calmo por aqui ainda...</p>;
-  }
+  if (!temConteudo) return <p className="no-projects">Tudo calmo por aqui ainda...</p>;
 
   return (
     <>
-      {/* Projetos */}
       {projetosFiltrados.length > 0 && (
         <DndContext
           sensors={sensors}
@@ -330,6 +312,7 @@ export default function ContainerGrid({
                   key={proj.id}
                   proj={proj}
                   onProjectClick={onProjectClick}
+                  onViewDetails={onViewProjectDetails}
                 />
               ))}
             </div>
@@ -337,7 +320,6 @@ export default function ContainerGrid({
         </DndContext>
       )}
 
-      {/* Setores */}
       {setoresFiltrados.length > 0 && (
         <>
           {projetosFiltrados.length > 0 && <hr className="setores-divider" />}

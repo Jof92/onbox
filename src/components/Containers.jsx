@@ -188,7 +188,6 @@ function CalculadoraWindow({ historico, onClose }) {
       className="calc-window"
       style={{ left: pos.x, top: pos.y, cursor: dragging ? "grabbing" : "default" }}
     >
-      {/* Barra de título — área de arrasto */}
       <div
         className="calc-window__titlebar"
         onMouseDown={onMouseDown}
@@ -203,7 +202,6 @@ function CalculadoraWindow({ historico, onClose }) {
         </button>
       </div>
 
-      {/* Corpo da calculadora */}
       <div className="calc-window__body">
         <div className="incc-calc__field">
           <label>Valor original (R$)</label>
@@ -282,14 +280,17 @@ function CalculadoraWindow({ historico, onClose }) {
 export default function Containers({ containerIdDaUrl }) {
   const navigate = useNavigate();
 
-  const [user, setUser] = useState(null);
+  const [user, setUser]                     = useState(null);
   const [containerAtual, setContainerAtual] = useState(null);
-  const [nomeContainer, setNomeContainer] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [nomeContainer, setNomeContainer]   = useState("");
+  const [loading, setLoading]               = useState(true);
 
-  const [inccUltimo, setInccUltimo] = useState(null);
+  const [inccUltimo, setInccUltimo]       = useState(null);
   const [inccHistorico, setInccHistorico] = useState([]);
   const [showCalculadora, setShowCalculadora] = useState(false);
+
+  // ── Estado de sidebar recolhida ──
+  const [sidebarRecolhida, setSidebarRecolhida] = useState(false);
 
   const [sidebarProps, setSidebarProps] = useState({
     projects: [],
@@ -356,8 +357,25 @@ export default function Containers({ containerIdDaUrl }) {
   return (
     <div className="containers-page">
       <div className="containers-content">
-        <ThinSidebar containerAtual={containerAtual} setContainerAtual={setContainerAtual} user={user} />
-        <Sidebar {...sidebarProps} currentContainerId={containerAtual} />
+
+        {/* ThinSidebar recebe estado de recolhimento e callbacks do Box */}
+        <ThinSidebar
+          containerAtual={containerAtual}
+          setContainerAtual={setContainerAtual}
+          user={user}
+          sidebarRecolhida={sidebarRecolhida}
+          setSidebarRecolhida={setSidebarRecolhida}
+          onCreateProject={sidebarProps.onCreateProject}
+          onOpenSetoresManager={sidebarProps.onOpenSetoresManager}
+        />
+
+        {/* Sidebar recebe prop recolhida e callback para recolher */}
+        <Sidebar
+          {...sidebarProps}
+          currentContainerId={containerAtual}
+          recolhida={sidebarRecolhida}
+          onRecolher={() => setSidebarRecolhida(true)}
+        />
 
         <div className="containers-main-with-title">
           <div className="title-bar">
@@ -378,7 +396,11 @@ export default function Containers({ containerIdDaUrl }) {
             </div>
           </div>
 
-          <ProjectManager containerAtual={containerAtual} user={user} onSidebarUpdate={setSidebarProps} />
+          <ProjectManager
+            containerAtual={containerAtual}
+            user={user}
+            onSidebarUpdate={setSidebarProps}
+          />
         </div>
       </div>
 

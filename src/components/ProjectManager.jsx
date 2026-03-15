@@ -77,24 +77,29 @@ export default function ProjectManager({ containerAtual, user, onSidebarUpdate }
   };
 
   const fetchProjects = async (userId) => {
-    if (!userId) {
-      setProjects([]);
-      return;
-    }
-
-    try {
-      const { data: projectsData, error: projectsError } = await supabase
-        .from("projects")
-        .select(`*, pavimentos(*), eap(*)`)
-        .eq("user_id", userId)
-        .order("ordem_display", { ascending: true, nullsFirst: false })
-        .order("created_at", { ascending: false });
-
-      if (projectsError) throw projectsError;
-
-      const enhancedProjects = [];
-      for (const proj of projectsData || []) {
-        try {
+  if (!userId) {
+    setProjects([]);
+    return;
+  }
+ 
+  try {
+    const { data: projectsData, error: projectsError } = await supabase
+      .from("projects")
+      .select(`*, pavimentos(*), eap(*)`)
+      .eq("user_id", userId)
+      .order("ordem_display", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: false });
+ 
+    if (projectsError) throw projectsError;
+ 
+    const enhancedProjects = [];
+    for (const proj of projectsData || []) {
+      try {
+        // 1. Prioridade: photo_url direto na tabela projects (salvo pelo EntityDetails)
+        let photoUrl = proj.photo_url || null;
+ 
+        // 2. Fallback: tabela projects_photos (salvo pelo ProjectForm legado)
+        if (!photoUrl) {
           const { data: photoData } = await supabase
             .from("projects_photos")
             .select("photo_url")
@@ -102,52 +107,54 @@ export default function ProjectManager({ containerAtual, user, onSidebarUpdate }
             .order("created_at", { ascending: false })
             .limit(1)
             .single();
-
-          const { data: membersData } = await supabase
-            .from("project_members")
-            .select("user_id")
-            .eq("project_id", proj.id);
-
-          let membrosDetalhados = [];
-          if (membersData?.length) {
-            const userIds = membersData.map(m => m.user_id);
-            const { data: perfis } = await supabase
-              .from("profiles")
-              .select("id, nickname, avatar_url")
-              .in("id", userIds);
-            membrosDetalhados = perfis || [];
-          }
-
-          const sortedPavimentos = [...(proj.pavimentos || [])].sort(
-            (a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)
-          );
-          const sortedEap = [...(proj.eap || [])].sort(
-            (a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)
-          );
-
-          enhancedProjects.push({
-            ...proj,
-            pavimentos: sortedPavimentos,
-            eap: sortedEap,
-            photo_url: photoData?.photo_url || null,
-            membros: membrosDetalhados,
-          });
-        } catch (err) {
-          enhancedProjects.push({
-            ...proj,
-            pavimentos: proj.pavimentos || [],
-            eap: proj.eap || [],
-            photo_url: null,
-            membros: [],
-          });
+          photoUrl = photoData?.photo_url || null;
         }
+ 
+        const { data: membersData } = await supabase
+          .from("project_members")
+          .select("user_id")
+          .eq("project_id", proj.id);
+ 
+        let membrosDetalhados = [];
+        if (membersData?.length) {
+          const userIds = membersData.map(m => m.user_id);
+          const { data: perfis } = await supabase
+            .from("profiles")
+            .select("id, nickname, avatar_url")
+            .in("id", userIds);
+          membrosDetalhados = perfis || [];
+        }
+ 
+        const sortedPavimentos = [...(proj.pavimentos || [])].sort(
+          (a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)
+        );
+        const sortedEap = [...(proj.eap || [])].sort(
+          (a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)
+        );
+ 
+        enhancedProjects.push({
+          ...proj,
+          pavimentos: sortedPavimentos,
+          eap: sortedEap,
+          photo_url: photoUrl,
+          membros: membrosDetalhados,
+        });
+      } catch (err) {
+        enhancedProjects.push({
+          ...proj,
+          pavimentos: proj.pavimentos || [],
+          eap: proj.eap || [],
+          photo_url: proj.photo_url || null,
+          membros: [],
+        });
       }
-      setProjects(enhancedProjects);
-    } catch (err) {
-      setError("Erro ao carregar projetos");
-      setProjects([]);
     }
-  };
+    setProjects(enhancedProjects);
+  } catch (err) {
+    setError("Erro ao carregar projetos");
+    setProjects([]);
+  }
+};
 
   const fetchSetores = async (userId) => {
     if (!userId) {
@@ -710,6 +717,7 @@ export default function ProjectManager({ containerAtual, user, onSidebarUpdate }
             setProjects(prev => prev.map(p => p.id === updated.id ? { ...p, ...updated } : p));
           }}
           canEdit={canEditEntity(selectedProject)}
+          containerId={containerAtual}
         >
         </EntityDetails>
       ) : (
@@ -732,6 +740,7 @@ export default function ProjectManager({ containerAtual, user, onSidebarUpdate }
           currentUserId={currentUserId}
           onReorderProjects={handleReorderProjects}
           onReorderSetores={handleReorderSetores}
+          onViewProjectDetails={(proj) => setSelectedProject(proj)}
         />
       )}
 

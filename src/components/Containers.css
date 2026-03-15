@@ -432,7 +432,7 @@
 .setores-divider {
   margin: 24px 0;
   border: 0;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid #f6e1a7;
 }
 
 .setores-section {
@@ -846,6 +846,44 @@
   box-sizing: border-box;
 }
 
+/* ── Botão de detalhes (livro) no canto superior direito do card ── */
+.project-box {
+  position: relative; /* garante que o botão se posicione corretamente */
+}
+
+.project-box__details-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: #bf9010;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.18s ease, background 0.18s ease, transform 0.15s ease;
+  backdrop-filter: blur(4px);
+}
+
+/* Mostra o botão ao passar o mouse no card */
+.project-box:hover .project-box__details-btn {
+  opacity: 1;
+}
+
+.project-box__details-btn:hover {
+  background: #f0f1f9;
+  border-color: #bf9010;
+  transform: scale(1.1);
+}
+
+.project-box__details-btn:active {
+  transform: scale(0.95);
+}
+
 /* ===== Responsividade ===== */
 @media (max-width: 767px) {
   .tittle-cont {
@@ -899,3 +937,4 @@
     gap: 15px;
   }
 }
+

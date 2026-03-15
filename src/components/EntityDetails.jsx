@@ -6,6 +6,7 @@ import dataTransferImage from "../assets/data-transfer.png";
 import "./EntityDetails.css";
 
 const INCC_API_URL = "https://incc-api.onrender.com";
+const FOTO_BUCKET  = "projects_photos";
 
 /* ─── helpers ────────────────────────────────────────────────────────────── */
 const formatarData = (data) => {
@@ -43,10 +44,9 @@ const encontrarIndiceParaData = (historico, data) => {
   return melhor;
 };
 
-/* ─── busca membros do projeto (2 queries, sem join) ────────────────────── */
+/* ─── busca membros do projeto ───────────────────────────────────────────── */
 async function fetchMembrosDoProject(projectId) {
   if (!projectId) return [];
-  // 1. busca os user_ids
   const { data: rows, error } = await supabase
     .from("project_members")
     .select("user_id")
@@ -57,7 +57,6 @@ async function fetchMembrosDoProject(projectId) {
   }
   const ids = rows.map((r) => r.user_id).filter(Boolean);
   if (!ids.length) return [];
-  // 2. busca os perfis em separado
   const { data: perfis, error: errP } = await supabase
     .from("profiles")
     .select("id, nickname, avatar_url")
@@ -66,57 +65,74 @@ async function fetchMembrosDoProject(projectId) {
   return perfis || [];
 }
 
-/* ─── salva membros (delete + insert) ───────────────────────────────────── */
+/* ─── salva membros ──────────────────────────────────────────────────────── */
 async function saveMembros(projectId, membros, addedBy) {
   if (!projectId) return;
-
-  console.log("[saveMembros] projectId:", projectId);
-  console.log("[saveMembros] membros a salvar:", membros.map((m) => ({ id: m.id, nickname: m.nickname })));
-  console.log("[saveMembros] addedBy:", addedBy);
-
-  // DELETE
-  const { error: delErr, count: delCount } = await supabase
+  const { error: delErr } = await supabase
     .from("project_members")
     .delete()
     .eq("project_id", projectId);
-
-  if (delErr) {
-    console.error("[saveMembros] ERRO no DELETE:", delErr);
-    throw new Error(`Erro ao remover membros antigos: ${delErr.message}`);
-  }
-  console.log("[saveMembros] DELETE ok, linhas removidas:", delCount);
-
-  if (!membros.length) {
-    console.log("[saveMembros] nenhum membro para inserir, fim.");
-    return;
-  }
-
+  if (delErr) throw new Error(`Erro ao remover membros antigos: ${delErr.message}`);
+  if (!membros.length) return;
   const inserts = membros.map((m) => ({
     project_id: projectId,
     user_id:    m.id,
     added_by:   addedBy || m.id,
   }));
-  console.log("[saveMembros] INSERT payload:", inserts);
-
-  const { data: insData, error: insErr } = await supabase
-    .from("project_members")
-    .insert(inserts)
-    .select();
-
-  if (insErr) {
-    console.error("[saveMembros] ERRO no INSERT:", insErr);
-    throw new Error(`Erro ao salvar membros: ${insErr.message}`);
-  }
-  console.log("[saveMembros] INSERT ok, linhas inseridas:", insData);
+  const { error: insErr } = await supabase.from("project_members").insert(inserts).select();
+  if (insErr) throw new Error(`Erro ao salvar membros: ${insErr.message}`);
 }
 
-/* ─── Avatar com iniciais legíveis ──────────────────────────────────────── */
+/* ─── upload de foto ─────────────────────────────────────────────────────── */
+async function uploadFotoProjeto(projectId, file) {
+  const ext  = file.name.split(".").pop().toLowerCase();
+  const path = `${projectId}.${ext}`;
+
+  console.log("[uploadFoto] bucket:", FOTO_BUCKET, "| path:", path, "| size:", file.size, "| type:", file.type);
+
+  const { data: upData, error: upErr } = await supabase.storage
+    .from(FOTO_BUCKET)
+    .upload(path, file, {
+      upsert:       true,
+      contentType:  file.type || `image/${ext}`,
+      cacheControl: "3600",
+    });
+
+  if (upErr) {
+    console.error("[uploadFoto] ERRO upload:", upErr);
+    throw new Error(`Erro no upload da foto: ${upErr.message}`);
+  }
+  console.log("[uploadFoto] upload ok:", upData);
+
+  const { data: urlData } = supabase.storage
+    .from(FOTO_BUCKET)
+    .getPublicUrl(path);
+
+  // cache-buster para forçar reload após upsert
+  const url = `${urlData.publicUrl}?v=${Date.now()}`;
+  console.log("[uploadFoto] URL pública:", url);
+  return url;
+}
+
+async function removerFotoProjeto(photoUrl) {
+  try {
+    const match = photoUrl.match(new RegExp(`${FOTO_BUCKET}/(.+?)(?:\\?|$)`));
+    const path  = match?.[1];
+    if (!path) return;
+    console.log("[removerFoto] removendo path:", path);
+    const { error } = await supabase.storage.from(FOTO_BUCKET).remove([path]);
+    if (error) console.warn("[removerFoto] aviso:", error.message);
+  } catch (e) {
+    console.warn("[removerFoto] erro ignorado:", e);
+  }
+}
+
+/* ─── Avatar com iniciais ────────────────────────────────────────────────── */
 function hashColor(str) {
   if (!str) return { bg: "#4a6fa5", fg: "#ffffff" };
   let h = 0;
   for (let i = 0; i < str.length; i++) h = str.charCodeAt(i) + ((h << 5) - h);
   const hue = Math.abs(h) % 360;
-  // lightness 38-48% → sempre escuro o suficiente para texto branco
   const sat = 50 + (Math.abs(h >> 4) % 20);
   const lig = 38 + (Math.abs(h >> 8) % 10);
   return { bg: `hsl(${hue},${sat}%,${lig}%)`, fg: "#ffffff" };
@@ -152,8 +168,7 @@ function ProjectAvatar({ name, photoUrl, size = 62 }) {
   return (
     <div style={{ ...style, backgroundColor: bg, color: fg,
       fontSize: fs, fontWeight: 800, letterSpacing: "0px",
-      fontFamily: "'Segoe UI', Arial, sans-serif",
-      userSelect: "none",
+      fontFamily: "'Segoe UI', Arial, sans-serif", userSelect: "none",
     }}>
       {initials}
     </div>
@@ -242,9 +257,9 @@ function ImportarPopover({ containerId, currentProjectId, anchorRef, onImport, o
 
   const togglePav = (id) => setSelPavimentos((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
   const toggleEap = (id) => setSelEap((p)        => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
-  const hasPavs = (detalhes?.pavimentos ?? []).length > 0;
-  const hasEaps = (detalhes?.eap        ?? []).length > 0;
-  const totalSel = selPavimentos.length + selEap.length;
+  const hasPavs   = (detalhes?.pavimentos ?? []).length > 0;
+  const hasEaps   = (detalhes?.eap        ?? []).length > 0;
+  const totalSel  = selPavimentos.length + selEap.length;
 
   const handleImport = () => {
     const pav = (detalhes?.pavimentos ?? []).filter((p) => selPavimentos.includes(p.id)).map((p) => ({ id: null, nome: p.name, _tempId: Math.random() }));
@@ -337,6 +352,100 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
   const [showImportPopover, setShowImportPopover] = useState(false);
   const importBtnRef = useRef(null);
 
+  /* ─── Foto ──────────────────────────────────────────────────────────────── */
+  const [fotoPreview, setFotoPreview]   = useState(entity.photo_url ?? null);
+  const [fotoFile, setFotoFile]         = useState(null);
+  const [fotoRemovida, setFotoRemovida] = useState(false);
+  const fotoInputRef                    = useRef(null);
+
+  // ─── Crop ────────────────────────────────────────────────────────────────
+  const [cropSrc, setCropSrc]     = useState(null);
+  const [cropOffset, setCropOffset] = useState({ x: 0, y: 0 });
+  const [cropScale, setCropScale] = useState(1);
+  const cropImgRef                = useRef(null);
+  const CROP_SIZE                 = 280;
+
+  const handleFotoChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (fotoInputRef.current) fotoInputRef.current.value = "";
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.max(CROP_SIZE / img.width, CROP_SIZE / img.height);
+      setCropScale(scale);
+      setCropOffset({ x: (CROP_SIZE - img.width * scale) / 2, y: (CROP_SIZE - img.height * scale) / 2 });
+      cropImgRef.current = img;
+      setCropSrc(url);
+    };
+    img.src = url;
+  };
+
+  const handleRemoverFoto = () => {
+    setFotoFile(null); setFotoRemovida(true); setFotoPreview(null); setCropSrc(null);
+    if (fotoInputRef.current) fotoInputRef.current.value = "";
+  };
+
+  const handleCropMouseDown = (e) => {
+    e.preventDefault();
+    const start = { mx: e.clientX, my: e.clientY, ox: cropOffset.x, oy: cropOffset.y };
+    const clamp = (nx, ny, sc) => {
+      const img = cropImgRef.current; if (!img) return { x: nx, y: ny };
+      const iw = img.width * sc, ih = img.height * sc;
+      return {
+        x: Math.max(Math.min(0, CROP_SIZE - iw), Math.min(Math.max(0, CROP_SIZE - iw), nx)),
+        y: Math.max(Math.min(0, CROP_SIZE - ih), Math.min(Math.max(0, CROP_SIZE - ih), ny)),
+      };
+    };
+    const onMove = (ev) => setCropOffset(clamp(start.ox + ev.clientX - start.mx, start.oy + ev.clientY - start.my, cropScale));
+    const onUp   = () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  const handleCropTouchStart = (e) => {
+    const t0 = e.touches[0];
+    const start = { mx: t0.clientX, my: t0.clientY, ox: cropOffset.x, oy: cropOffset.y };
+    const clamp = (nx, ny, sc) => {
+      const img = cropImgRef.current; if (!img) return { x: nx, y: ny };
+      const iw = img.width * sc, ih = img.height * sc;
+      return {
+        x: Math.max(Math.min(0, CROP_SIZE - iw), Math.min(Math.max(0, CROP_SIZE - iw), nx)),
+        y: Math.max(Math.min(0, CROP_SIZE - ih), Math.min(Math.max(0, CROP_SIZE - ih), ny)),
+      };
+    };
+    const onMove = (ev) => { const tc = ev.touches[0]; setCropOffset(clamp(start.ox + tc.clientX - start.mx, start.oy + tc.clientY - start.my, cropScale)); };
+    const onEnd  = () => { window.removeEventListener("touchmove", onMove); window.removeEventListener("touchend", onEnd); };
+    window.addEventListener("touchmove", onMove, { passive: true });
+    window.addEventListener("touchend", onEnd);
+  };
+
+  const handleCropZoom = (e) => {
+    const ns = parseFloat(e.target.value);
+    const img = cropImgRef.current; if (!img) return;
+    const iw = img.width * ns, ih = img.height * ns;
+    setCropOffset(prev => ({
+      x: Math.max(Math.min(0, CROP_SIZE - iw), Math.min(Math.max(0, CROP_SIZE - iw), prev.x)),
+      y: Math.max(Math.min(0, CROP_SIZE - ih), Math.min(Math.max(0, CROP_SIZE - ih), prev.y)),
+    }));
+    setCropScale(ns);
+  };
+
+  const confirmarCrop = () => {
+    const img = cropImgRef.current; if (!img) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = CROP_SIZE; canvas.height = CROP_SIZE;
+    canvas.getContext("2d").drawImage(img, cropOffset.x, cropOffset.y, img.width * cropScale, img.height * cropScale);
+    canvas.toBlob((blob) => {
+      const f = new File([blob], "foto_projeto.jpg", { type: "image/jpeg" });
+      setFotoFile(f); setFotoRemovida(false);
+      setFotoPreview(URL.createObjectURL(blob));
+      setCropSrc(null);
+    }, "image/jpeg", 0.92);
+  };
+
+
+  /* ─── Pavimentos / EAP ──────────────────────────────────────────────────── */
   const [pavimentosEdit, setPavimentosEdit] = useState(
     (entity.pavimentos || []).map((p) => ({ id: p?.id ?? null, nome: typeof p === "string" ? p : (p?.name ?? p?.nome ?? ""), _tempId: Math.random() }))
   );
@@ -348,7 +457,7 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
   const dragPav = useDragSort(setPavimentosEdit);
   const dragEap = useDragSort(setEapEdit);
 
-  // ─── Avisos do projeto ────────────────────────────────────────────────────
+  /* ─── Avisos ────────────────────────────────────────────────────────────── */
   const DIAS = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
   const [avisos, setAvisos]       = useState([]);
   const [novoAviso, setNovoAviso] = useState({ texto: "", dia_semana: "" });
@@ -373,34 +482,42 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
 
   const removeAviso = (idx) => setAvisos((prev) => prev.filter((_, i) => i !== idx));
 
-  /* Carrega perfis disponíveis */
+  /* ─── Perfis ────────────────────────────────────────────────────────────── */
   useEffect(() => {
     (async () => {
-      const cid = containerId || entity?.container_id;
-      if (!cid) {
-        const { data } = await supabase.from("profiles").select("id, nickname, avatar_url");
-        if (data) setProfiles(data);
-        return;
-      }
-      const { data: convites } = await supabase.from("convites").select("user_id").eq("container_id", cid).eq("status", "aceito");
-      if (!convites?.length) return;
-      const ids = convites.map((c) => c.user_id).filter(Boolean);
-      if (!ids.length) return;
-      const { data: perfis } = await supabase.from("profiles").select("id, nickname, avatar_url").in("id", ids);
+      // Tenta todas as fontes possíveis do container owner
+      const cid = containerId || entity?.container_id || entity?.user_id;
+      if (!cid) return;
+
+      // Comeca com o proprio dono do container
+      const idsSet = new Set([cid]);
+
+      // Adiciona convidados com status aceito
+      // container_id = dono do container que enviou o convite
+      const { data: convites } = await supabase
+        .from("convites")
+        .select("user_id")
+        .eq("container_id", cid)
+        .eq("status", "aceito");
+
+      (convites || []).forEach((c) => { if (c.user_id) idsSet.add(c.user_id); });
+
+      const ids = [...idsSet];
+      const { data: perfis } = await supabase
+        .from("profiles")
+        .select("id, nickname, avatar_url")
+        .in("id", ids);
+
       if (perfis) setProfiles(perfis);
     })();
   }, [containerId, entity?.container_id]);
 
-  /* Carrega membros já salvos → pré-marca checkboxes */
   useEffect(() => {
     if (!entity?.id) return;
-    fetchMembrosDoProject(entity.id).then((membros) => {
-      console.log("[ModalEdicao] membros carregados:", membros);
-      setMembrosSelecionados(membros);
-    });
+    fetchMembrosDoProject(entity.id).then(setMembrosSelecionados);
   }, [entity?.id]);
 
-  /* Valores de orçamento dos EAPs */
+  /* ─── EAP valores ───────────────────────────────────────────────────────── */
   useEffect(() => {
     if (!eap?.length) return;
     const ids = eap.map((e) => e?.id).filter(Boolean);
@@ -430,11 +547,25 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
     prev.find((m) => m.id === p.id) ? prev.filter((m) => m.id !== p.id) : [...prev, p]
   );
 
+  /* ─── handleSave ────────────────────────────────────────────────────────── */
   const handleSave = async () => {
     setSalvando(true); setErro("");
     try {
-      /* 1. projeto */
+      /* 1 ── foto */
+      let novaFotoUrl = entity.photo_url ?? null;
+
+      if (fotoFile) {
+        novaFotoUrl = await uploadFotoProjeto(entity.id, fotoFile);
+      } else if (fotoRemovida && entity.photo_url) {
+        await removerFotoProjeto(entity.photo_url);
+        novaFotoUrl = null;
+      }
+
+      console.log("[handleSave] photo_url final:", novaFotoUrl);
+
+      /* 2 ── projeto */
       const updateProject = {
+        photo_url:           novaFotoUrl,
         data_inicio:         form.data_inicio      || null,
         data_finalizacao:    form.data_finalizacao || null,
         engenheiro_id:       form.engenheiro_id    || null,
@@ -442,15 +573,22 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
         indice_incc_atual:   inccAtual?.indice     ?? null,
         orcamento_corrigido: totalCorrigido        ?? null,
       };
-      const { error: errProj } = await supabase.from("projects").update(updateProject).eq("id", entity.id);
-      if (errProj) throw errProj;
 
-      /* 2. membros */
+      const { error: errProj } = await supabase
+        .from("projects")
+        .update(updateProject)
+        .eq("id", entity.id);
+      if (errProj) {
+        console.error("[handleSave] ERRO update projects:", errProj);
+        throw new Error(errProj.message);
+      }
+      console.log("[handleSave] projects atualizado ok, photo_url:", novaFotoUrl);
+
+      /* 3 ── membros */
       const { data: { user } } = await supabase.auth.getUser();
       await saveMembros(entity.id, membrosSelecionados, user?.id);
-      console.log("[handleSave] membros salvos:", membrosSelecionados.map((m) => m.id));
 
-      /* 3. pavimentos */
+      /* 4 ── pavimentos */
       const idsOrigPav  = (entity.pavimentos || []).map((p) => p?.id).filter(Boolean);
       const idsAtualPav = pavimentosEdit.map((p) => p.id).filter(Boolean);
       const removPav    = idsOrigPav.filter((id) => !idsAtualPav.includes(id));
@@ -461,7 +599,7 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
         else      await supabase.from("pavimentos").insert({ name: p.nome, project_id: entity.id, ordem: i });
       }
 
-      /* 4. EAP */
+      /* 5 ── EAP */
       const idsOrigEap  = (entity.eap || []).map((e) => e?.id).filter(Boolean);
       const idsAtualEap = eapEdit.map((e) => e.id).filter(Boolean);
       const removEap    = idsOrigEap.filter((id) => !idsAtualEap.includes(id));
@@ -475,39 +613,29 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
         else      await supabase.from("eap").insert({ name: e.nome, project_id: entity.id, ordem: i, orcamento_base: orcBase });
       }
 
-      /* 5. Avisos */
-      const { error: errDelAvisos } = await supabase
-        .from("project_avisos").delete().eq("project_id", entity.id);
-      if (errDelAvisos) {
-        console.error("[handleSave] ERRO ao deletar avisos:", errDelAvisos);
-        throw new Error(`Erro ao limpar avisos: ${errDelAvisos.message}`);
-      }
+      /* 6 ── avisos */
+      await supabase.from("project_avisos").delete().eq("project_id", entity.id);
       const avisosParaInserir = avisos.filter((a) => a.texto?.trim()).map((a) => ({
         project_id: entity.id,
         texto:      a.texto.trim(),
         dia_semana: a.dia_semana ?? null,
       }));
-      console.log("[handleSave] avisos para inserir:", avisosParaInserir);
       if (avisosParaInserir.length) {
-        const { error: errInsAvisos } = await supabase
-          .from("project_avisos").insert(avisosParaInserir);
-        if (errInsAvisos) {
-          console.error("[handleSave] ERRO ao inserir avisos:", errInsAvisos);
-          throw new Error(`Erro ao salvar avisos: ${errInsAvisos.message}`);
-        }
-        console.log("[handleSave] avisos salvos com sucesso:", avisosParaInserir.length);
+        const { error: errAv } = await supabase.from("project_avisos").insert(avisosParaInserir);
+        if (errAv) throw new Error(`Erro ao salvar avisos: ${errAv.message}`);
       }
 
       onSave({
-        ...entity, ...updateProject,
-        _membrosAtualizados: membrosSelecionados,   // ← sinal para o pai recarregar
+        ...entity,
+        ...updateProject,
+        _membrosAtualizados: membrosSelecionados,
         pavimentos: pavimentosEdit.map((p) => ({ id: p.id, name: p.nome })),
         eap:        eapEdit.map((e)        => ({ id: e.id, name: e.nome })),
       });
       onClose();
     } catch (err) {
       console.error("[handleSave] erro:", err);
-      setErro("Erro ao salvar. Verifique os dados e tente novamente.");
+      setErro(err?.message || "Erro ao salvar. Verifique os dados e tente novamente.");
     } finally { setSalvando(false); }
   };
 
@@ -520,7 +648,117 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
         </div>
         <div className="ed-modal-body">
 
-          {/* Datas */}
+          {/* ── Foto do Projeto ── */}
+          <div className="ed-modal-section">
+            <p className="ed-modal-section-title">Foto do Projeto</p>
+
+            {/* ── Crop UI ── */}
+            {cropSrc ? (
+              <div className="ed-crop-container">
+                <div
+                  className="ed-crop-viewport"
+                  style={{ width: CROP_SIZE, height: CROP_SIZE }}
+                  onMouseDown={handleCropMouseDown}
+                  onTouchStart={handleCropTouchStart}
+                >
+                  {/* grade de referência */}
+                  <div className="ed-crop-grid" />
+                  {/* imagem arrastável */}
+                  <img
+                    src={cropSrc}
+                    alt=""
+                    draggable={false}
+                    style={{
+                      position: "absolute",
+                      left: cropOffset.x,
+                      top:  cropOffset.y,
+                      width:  cropImgRef.current ? cropImgRef.current.width  * cropScale : "auto",
+                      height: cropImgRef.current ? cropImgRef.current.height * cropScale : "auto",
+                      userSelect: "none",
+                      pointerEvents: "none",
+                    }}
+                  />
+                  {/* moldura circular de recorte */}
+                  <div className="ed-crop-mask" />
+                </div>
+
+                {/* zoom slider */}
+                <div className="ed-crop-zoom-row">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                  <input
+                    type="range"
+                    className="ed-crop-slider"
+                    min={Math.max(0.2, CROP_SIZE / Math.max(cropImgRef.current?.width || 1, cropImgRef.current?.height || 1))}
+                    max={4}
+                    step={0.01}
+                    value={cropScale}
+                    onChange={handleCropZoom}
+                  />
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                </div>
+
+                <div className="ed-crop-actions">
+                  <button type="button" className="ed-modal-foto-btn ed-modal-foto-btn--danger" onClick={() => { setCropSrc(null); if (fotoInputRef.current) fotoInputRef.current.value = ""; }}>
+                    Cancelar
+                  </button>
+                  <button type="button" className="ed-modal-btn-save" style={{ padding: "7px 20px", fontSize: "12px" }} onClick={confirmarCrop}>
+                    Confirmar recorte
+                  </button>
+                </div>
+                <p className="ed-modal-foto-hint" style={{ textAlign: "center", marginTop: 4 }}>Arraste para reposicionar · deslize para zoom</p>
+              </div>
+            ) : (
+              <div className="ed-modal-foto-wrap">
+                <div
+                  className="ed-modal-foto-preview"
+                  onClick={() => fotoInputRef.current?.click()}
+                  title="Clique para alterar a foto"
+                >
+                  {fotoPreview ? (
+                    <img src={fotoPreview} alt="Preview do projeto" />
+                  ) : (
+                    <span className="ed-modal-foto-placeholder">
+                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="3" width="18" height="18" rx="4" />
+                        <circle cx="8.5" cy="8.5" r="1.5" />
+                        <polyline points="21 15 16 10 5 21" />
+                      </svg>
+                      <span>Sem foto</span>
+                    </span>
+                  )}
+                  <div className="ed-modal-foto-overlay">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                      <circle cx="12" cy="13" r="4" />
+                    </svg>
+                    <span>Alterar</span>
+                  </div>
+                </div>
+                <div className="ed-modal-foto-actions">
+                  <button type="button" className="ed-modal-foto-btn" onClick={() => fotoInputRef.current?.click()}>
+                    {fotoPreview ? "Trocar foto" : "Adicionar foto"}
+                  </button>
+                  {fotoPreview && (
+                    <button type="button" className="ed-modal-foto-btn ed-modal-foto-btn--danger" onClick={handleRemoverFoto}>
+                      Remover foto
+                    </button>
+                  )}
+                  <p className="ed-modal-foto-hint">JPG, PNG ou WebP · recomendado 400×400 px</p>
+                </div>
+              </div>
+            )}
+
+            <input
+              ref={fotoInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              style={{ display: "none" }}
+              onChange={handleFotoChange}
+            />
+          </div>
+
+
+          {/* ── Datas ── */}
           <div className="ed-modal-section">
             <p className="ed-modal-section-title">Período da Obra</p>
             <div className="ed-modal-row">
@@ -535,7 +773,7 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
             </div>
           </div>
 
-          {/* Engenheiro */}
+          {/* ── Engenheiro ── */}
           <div className="ed-modal-section">
             <p className="ed-modal-section-title">Engenheiro Responsável</p>
             <select value={form.engenheiro_id} onChange={(e) => setForm((f) => ({ ...f, engenheiro_id: e.target.value }))} className="ed-modal-select">
@@ -544,7 +782,7 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
             </select>
           </div>
 
-          {/* Membros */}
+          {/* ── Membros ── */}
           <div className="ed-modal-section">
             <p className="ed-modal-section-title">Membros do Projeto</p>
             <div className="ed-modal-profiles">
@@ -563,7 +801,7 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
             </div>
           </div>
 
-          {/* Avisos do Projeto */}
+          {/* ── Avisos ── */}
           <div className="ed-modal-section">
             <p className="ed-modal-section-title">Avisos na Listagem</p>
             <p className="ed-modal-avisos-hint">Aparecem para todos os membros ao abrir a listagem fora do dia configurado.</p>
@@ -608,7 +846,7 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
             </div>
           </div>
 
-          {/* Pavimentos */}
+          {/* ── Pavimentos ── */}
           <div className="ed-modal-section">
             <div className="ed-modal-section-import-header">
               <p className="ed-modal-section-title">Pavimentos</p>
@@ -636,7 +874,7 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
             </div>
           </div>
 
-          {/* EAP */}
+          {/* ── EAP ── */}
           <div className="ed-modal-section">
             <p className="ed-modal-section-title">Itens da EAP</p>
             <div className="ed-modal-list-edit">
@@ -659,7 +897,7 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
             </div>
           </div>
 
-          {/* Orçamento EAP */}
+          {/* ── Orçamento EAP ── */}
           {eapEdit.length > 0 && (
             <div className="ed-modal-section">
               <p className="ed-modal-section-title">Orçamento por EAP (valores na data de início)</p>
@@ -682,9 +920,9 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
               </div>
               <div className="ed-modal-incc-box">
                 <div className="ed-modal-incc-row"><span>Total base (soma EAPs)</span><strong>{formatarMoeda(totalEap || null)}</strong></div>
-                {inccInicio  && <div className="ed-modal-incc-row ed-modal-incc-sub"><span>INCC referência ({inccInicio.mes})</span><span>{inccInicio.indice?.toLocaleString("pt-BR",{minimumFractionDigits:3})}</span></div>}
-                {inccAtual   && <div className="ed-modal-incc-row ed-modal-incc-sub"><span>INCC atual ({inccAtual.mes})</span><span>{inccAtual.indice?.toLocaleString("pt-BR",{minimumFractionDigits:3})}</span></div>}
-                {fatorIncc   && <div className="ed-modal-incc-row ed-modal-incc-sub"><span>Fator de correção</span><span>{fatorIncc.toFixed(6)}</span></div>}
+                {inccInicio   && <div className="ed-modal-incc-row ed-modal-incc-sub"><span>INCC referência ({inccInicio.mes})</span><span>{inccInicio.indice?.toLocaleString("pt-BR",{minimumFractionDigits:3})}</span></div>}
+                {inccAtual    && <div className="ed-modal-incc-row ed-modal-incc-sub"><span>INCC atual ({inccAtual.mes})</span><span>{inccAtual.indice?.toLocaleString("pt-BR",{minimumFractionDigits:3})}</span></div>}
+                {fatorIncc    && <div className="ed-modal-incc-row ed-modal-incc-sub"><span>Fator de correção</span><span>{fatorIncc.toFixed(6)}</span></div>}
                 {variacaoIncc && <div className="ed-modal-incc-row ed-modal-incc-sub"><span>Variação INCC</span><span className={Number(variacaoIncc)>=0?"ed-pos":"ed-neg"}>{Number(variacaoIncc)>=0?"+":""}{variacaoIncc}%</span></div>}
                 {totalCorrigido != null && <div className="ed-modal-incc-row ed-modal-incc-destaque"><span>Total corrigido pelo INCC</span><strong>{formatarMoeda(totalCorrigido)}</strong></div>}
               </div>
@@ -703,7 +941,11 @@ function ModalEdicao({ entity, eap, onClose, onSave, inccHistorico, containerId 
       {showImportPopover && (
         <ImportarPopover
           containerId={containerId || entity?.container_id} currentProjectId={entity.id}
-          anchorRef={importBtnRef} onImport={(imp) => { if (imp.pavimentos.length) setPavimentosEdit((p) => [...p, ...imp.pavimentos]); if (imp.eap.length) setEapEdit((p) => [...p, ...imp.eap]); }}
+          anchorRef={importBtnRef}
+          onImport={(imp) => {
+            if (imp.pavimentos.length) setPavimentosEdit((p) => [...p, ...imp.pavimentos]);
+            if (imp.eap.length)        setEapEdit((p)        => [...p, ...imp.eap]);
+          }}
           onClose={() => setShowImportPopover(false)}
         />
       )}
@@ -717,26 +959,21 @@ export default function EntityDetails({ entityType, entity: entityProp, onBack, 
   const [entity, setEntity]               = useState(entityProp);
   const [showModal, setShowModal]         = useState(false);
   const [engenheiro, setEngenheiro]       = useState(null);
-  const [membros, setMembros]             = useState([]);   // ← fonte de verdade
+  const [membros, setMembros]             = useState([]);
   const [stats, setStats]                 = useState({ tarefasTotal: 0, tarefasResolvidas: 0, atas: 0, listagens: 0, diarios: 0 });
   const [loadingStats, setLoadingStats]   = useState(true);
   const [inccHistorico, setInccHistorico] = useState([]);
   const [eapComValores, setEapComValores] = useState([]);
 
-  /* reset ao trocar de entidade */
   useEffect(() => {
     setEntity(entityProp); setShowModal(false); setEngenheiro(null);
     setEapComValores([]); setMembros([]); setLoadingStats(true);
     setStats({ tarefasTotal: 0, tarefasResolvidas: 0, atas: 0, listagens: 0, diarios: 0 });
   }, [entityProp?.id]);
 
-  /* carrega membros do banco */
   useEffect(() => {
     if (!isProject || !entity?.id) return;
-    fetchMembrosDoProject(entity.id).then((m) => {
-      console.log("[EntityDetails] membros:", m);
-      setMembros(m);
-    });
+    fetchMembrosDoProject(entity.id).then(setMembros);
   }, [isProject, entity?.id]);
 
   const name            = entity.name || (isProject ? "Projeto" : "Setor");
@@ -804,7 +1041,6 @@ export default function EntityDetails({ entityType, entity: entityProp, onBack, 
 
   const handleSaved = (updated) => {
     setEntity(updated);
-    // Após salvar, recarrega membros do banco (garantia máxima)
     if (updated._membrosAtualizados) {
       setMembros(updated._membrosAtualizados);
     } else {
@@ -829,7 +1065,7 @@ export default function EntityDetails({ entityType, entity: entityProp, onBack, 
               </div>
             )}
           </div>
-          {isProject && <button type="button" className="ed-header-edit-btn" onClick={() => setShowModal(true)}><FaEdit /></button>}
+          {isProject && canEdit && <button type="button" className="ed-header-edit-btn" onClick={() => setShowModal(true)}><FaEdit /></button>}
         </div>
 
         <div className="ed-body">

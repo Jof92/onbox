@@ -9,12 +9,16 @@
   border-right: 2px solid #f6e1a7;
 }
 
+.thin-collab-group{
+  border-top: 1px solid #f6e1a7;
+}
+
 /* Botões laterais */
 .thin-btn {
   background: #bf9010;
   color: #fff;
   padding: 10px;
-  border-radius: 8px;
+  border-radius: 50%;
   border: none;
   cursor: pointer;
   display: flex;
